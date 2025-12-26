@@ -1,0 +1,14 @@
+**/*.rs.bk
+.#*
+.gdb_history
+/book/*/book
+target/
+Cargo.lock
+*.hex
+book-target/
+*.local.toml
+
+.DS_Store
+.vscode/
+*qemu.log
+*qemuoutput.log

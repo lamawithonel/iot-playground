@@ -1,0 +1,40 @@
+[package]
+name = "microbit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# --- Core ---
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+heapless = "0.8"
+panic-halt = "0.2"
+# --- RTIC (The Brains) ---
+rtic = { version = "2.1", features = ["thumbv7-backend"] }
+# --- Timing (The Heartbeat) ---
+# v2.1.0 is the latest. We select the specific chip family.
+rtic-monotonics = { version = "2.1", features = ["stm32f405rg"] }
+static_cell = "2.1"
+
+[dependencies.embassy-executor]
+git = "https://github.com/embassy-rs/embassy"
+features = ["arch-cortex-m", "defmt", "executor-thread"]
+
+# --- Hardware (The Muscle) ---
+[dependencies.embassy-stm32]
+git = "https://github.com/embassy-rs/embassy"
+features = [
+  "defmt",
+  "exti",
+  "memory-x",  # Handles memory mapping automatically
+  "stm32f405rg",  # Your specific Feather Chip
+  "time-driver-tim3",  # CRITICAL: We give Embassy TIM3, so RTIC can have TIM2.
+  "unstable-pac",
+]
+
+[dependencies.embassy-usb]
+git = "https://github.com/embassy-rs/embassy"
+features = ["defmt"]
+
+[profile.release]
+debug = 2

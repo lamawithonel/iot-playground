@@ -1,0 +1,15 @@
+[default.general]
+chip = "STM32F303VCTx"
+
+[default.probe]
+usb_vid = "0483"
+usb_pid = "374b"
+
+[default.rtt]
+enabled = true
+channels = [
+  { up = 0, down = 0, name = "defmt", format = "Defmt" },
+]
+
+[default.gdb]
+enabled = false

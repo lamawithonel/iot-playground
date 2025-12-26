@@ -1,0 +1,16 @@
+[default.general]
+chip = "STM32F405RGTx"
+# connect_under_reset = true
+
+[default.probe]
+protocol = "Swd"  # Force SWD (the Feather STM32F405 doesn't support full JTAG)
+# speed = 1000  # uncomment to reduce speed to 1MHz for improved signal stability
+
+[default.rtt]
+enabled = true
+channels = [
+  { up = 0, down = 0, name = "defmt", format = "Defmt" },
+]
+
+[default.gdb]
+enabled = false
