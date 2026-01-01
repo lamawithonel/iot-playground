@@ -1,0 +1,45 @@
+---
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main, develop ]
+
+env:
+  CARGO_TERM_COLOR: always
+  MANIFEST_PATH: feather-stm32f405/Cargo.toml
+
+jobs:
+  check:
+    name: Check, Lint, and Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            feather-stm32f405/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('feather-stm32f405/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path ${{ env.MANIFEST_PATH }} --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --manifest-path ${{ env.MANIFEST_PATH }} --target thumbv7em-none-eabihf -- -D warnings
+
+      - name: Build (debug)
+        run: cargo build --manifest-path ${{ env.MANIFEST_PATH }} --target thumbv7em-none-eabihf --verbose
+
+      - name: Build (release)
+        run: cargo build --manifest-path ${{ env.MANIFEST_PATH }} --target thumbv7em-none-eabihf --release --verbose
