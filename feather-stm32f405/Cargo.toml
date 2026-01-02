@@ -16,6 +16,7 @@ test = false
 defmt = "1.0.1"
 defmt-rtt = "1.1.0"
 embedded-hal = "0.2.7"
+heapless = "0.8"
 
 [dependencies.cortex-m]
 version = "0.7.7"
@@ -30,6 +31,11 @@ features = [
   "defmt",
   "stm32f405rg",
 ]
+
+# NOTE: Replace with rustls-wolfcrypt-provider for FIPS 140-3 compliance
+[dependencies.embedded-tls]
+version = "0.17"
+default-features = false
 
 [dependencies.panic-probe]
 version = "1.0.0"
@@ -55,6 +61,17 @@ features = [
 git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
 
+[dependencies.smoltcp]
+version = "0.12"
+default-features = false
+features = [
+  "async",
+  "defmt",
+  "proto-ipv4",
+  "socket-dhcpv4",
+  "socket-tcp",
+]
+
 [dependencies.stm32-metapac]
 version = "18.0.0"
 features = [
@@ -62,6 +79,11 @@ features = [
   "rt",
   "stm32f405rg",
 ]
+
+[dependencies.w5500-hl]
+version = "0.12"
+default-features = false
+features = ["defmt"]
 
 [profile.dev]
 opt-level = 1
@@ -71,7 +93,7 @@ panic = "abort"
 codegen-units = 16
 
 [profile.release]
-opt-level = "s"  # optimize for size
-debug = true  # symbols are nice and they don't increase the size on Flash
-lto = true  # better optimizations
+opt-level = "s"    # optimize for size
+debug = true       # symbols are nice and they don't increase the size on Flash
+lto = true         # better optimizations
 codegen-units = 1  # better optimizations
