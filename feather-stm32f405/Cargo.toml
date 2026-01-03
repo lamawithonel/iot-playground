@@ -15,8 +15,11 @@ test = false
 [dependencies]
 defmt = "1.0.1"
 defmt-rtt = "1.1.0"
-embedded-hal = "0.2.7"
+embedded-hal = "1.0"
+embedded-hal-async = "1.0"
+embedded-io-async = "0.6"
 heapless = "0.8"
+static_cell = "2.0"
 
 [dependencies.cortex-m]
 version = "0.7.7"
@@ -24,12 +27,50 @@ features = [
   "critical-section-single-core",
 ]
 
+[dependencies.embassy-embedded-hal]
+version = "0.5.0"
+features = ["defmt"]
+
+[dependencies.embassy-futures]
+version = "0.1"  # Latest stable is 0.1.x
+
+[dependencies.embassy-net]
+version = "0.7.1"
+features = [
+  "defmt",
+  "dhcpv4",
+  "dns",
+  "medium-ethernet",
+  "tcp",
+  "udp",
+]
+
+[dependencies.embassy-net-wiznet]
+version = "0.2"
+features = ["defmt"]
+
 [dependencies.embassy-stm32]
 version = "0.4.0"
 default-features = false
 features = [
   "defmt",
+  "exti",
+  "rt",                   # Required for NVIC_PRIO_BITS
   "stm32f405rg",
+  "time-driver-any",      # Provides embassy-time driver for embassy components
+  "unstable-pac",
+]
+
+[dependencies.embassy-sync]
+version = "0.7.0"
+features = ["defmt"]
+
+[dependencies.embassy-time]
+version = "0.5.0"
+features = [
+  "defmt",
+  "defmt-timestamp-uptime",
+  "generic-queue-16",
 ]
 
 # NOTE: Replace with rustls-wolfcrypt-provider for FIPS 140-3 compliance
@@ -50,27 +91,13 @@ features = ["thumbv7-backend"]
 git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
 features = [
+  "cortex-m-systick",
   "defmt",
-  "stm32_tim2",
-  "stm32_tim3",
-  "stm32_tim4",
-  "stm32f405rg",
 ]
 
 [dependencies.rtic-time]
 git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
-
-[dependencies.smoltcp]
-version = "0.12"
-default-features = false
-features = [
-  "async",
-  "defmt",
-  "proto-ipv4",
-  "socket-dhcpv4",
-  "socket-tcp",
-]
 
 [dependencies.stm32-metapac]
 version = "18.0.0"
@@ -79,11 +106,6 @@ features = [
   "rt",
   "stm32f405rg",
 ]
-
-[dependencies.w5500-hl]
-version = "0.12"
-default-features = false
-features = ["defmt"]
 
 [profile.dev]
 opt-level = 1

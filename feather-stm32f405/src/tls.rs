@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+#![deny(warnings)]
 //! TLS module: embedded-tls based TLS 1.3 implementation
 //!
 //! This module provides:
