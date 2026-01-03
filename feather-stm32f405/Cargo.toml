@@ -27,6 +27,9 @@ features = [
   "critical-section-single-core",
 ]
 
+[dependencies.critical-section]
+version = "1.1"
+
 [dependencies.embassy-embedded-hal]
 version = "0.5.0"
 features = ["defmt"]
@@ -98,6 +101,12 @@ features = [
 [dependencies.rtic-time]
 git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
+
+# SNTP client for time synchronization (SR-NET-006)
+# Version 0.7.0 adds async support
+[dependencies.sntpc]
+version = "0.7.0"
+default-features = false
 
 [dependencies.stm32-metapac]
 version = "18.0.0"

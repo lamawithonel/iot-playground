@@ -9,7 +9,9 @@ use panic_probe as _;
 use rtic::app;
 use rtic_monotonics::systick::prelude::*;
 
+mod ccmram;
 mod network;
+mod time;
 
 systick_monotonic!(Mono, 1_000);
 
@@ -18,13 +20,15 @@ mod app {
     use super::*;
     use defmt::info;
     use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice as SpiDeviceBus;
-    use embassy_futures::join::join3;
+    use embassy_futures::join::join4;
     use embassy_net::StackResources;
     use embassy_net_wiznet::chip::W5500;
     use embassy_stm32::exti::ExtiInput;
     use embassy_stm32::gpio::{Level, Output, Pull, Speed};
     use embassy_stm32::mode::Async;
     use embassy_stm32::peripherals;
+    use embassy_stm32::rcc::{Hse, HseMode, LsConfig, LseConfig, LseMode};
+    use embassy_stm32::rtc::{Rtc, RtcConfig};
     use embassy_stm32::spi::{self, Spi};
     use embassy_stm32::time::Hertz;
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -71,10 +75,40 @@ mod app {
         // Initialize RTIC monotonic
         Mono::start(cx.core.SYST, 168_000_000);
 
-        // Initialize embassy-stm32 HAL
-        let p = embassy_stm32::init(embassy_stm32::Config::default());
+        // Configure embassy-stm32 with proper clock sources
+        // Adafruit Feather STM32F405 has:
+        // - 12 MHz HSE crystal for main system clock
+        // - 32.768 kHz LSE crystal on PC14/PC15 for RTC
+        let mut config = embassy_stm32::Config::default();
 
-        info!("System initialized");
+        // Configure HSE: 12 MHz external crystal
+        config.rcc.hse = Some(Hse {
+            freq: Hertz(12_000_000),
+            mode: HseMode::Oscillator,
+        });
+
+        // Configure LSE: 32.768 kHz crystal for RTC
+        config.rcc.ls = LsConfig {
+            rtc: embassy_stm32::rcc::RtcClockSource::LSE,
+            lsi: false,
+            lse: Some(LseConfig {
+                frequency: Hertz(32_768),
+                mode: LseMode::Oscillator(embassy_stm32::rcc::LseDrive::MediumHigh),
+            }),
+        };
+
+        // Initialize embassy-stm32 HAL with clock config
+        let p = embassy_stm32::init(config);
+
+        info!("System initialized with HSE (12MHz) and LSE (32.768kHz)");
+
+        // Initialize internal RTC with LSE clock
+        let rtc_config = RtcConfig::default();
+        let rtc = Rtc::new(p.RTC, rtc_config);
+        info!("Internal RTC initialized with LSE (32.768kHz, ±20-50ppm accuracy)");
+
+        // Initialize time module with RTC
+        time::initialize_rtc(rtc);
 
         // Initialize Feather STM32F405 heartbeat LED (PC1)
         let led = Output::new(p.PC1, Level::High, Speed::Low);
@@ -191,7 +225,8 @@ mod app {
         // We need to run:
         // 1. W5500 runner (handles SPI/IRQ)
         // 2. Stack runner (handles TCP/IP state machine)
-        // 3. Our application logic
+        // 3. Application logic
+        // 4. SNTP resync task (after initial sync)
 
         let app_logic = async {
             let receiver = network::network_receiver();
@@ -215,6 +250,21 @@ mod app {
                         "Gateway: {}.{}.{}.{}",
                         gw_octets[0], gw_octets[1], gw_octets[2], gw_octets[3]
                     );
+                }
+            }
+
+            // Initialize SNTP time synchronization (SR-NET-006)
+            // This will write the time to internal RTC (clocked by LSE)
+            info!("Initializing SNTP time synchronization with RTC (LSE)...");
+            match time::initialize_time(&stack).await {
+                Ok(ts) => {
+                    info!(
+                        "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
+                        ts.unix_secs, ts.micros
+                    );
+                }
+                Err(e) => {
+                    defmt::warn!("SNTP initialization failed: {:?}", e);
                 }
             }
 
@@ -247,15 +297,27 @@ mod app {
             }
         };
 
-        // Run all three concurrently
-        join3(runner.run(), runner2.run(), app_logic).await;
+        // SNTP periodic resync task (SR-NET-007: 15-minute interval)
+        // Runs concurrently with main app logic
+        // Updates internal RTC every 15 minutes to maintain accurate time
+        let sntp_resync = async {
+            // Wait for initial sync to complete
+            stack.wait_config_up().await;
+            Timer::after_secs(30).await; // Give initial sync time to complete
 
-        unreachable!()
+            info!("SNTP resync task started (15-minute interval)");
+            time::start_resync_task(&stack).await // This function never returns
+        };
+
+        // Run all four concurrently - never returns
+        join4(runner.run(), runner2.run(), app_logic, sntp_resync).await;
     }
 
     /// Example high-priority task that sends messages to network
     ///
     /// Priority 3: High priority (simulates interrupt-driven sensor)
+    /// Demonstrates timestamp API usage for sensor data
+    /// Timestamps are read from internal RTC between SNTP syncs
     #[task(priority = 3)]
     async fn frame_logger(_cx: frame_logger::Context) -> ! {
         let sender = network::network_sender();
@@ -264,19 +326,34 @@ mod app {
             // Simulate periodic data
             embassy_time::Timer::after_secs(5).await;
 
-            // Create message without touching network stack
+            // Get timestamp from internal RTC (SR-NET-007 requirement)
+            let timestamp = time::get_timestamp();
+
+            // Create message with timestamp
             let mut msg_str = String::new();
-            let _ = core::fmt::write(
-                &mut msg_str,
-                format_args!("Frame logged at {} ms", Mono::now().ticks()),
-            );
+            if timestamp.unix_secs == 0 {
+                // Time not yet synced - use local monotonic counter
+                let _ = core::fmt::write(
+                    &mut msg_str,
+                    format_args!("Frame at {} ms (RTC not synced)", Mono::now().ticks()),
+                );
+            } else {
+                // Time is synced - use Unix timestamp from RTC
+                let _ = core::fmt::write(
+                    &mut msg_str,
+                    format_args!(
+                        "Frame at {} UTC (from internal RTC/LSE)",
+                        timestamp.unix_secs
+                    ),
+                );
+            }
 
             let msg = network::NetworkMessage::LogFrame { data: msg_str };
 
             // Send to network task (non-blocking in async context)
             sender.send(msg).await;
 
-            info!("Sent frame to network task");
+            info!("Sent RTC-timestamped frame to network task");
         }
     }
 }
