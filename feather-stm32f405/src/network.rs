@@ -1,73 +1,33 @@
-//! Network module: W5500 Ethernet + smoltcp TCP/IP stack
-//!
-//! This module manages:
-//! - W5500 SPI communication
-//! - smoltcp network interface
-//! - DHCP client
-//! - TCP socket management
 #![deny(unsafe_code)]
 #![deny(warnings)]
+//! Network module: W5500 Ethernet with embassy-net
+//!
+//! This module implements the "Init-Inside-Task" pattern:
+//! - Raw peripherals (Send) are passed to the task
+//! - Stack, Runner, and drivers (!Send) are constructed inside the task
+//! - Maintains RTIC's SRP guarantees while using embassy-net
 
-use defmt::{info, warn};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::{Channel, Receiver, Sender};
+use heapless::String;
 
-/// Network configuration
-#[allow(dead_code)]
-pub struct NetworkConfig {
-    /// MAC address (will be read from W5500 or set manually)
-    pub mac_addr: [u8; 6],
+/// Messages that can be sent to the network task
+#[derive(Clone, Debug)]
+pub enum NetworkMessage {
+    /// Log a message (for demonstration)
+    LogFrame { data: String<128> },
 }
 
-#[allow(dead_code)]
-impl Default for NetworkConfig {
-    fn default() -> Self {
-        Self {
-            // Placeholder MAC - should be unique per device
-            mac_addr: [0x02, 0x00, 0x00, 0x00, 0x00, 0x01],
-        }
-    }
+/// Channel for sending messages to network task
+/// Using CriticalSectionRawMutex makes it safe across all RTIC priorities
+pub static NETWORK_CHANNEL: Channel<CriticalSectionRawMutex, NetworkMessage, 8> = Channel::new();
+
+/// Get a sender for the network channel (can be called from any task)
+pub fn network_sender() -> Sender<'static, CriticalSectionRawMutex, NetworkMessage, 8> {
+    NETWORK_CHANNEL.sender()
 }
 
-/// Initialize W5500 Ethernet controller
-///
-/// This function will:
-/// 1. Initialize SPI peripheral
-/// 2. Reset W5500
-/// 3. Configure W5500 for operation
-/// 4. Setup smoltcp interface
-#[allow(dead_code)]
-pub fn init_w5500() -> Result<(), NetworkError> {
-    info!("Initializing W5500 Ethernet controller...");
-    warn!("W5500 initialization not yet implemented");
-    Err(NetworkError::NotImplemented)
+/// Get a receiver for the network channel (used inside network task)
+pub fn network_receiver() -> Receiver<'static, CriticalSectionRawMutex, NetworkMessage, 8> {
+    NETWORK_CHANNEL.receiver()
 }
-
-/// Start DHCP client
-///
-/// Acquires IP address, subnet mask, gateway, and DNS servers
-#[allow(dead_code)]
-pub fn start_dhcp() -> Result<(), NetworkError> {
-    info!("Starting DHCP client...");
-    warn!("DHCP client not yet implemented");
-    Err(NetworkError::NotImplemented)
-}
-
-/// Network error types
-#[derive(Debug, defmt::Format)]
-#[allow(dead_code)]
-pub enum NetworkError {
-    /// SPI communication error
-    SpiError,
-    /// W5500 initialization failed
-    InitFailed,
-    /// DHCP timeout
-    DhcpTimeout,
-    /// TCP connection error
-    TcpError,
-    /// Feature not yet implemented
-    NotImplemented,
-}
-
-// TODO: Implement W5500 driver integration
-// TODO: Implement smoltcp interface
-// TODO: Implement DHCP client
-// TODO: Add TCP socket helpers
