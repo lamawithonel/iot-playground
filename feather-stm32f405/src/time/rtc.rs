@@ -115,15 +115,8 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
 /// Get current timestamp from internal RTC hardware
 ///
 /// Returns `Timestamp` with `unix_secs = 0` until first sync.
-/// Logs errors but doesn't propagate them for backward compatibility.
 pub fn get_timestamp() -> Timestamp {
-    match read_rtc() {
-        Ok(ts) => ts,
-        Err(e) => {
-            error!("Failed to read RTC: {:?}", e);
-            Timestamp::new(0, 0)
-        }
-    }
+    read_rtc().unwrap_or(Timestamp::new(0, 0))
 }
 
 #[cfg(test)]
