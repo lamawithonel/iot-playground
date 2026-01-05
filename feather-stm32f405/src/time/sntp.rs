@@ -37,6 +37,12 @@ const SNTP_RESYNC_INTERVAL_SECS: u64 = 900;
 /// Stratum 16 = unsynchronized
 const MAX_STRATUM: u8 = 3;
 
+/// Maximum RTT correction in milliseconds
+///
+/// Clamps RTT/2 correction to a reasonable maximum to prevent overflow.
+/// Network RTT exceeding 2 seconds (correction > 1000ms) is unusual and likely an error.
+const MAX_RTT_CORRECTION_MS: u64 = 1000;
+
 /// SNTP client errors
 #[derive(Debug, Clone, Copy, Format)]
 #[allow(dead_code)]
@@ -191,8 +197,11 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
     let mut timestamp = Timestamp::from_ntp(tx_timestamp_secs, tx_timestamp_frac);
 
     // Apply RTT/2 correction with bounds checking
-    // Clamp to reasonable maximum to avoid overflow (max ~1000ms correction)
-    let correction = rtt_correction_millis.min(1000) as u32;
+    let correction = if rtt_correction_millis > MAX_RTT_CORRECTION_MS {
+        MAX_RTT_CORRECTION_MS as u32
+    } else {
+        rtt_correction_millis as u32
+    };
     timestamp.millis = timestamp.millis.saturating_add(correction);
     if timestamp.millis >= 1_000 {
         timestamp.unix_secs = timestamp.unix_secs.saturating_add(1);

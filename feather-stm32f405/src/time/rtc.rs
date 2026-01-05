@@ -15,6 +15,9 @@ use embassy_stm32::rtc::Rtc;
 
 use super::calendar::{datetime_to_unix, unix_to_datetime};
 
+/// Conversion factor from microseconds to milliseconds
+const MICROS_PER_MILLI: u32 = 1_000;
+
 /// Global internal RTC instance
 static RTC: Mutex<RefCell<Option<Rtc>>> = Mutex::new(RefCell::new(None));
 
@@ -111,8 +114,8 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
         if let Some(rtc) = RTC.borrow(cs).borrow_mut().as_mut() {
             let datetime = rtc.now().map_err(|_| RtcError::HardwareError)?;
             // Extract milliseconds from microseconds (truncated to nearest millisecond)
-            // DateTime.microsecond() is guaranteed to be 0..=999_999, so division by 1000 yields 0..=999
-            let millis = datetime.microsecond() / 1_000;
+            // DateTime.microsecond() is guaranteed to be 0..=999_999, so division by MICROS_PER_MILLI yields 0..=999
+            let millis = datetime.microsecond() / MICROS_PER_MILLI;
             let unix_secs = datetime_to_unix(datetime);
             Ok(Timestamp::new(unix_secs, millis))
         } else {
