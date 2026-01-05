@@ -1,4 +1,4 @@
-//! SNTP Time Synchronization Module with Hardware RTC
+//! SNTP Time Synchronization Module with Hardware RTC (Chrono version)
 //!
 //! Implements time synchronization using SNTP (Simple Network Time Protocol)
 //! per RFC 5905, fulfilling requirements SR-NET-006 and SR-NET-007.
@@ -19,6 +19,7 @@
 //! - Atomic sync status in CCM RAM
 //! - Custom defmt timestamps (Unix epoch time instead of uptime)
 //! - Stratum validation (rejects servers with stratum > 3)
+//! - **Uses chrono crate for date/time conversions**
 //!
 //! ## defmt Timestamps
 //!
@@ -60,6 +61,7 @@
 #![allow(unsafe_code)]
 #![deny(warnings)]
 
+use chrono::{Datelike, NaiveDateTime, Timelike};
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 use critical_section::Mutex;
@@ -72,9 +74,6 @@ use embassy_time::{Duration, Instant, Timer};
 
 /// NTP epoch offset (1900-01-01 to 1970-01-01 in seconds)
 const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
-
-/// Unix epoch start (1970-01-01)
-const UNIX_EPOCH_YEAR: u16 = 1970;
 
 /// Default NTP servers with fallback
 const NTP_SERVERS: &[&str] = &["pool.ntp.org", "time.google.com", "time.cloudflare.com"];
@@ -157,118 +156,51 @@ pub fn is_time_synced() -> bool {
     TIME_SYNCED.load(Ordering::Relaxed)
 }
 
-/// Convert Unix timestamp to RTC DateTime
+/// Convert Unix timestamp to RTC DateTime using chrono
 fn unix_to_datetime(unix_secs: u64) -> DateTime {
-    // Simple conversion - not accounting for all leap years perfectly
-    // Good enough for embedded use between NTP syncs
+    // Use chrono for accurate date/time conversion
+    let naive_dt = NaiveDateTime::from_timestamp_opt(unix_secs as i64, 0)
+        .unwrap_or_else(|| {
+            error!("Failed to construct NaiveDateTime, falling back to epoch");
+            NaiveDateTime::from_timestamp_opt(0, 0).unwrap()
+        });
 
-    const SECONDS_PER_DAY: u64 = 86400;
-    const DAYS_PER_YEAR: u64 = 365;
-    const DAYS_PER_LEAP_YEAR: u64 = 366;
-
-    let mut days = unix_secs / SECONDS_PER_DAY;
-    let secs_today = unix_secs % SECONDS_PER_DAY;
-
-    let hour = (secs_today / 3600) as u8;
-    let minute = ((secs_today % 3600) / 60) as u8;
-    let second = (secs_today % 60) as u8;
-
-    // Calculate year (simplified - doesn't handle all leap year edge cases)
-    let mut year = UNIX_EPOCH_YEAR;
-    loop {
-        let days_in_year = if is_leap_year(year) {
-            DAYS_PER_LEAP_YEAR
-        } else {
-            DAYS_PER_YEAR
-        };
-
-        if days < days_in_year {
-            break;
-        }
-
-        days -= days_in_year;
-        year += 1;
-    }
-
-    // Calculate month and day
-    let days_in_months = if is_leap_year(year) {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-
-    let mut month = 1u8;
-    let mut day = days as u8 + 1;
-
-    for days_in_month in days_in_months.iter() {
-        if day <= *days_in_month {
-            break;
-        }
-        day -= days_in_month;
-        month += 1;
-    }
-
-    // Build DateTime using separate arguments (embassy-stm32 v0.4.0 API)
-    // Returns Result<DateTime, DateTimeError> - unwrap is safe for valid date ranges
     DateTime::from(
-        year,
-        month,
-        day,
-        DayOfWeek::Monday, // Placeholder - not critical for timekeeping
-        hour,
-        minute,
-        second,
-        0, // microsecond
+        naive_dt.year() as u16,
+        naive_dt.month() as u8,
+        naive_dt.day() as u8,
+        DayOfWeek::Monday,  // Placeholder - not critical for timekeeping
+        naive_dt.hour() as u8,
+        naive_dt.minute() as u8,
+        naive_dt.second() as u8,
+        0,  // microsecond
     )
     .unwrap_or_else(|_| {
-        // Fallback to Unix epoch if date construction fails
         error!("Failed to construct DateTime, falling back to epoch");
         DateTime::from(1970, 1, 1, DayOfWeek::Thursday, 0, 0, 0, 0).unwrap()
     })
 }
 
-/// Convert RTC DateTime to Unix timestamp
+/// Convert RTC DateTime to Unix timestamp using chrono
 fn datetime_to_unix(dt: DateTime) -> u64 {
-    const SECONDS_PER_DAY: u64 = 86400;
-    const DAYS_PER_YEAR: u64 = 365;
-    const DAYS_PER_LEAP_YEAR: u64 = 366;
+    // Use chrono for accurate date/time conversion
+    // Create NaiveDateTime from RTC components
+    let year = dt.year() as i32;
+    let month = dt.month() as u32;
+    let day = dt.day() as u32;
+    let hour = dt.hour() as u32;
+    let minute = dt.minute() as u32;
+    let second = dt.second() as u32;
 
-    // Count days since Unix epoch
-    let mut days = 0u64;
-
-    // Add days for complete years
-    for y in UNIX_EPOCH_YEAR..dt.year() {
-        days += if is_leap_year(y) {
-            DAYS_PER_LEAP_YEAR
-        } else {
-            DAYS_PER_YEAR
-        };
+    if let Some(date) = chrono::NaiveDate::from_ymd_opt(year, month, day) {
+        if let Some(time) = chrono::NaiveTime::from_hms_opt(hour, minute, second) {
+            let naive_dt = chrono::NaiveDateTime::new(date, time);
+            return naive_dt.timestamp() as u64;
+        }
     }
 
-    // Add days for complete months in current year
-    let days_in_months = if is_leap_year(dt.year()) {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-
-    for m in 0..(dt.month() - 1) {
-        days += days_in_months[m as usize] as u64;
-    }
-
-    // Add remaining days
-    days += (dt.day() - 1) as u64;
-
-    // Convert to seconds and add time of day
-    days * SECONDS_PER_DAY
-        + (dt.hour() as u64) * 3600
-        + (dt.minute() as u64) * 60
-        + (dt.second() as u64)
-}
-
-/// Check if year is a leap year
-fn is_leap_year(year: u16) -> bool {
-    (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
+    error!("Failed to convert DateTime to unix timestamp, returning 0");
+    0
 }
 
 /// Write timestamp to internal RTC hardware
@@ -501,13 +433,5 @@ mod tests {
         let ts = Timestamp::from_ntp(NTP_UNIX_OFFSET, 0);
         assert_eq!(ts.unix_secs, 0);
         assert_eq!(ts.micros, 0);
-    }
-
-    #[test]
-    fn test_leap_year() {
-        assert!(is_leap_year(2000));
-        assert!(is_leap_year(2024));
-        assert!(!is_leap_year(1900));
-        assert!(!is_leap_year(2023));
     }
 }
