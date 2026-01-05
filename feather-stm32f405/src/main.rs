@@ -338,12 +338,12 @@ mod app {
                     format_args!("Frame at {} ms (RTC not synced)", Mono::now().ticks()),
                 );
             } else {
-                // Time is synced - use Unix timestamp from RTC
+                // Time is synced - use Unix timestamp from RTC with millisecond precision
                 let _ = core::fmt::write(
                     &mut msg_str,
                     format_args!(
-                        "Frame at {} UTC (from internal RTC/LSE)",
-                        timestamp.unix_secs
+                        "Frame at {}.{:03} UTC (from internal RTC/LSE)",
+                        timestamp.unix_secs, timestamp.millis
                     ),
                 );
             }
