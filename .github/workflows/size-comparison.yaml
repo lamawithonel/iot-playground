@@ -1,0 +1,134 @@
+---
+name: Binary Size Comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ test/chrono-size-comparison ]
+
+env:
+  CARGO_TERM_COLOR: always
+  MANIFEST_PATH: feather-stm32f405/Cargo.toml
+
+jobs:
+  size-comparison:
+    name: Compare Binary Sizes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to compare branches
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+
+      - name: Install ARM toolchain for size analysis
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            feather-stm32f405/target
+          key: ${{ runner.os }}-cargo-size-${{ hashFiles('feather-stm32f405/Cargo.lock') }}
+
+      # Build baseline (custom time functions)
+      - name: Build baseline (feature/sntp-client)
+        run: |
+          git checkout feature/sntp-client
+          cargo build --manifest-path ${{ env.MANIFEST_PATH }} --target thumbv7em-none-eabihf --release
+          cp feather-stm32f405/target/thumbv7em-none-eabihf/release/feather-stm32f405 /tmp/baseline.elf
+
+      - name: Measure baseline size
+        run: |
+          echo "## Baseline Size (Custom Time Functions)" >> size_report.md
+          echo '```' >> size_report.md
+          arm-none-eabi-size /tmp/baseline.elf >> size_report.md
+          echo '```' >> size_report.md
+          # Save for comparison
+          arm-none-eabi-size /tmp/baseline.elf | tail -n 1 | awk '{print $1}' > /tmp/baseline_text.txt
+          arm-none-eabi-size /tmp/baseline.elf | tail -n 1 | awk '{print $2}' > /tmp/baseline_data.txt
+          arm-none-eabi-size /tmp/baseline.elf | tail -n 1 | awk '{print $3}' > /tmp/baseline_bss.txt
+
+      # Build with chrono
+      - name: Build with chrono
+        run: |
+          git checkout test/chrono-size-comparison
+          cargo clean --manifest-path ${{ env.MANIFEST_PATH }}
+          cargo build --manifest-path ${{ env.MANIFEST_PATH }} --target thumbv7em-none-eabihf --release
+          cp feather-stm32f405/target/thumbv7em-none-eabihf/release/feather-stm32f405 /tmp/chrono.elf
+
+      - name: Measure chrono size
+        run: |
+          echo "" >> size_report.md
+          echo "## With Chrono (no_std)" >> size_report.md
+          echo '```' >> size_report.md
+          arm-none-eabi-size /tmp/chrono.elf >> size_report.md
+          echo '```' >> size_report.md
+          # Save for comparison
+          arm-none-eabi-size /tmp/chrono.elf | tail -n 1 | awk '{print $1}' > /tmp/chrono_text.txt
+          arm-none-eabi-size /tmp/chrono.elf | tail -n 1 | awk '{print $2}' > /tmp/chrono_data.txt
+          arm-none-eabi-size /tmp/chrono.elf | tail -n 1 | awk '{print $3}' > /tmp/chrono_bss.txt
+
+      - name: Calculate differences
+        run: |
+          baseline_text=$(cat /tmp/baseline_text.txt)
+          baseline_data=$(cat /tmp/baseline_data.txt)
+          baseline_bss=$(cat /tmp/baseline_bss.txt)
+          chrono_text=$(cat /tmp/chrono_text.txt)
+          chrono_data=$(cat /tmp/chrono_data.txt)
+          chrono_bss=$(cat /tmp/chrono_bss.txt)
+          
+          diff_text=$((chrono_text - baseline_text))
+          diff_data=$((chrono_data - baseline_data))
+          diff_bss=$((chrono_bss - baseline_bss))
+          diff_total=$((diff_text + diff_data + diff_bss))
+          
+          echo "" >> size_report.md
+          echo "## Size Difference" >> size_report.md
+          echo "" >> size_report.md
+          echo "| Section | Baseline | With Chrono | Difference |" >> size_report.md
+          echo "|---------|----------|-------------|------------|" >> size_report.md
+          echo "| .text   | ${baseline_text} | ${chrono_text} | **+${diff_text}** bytes |" >> size_report.md
+          echo "| .data   | ${baseline_data} | ${chrono_data} | **+${diff_data}** bytes |" >> size_report.md
+          echo "| .bss    | ${baseline_bss} | ${chrono_bss} | **+${diff_bss}** bytes |" >> size_report.md
+          echo "| **Total** | **$((baseline_text + baseline_data + baseline_bss))** | **$((chrono_text + chrono_data + chrono_bss))** | **+${diff_total}** bytes |" >> size_report.md
+          echo "" >> size_report.md
+          
+          # Calculate percentage
+          baseline_total=$((baseline_text + baseline_data + baseline_bss))
+          percent=$(awk "BEGIN {printf \"%.2f\", ($diff_total / $baseline_total) * 100}")
+          echo "**Impact**: +${diff_total} bytes (+${percent}% increase)" >> size_report.md
+          echo "" >> size_report.md
+          echo "**Flash Available**: 1048576 bytes (1 MB)" >> size_report.md
+          percent_flash=$(awk "BEGIN {printf \"%.3f\", ($diff_total / 1048576) * 100}")
+          echo "**Chrono Overhead**: ${percent_flash}% of total flash" >> size_report.md
+
+      - name: Display report
+        run: cat size_report.md
+
+      - name: Upload size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-comparison-report
+          path: size_report.md
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('size_report.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
