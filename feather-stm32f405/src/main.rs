@@ -259,8 +259,8 @@ mod app {
             match time::initialize_time(&stack).await {
                 Ok(ts) => {
                     info!(
-                        "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
-                        ts.unix_secs, ts.micros
+                        "SNTP sync successful: {}.{:03} UTC (written to internal RTC)",
+                        ts.unix_secs, ts.millis
                     );
                 }
                 Err(e) => {

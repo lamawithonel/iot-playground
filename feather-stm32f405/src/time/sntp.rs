@@ -79,8 +79,8 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
             match sntp_request(stack, server).await {
                 Ok(timestamp) => {
                     info!(
-                        "SNTP sync successful: {}.{:06} UTC",
-                        timestamp.unix_secs, timestamp.micros
+                        "SNTP sync successful: {}.{:03} UTC",
+                        timestamp.unix_secs, timestamp.millis
                     );
 
                     // Write to internal RTC hardware
@@ -186,22 +186,22 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
 
     // Calculate round-trip time and apply RTT/2 correction
     let rtt = receive_time.duration_since(transmit_time);
-    let rtt_correction_micros = rtt.as_micros() / 2;
+    let rtt_correction_millis = rtt.as_millis() / 2;
 
     let mut timestamp = Timestamp::from_ntp(tx_timestamp_secs, tx_timestamp_frac);
 
     // Apply RTT/2 correction
-    timestamp.micros = timestamp
-        .micros
-        .saturating_add(rtt_correction_micros as u32);
-    if timestamp.micros >= 1_000_000 {
+    timestamp.millis = timestamp
+        .millis
+        .saturating_add(rtt_correction_millis as u32);
+    if timestamp.millis >= 1_000 {
         timestamp.unix_secs = timestamp.unix_secs.saturating_add(1);
-        timestamp.micros -= 1_000_000;
+        timestamp.millis -= 1_000;
     }
 
     info!(
-        "NTP timestamp: {}.{:06} UTC (RTT correction: {} µs)",
-        timestamp.unix_secs, timestamp.micros, rtt_correction_micros
+        "NTP timestamp: {}.{:03} UTC (RTT correction: {} ms)",
+        timestamp.unix_secs, timestamp.millis, rtt_correction_millis
     );
     Ok(timestamp)
 }

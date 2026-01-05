@@ -45,16 +45,20 @@
 //! ## defmt Timestamps
 //!
 //! This module provides a custom `defmt::timestamp!()` implementation using the hardware RTC.
-//! Returns Unix epoch time in seconds (u64) formatted as ISO8601 date-time.
+//! Returns Unix epoch time in milliseconds (u64) formatted as ISO8601 date-time with millisecond precision.
 //!
 //! ### Behavior:
 //! - Before first NTP sync: Shows 0 (timestamp not available)
-//! - After NTP sync: Shows ISO8601 formatted time from RTC (1-second resolution)
+//! - After NTP sync: Shows ISO8601 formatted time from RTC with millisecond granularity
 //! - Between syncs: RTC continues counting (±20-50ppm accuracy from LSE)
 //!
 //! ### Format:
-//! The `:iso8601s` display hint formats Unix epoch seconds as ISO8601 date-time strings.
-//! Example: `1767571200` → `2026-01-05T01:00:00Z`
+//! The `:iso8601ms` display hint formats Unix epoch milliseconds as ISO8601 date-time strings with millisecond precision.
+//! Example: `1767571200000` → `2026-01-05T01:00:00.000Z`
+//!
+//! ### Subsecond Precision:
+//! The STM32F405 RTC subsecond register (RTC_SSR) is automatically read by embassy-stm32 HAL and provides
+//! microsecond-level precision. This is converted to milliseconds (truncated) for timestamp display.
 //!
 //! See: <https://defmt.ferrous-systems.com/timestamps>
 //!
@@ -63,7 +67,7 @@
 //! // Initialize internal RTC and perform initial SNTP sync
 //! time::initialize_rtc(rtc);
 //! if let Ok(ts) = time::initialize_time(&stack).await {
-//!     info!("Time synced: {}.{:06}", ts.unix_secs, ts.micros);
+//!     info!("Time synced: {}.{:03}", ts.unix_secs, ts.millis);
 //! }
 //!
 //! // Check if time is synchronized
@@ -74,7 +78,7 @@
 //! // Spawn periodic resync task
 //! spawner.spawn(time_resync(stack)).ok();
 //!
-//! // Get timestamp from internal RTC for sensor data
+//! // Get timestamp from internal RTC for sensor data (with millisecond precision)
 //! let timestamp = time::get_timestamp();
 //! ```
 
@@ -101,7 +105,10 @@ use calendar::is_leap_year;
 // ============================================================================
 // Custom defmt timestamp using hardware RTC. See module documentation for details.
 
-defmt::timestamp!("{=u64:iso8601s}", { get_timestamp().unix_secs });
+defmt::timestamp!("{=u64:iso8601ms}", {
+    let ts = get_timestamp();
+    ts.unix_secs * 1000 + ts.millis as u64
+});
 
 #[cfg(test)]
 mod tests {
@@ -112,7 +119,7 @@ mod tests {
         const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
         let ts = Timestamp::from_ntp(NTP_UNIX_OFFSET, 0);
         assert_eq!(ts.unix_secs, 0);
-        assert_eq!(ts.micros, 0);
+        assert_eq!(ts.millis, 0);
     }
 
     #[test]
