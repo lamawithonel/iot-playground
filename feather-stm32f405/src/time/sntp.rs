@@ -189,9 +189,11 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
     let rtt_correction_micros = rtt.as_micros() / 2;
 
     let mut timestamp = Timestamp::from_ntp(tx_timestamp_secs, tx_timestamp_frac);
-    
+
     // Apply RTT/2 correction
-    timestamp.micros = timestamp.micros.saturating_add(rtt_correction_micros as u32);
+    timestamp.micros = timestamp
+        .micros
+        .saturating_add(rtt_correction_micros as u32);
     if timestamp.micros >= 1_000_000 {
         timestamp.unix_secs = timestamp.unix_secs.saturating_add(1);
         timestamp.micros -= 1_000_000;

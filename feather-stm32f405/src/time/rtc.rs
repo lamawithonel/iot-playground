@@ -37,7 +37,7 @@ impl Timestamp {
     pub fn from_ntp(ntp_secs: u64, ntp_frac: u32) -> Self {
         /// NTP epoch offset (1900-01-01 to 1970-01-01 in seconds)
         const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
-        
+
         let unix_secs = ntp_secs.saturating_sub(NTP_UNIX_OFFSET);
         // Convert NTP fractional part to microseconds (2^-32 seconds)
         let micros = ((ntp_frac as u64 * 1_000_000) >> 32) as u32;

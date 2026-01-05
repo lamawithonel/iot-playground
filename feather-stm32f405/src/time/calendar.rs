@@ -24,7 +24,7 @@ use embassy_stm32::rtc::{DateTime, DayOfWeek};
 /// - 2100: NOT leap (divisible by 100 but not 400)
 #[allow(dead_code)]
 pub(crate) fn is_leap_year(year: u16) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+    (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
 }
 
 /// Convert Unix timestamp to RTC DateTime using O(1) algorithm
@@ -36,7 +36,7 @@ pub(crate) fn is_leap_year(year: u16) -> bool {
 /// - UTC only (no timezone support)
 pub fn unix_to_datetime(unix_secs: u64) -> DateTime {
     const SECONDS_PER_DAY: u64 = 86400;
-    
+
     let days_since_epoch = (unix_secs / SECONDS_PER_DAY) as i32;
     let secs_today = unix_secs % SECONDS_PER_DAY;
 
@@ -94,32 +94,32 @@ fn civil_from_days(days_since_epoch: i32) -> (u16, u8, u8) {
     // Shift epoch from 1970-01-01 to 0000-03-01 (March 1, year 0)
     // This makes the year start on March 1, placing leap day at end of year
     let z = days_since_epoch + 719468; // 719468 = days from 0000-03-01 to 1970-01-01
-    
+
     // Calculate era (400-year cycles)
     let era = if z >= 0 { z } else { z - 146096 } / 146097;
     let doe = (z - era * 146097) as u32; // day of era [0, 146096]
-    
+
     // Calculate year of era [0, 399]
     let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    
+
     // Calculate actual year
     let y = (yoe as i32) + era * 400;
-    
+
     // Calculate day of year [0, 365]
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    
+
     // Calculate month [0, 11] where 0 = March, 11 = February
     let mp = (5 * doy + 2) / 153;
-    
+
     // Calculate day [1, 31]
     let d = (doy - (153 * mp + 2) / 5 + 1) as u8;
-    
+
     // Calculate month [1, 12] where 1 = January
     let m = if mp < 10 { mp + 3 } else { mp - 9 } as u8;
-    
+
     // Adjust year for January and February
     let year = if m <= 2 { y + 1 } else { y };
-    
+
     (year as u16, m, d)
 }
 
@@ -133,19 +133,15 @@ fn days_from_civil(year: u16, month: u8, day: u8) -> i32 {
     let y = year as i32;
     let m = month as i32;
     let d = day as i32;
-    
+
     // Adjust year and month to make March = month 0, February = month 11
-    let (y, m) = if m <= 2 {
-        (y - 1, m + 9)
-    } else {
-        (y, m - 3)
-    };
-    
+    let (y, m) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
+
     let era = if y >= 0 { y } else { y - 399 } / 400;
     let yoe = (y - era * 400) as u32; // year of era [0, 399]
     let doy = (153 * (m as u32) + 2) / 5 + (d as u32) - 1; // day of year [0, 365]
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // day of era [0, 146096]
-    
+
     era * 146097 + (doe as i32) - 719468 // 719468 = days from 0000-03-01 to 1970-01-01
 }
 
@@ -177,12 +173,12 @@ mod tests {
     fn test_round_trip_conversion() {
         // Test various dates in the valid range
         let test_dates = [
-            0u64,                    // 1970-01-01 00:00:00
-            946684800,               // 2000-01-01 00:00:00
-            1609459200,              // 2021-01-01 00:00:00
-            1704067200,              // 2024-01-01 00:00:00
-            2147483647,              // 2038-01-19 03:14:07 (32-bit Unix time limit)
-            4102444800,              // 2100-01-01 00:00:00
+            0u64,       // 1970-01-01 00:00:00
+            946684800,  // 2000-01-01 00:00:00
+            1609459200, // 2021-01-01 00:00:00
+            1704067200, // 2024-01-01 00:00:00
+            2147483647, // 2038-01-19 03:14:07 (32-bit Unix time limit)
+            4102444800, // 2100-01-01 00:00:00
         ];
 
         for &unix_secs in &test_dates {
@@ -199,9 +195,8 @@ mod tests {
     #[test]
     fn test_leap_day_2024() {
         // 2024-02-29 00:00:00 (leap day)
-        let leap_day = datetime_to_unix(
-            DateTime::from(2024, 2, 29, DayOfWeek::Monday, 0, 0, 0, 0).unwrap()
-        );
+        let leap_day =
+            datetime_to_unix(DateTime::from(2024, 2, 29, DayOfWeek::Monday, 0, 0, 0, 0).unwrap());
         let dt = unix_to_datetime(leap_day);
         assert_eq!(dt.year(), 2024);
         assert_eq!(dt.month(), 2);
