@@ -8,6 +8,7 @@
 //! - Time is written to STM32 hardware internal RTC
 //! - Between syncs, timestamps are read from internal RTC hardware
 //! - Sync status stored atomically in CCM RAM
+//! - defmt timestamps use RTC for Unix epoch time display
 //!
 //! ## Features
 //! - UDP socket communication with NTP servers
@@ -16,6 +17,24 @@
 //! - 15-minute automatic re-synchronization
 //! - Hardware internal RTC for accurate timekeeping between syncs
 //! - Atomic sync status in CCM RAM
+//! - Custom defmt timestamps (Unix epoch time instead of uptime)
+//! - Stratum validation (rejects servers with stratum > 3)
+//!
+//! ## defmt Timestamps
+//!
+//! This module provides a custom `defmt::timestamp!()` implementation using the hardware RTC.
+//! Returns Unix epoch time in seconds (u64) formatted as ISO8601 date-time.
+//!
+//! ### Behavior:
+//! - Before first NTP sync: Shows 0 (timestamp not available)
+//! - After NTP sync: Shows ISO8601 formatted time from RTC (1-second resolution)
+//! - Between syncs: RTC continues counting (±20-50ppm accuracy from LSE)
+//!
+//! ### Format:
+//! The `:iso8601s` display hint formats Unix epoch seconds as ISO8601 date-time strings.
+//! Example: `1767571200` → `2026-01-05T01:00:00Z`
+//!
+//! See: <https://defmt.ferrous-systems.com/timestamps>
 //!
 //! ## Usage
 //! ```no_run
@@ -23,6 +42,11 @@
 //! time::initialize_rtc(rtc);
 //! if let Ok(ts) = time::initialize_time(&stack).await {
 //!     info!("Time synced: {}.{:06}", ts.unix_secs, ts.micros);
+//! }
+//!
+//! // Check if time is synchronized
+//! if time::is_time_synced() {
+//!     // Safe to use timestamps
 //! }
 //!
 //! // Spawn periodic resync task
@@ -70,8 +94,13 @@ const SNTP_RETRY_BACKOFF_MS: u64 = 2000;
 /// Re-synchronization interval (15 minutes)
 const SNTP_RESYNC_INTERVAL_SECS: u64 = 900;
 
-/// Maximum accepted stratum level (future enhancement)
-#[allow(dead_code)]
+/// Maximum accepted stratum level
+///
+/// Stratum 0 = reference clock (GPS, atomic)
+/// Stratum 1 = primary servers (directly connected to stratum 0)
+/// Stratum 2 = secondary servers (synced to stratum 1)
+/// Stratum 3 = tertiary servers (synced to stratum 2)
+/// Stratum 16 = unsynchronized
 const MAX_STRATUM: u8 = 3;
 
 /// Maximum allowed drift before forced resync (future enhancement)
@@ -117,6 +146,15 @@ pub fn initialize_rtc(rtc: Rtc) {
         RTC.borrow(cs).replace(Some(rtc));
     });
     info!("Internal RTC initialized");
+}
+
+/// Check if time has been synchronized with NTP
+///
+/// Returns `true` if at least one successful NTP sync has occurred.
+/// Time read from `get_timestamp()` is only valid when this returns `true`.
+#[allow(dead_code)]
+pub fn is_time_synced() -> bool {
+    TIME_SYNCED.load(Ordering::Relaxed)
 }
 
 /// Convert Unix timestamp to RTC DateTime
@@ -373,9 +411,18 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
         Debug2Format(&from_addr)
     );
 
-    // Validate response
+    // Validate response length and source
     if recv_len < 48 || from_addr.endpoint.addr != server_ip {
         return Err(SntpError::InvalidResponse);
+    }
+
+    // Validate stratum (byte 1)
+    let stratum = response[1];
+    info!("NTP server stratum: {}", stratum);
+
+    if stratum == 0 || stratum > MAX_STRATUM {
+        warn!("Invalid stratum {} (max {})", stratum, MAX_STRATUM);
+        return Err(SntpError::InvalidStratum);
     }
 
     // Extract transmit timestamp (bytes 40-47)
@@ -411,8 +458,7 @@ pub enum SntpError {
     Timeout,
     /// Invalid NTP response packet
     InvalidResponse,
-    /// Server stratum too high (future)
-    #[allow(dead_code)]
+    /// Server stratum too high or invalid
     InvalidStratum,
     /// All configured servers failed
     AllServersFailed,
@@ -438,6 +484,13 @@ pub async fn initialize_time(stack: &Stack<'static>) -> Result<Timestamp, SntpEr
 pub async fn start_resync_task(stack: &Stack<'static>) -> ! {
     resync_task(stack).await
 }
+
+// ============================================================================
+// DEFMT TIMESTAMP IMPLEMENTATION
+// ============================================================================
+// Custom defmt timestamp using hardware RTC. See module documentation for details.
+
+defmt::timestamp!("{=u64:iso8601s}", { get_timestamp().unix_secs });
 
 #[cfg(test)]
 mod tests {
