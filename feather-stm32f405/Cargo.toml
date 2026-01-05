@@ -21,6 +21,9 @@ embedded-io-async = "0.6"
 heapless = "0.8"
 static_cell = "2.0"
 
+# Test: chrono for date/time conversions (no_std compatible)
+chrono = { version = "0.4", default-features = false }
+
 [dependencies.cortex-m]
 version = "0.7.7"
 features = [
