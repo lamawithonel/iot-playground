@@ -105,6 +105,7 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
         if let Some(rtc) = RTC.borrow(cs).borrow_mut().as_mut() {
             let datetime = rtc.now().map_err(|_| RtcError::HardwareError)?;
             // Extract milliseconds from microseconds (truncated to nearest millisecond)
+            // DateTime.microsecond() is guaranteed to be 0..=999_999, so division by 1000 yields 0..=999
             let millis = datetime.microsecond() / 1_000;
             let unix_secs = datetime_to_unix(datetime);
             Ok(Timestamp::new(unix_secs, millis))

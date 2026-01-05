@@ -190,10 +190,10 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
 
     let mut timestamp = Timestamp::from_ntp(tx_timestamp_secs, tx_timestamp_frac);
 
-    // Apply RTT/2 correction
-    timestamp.millis = timestamp
-        .millis
-        .saturating_add(rtt_correction_millis as u32);
+    // Apply RTT/2 correction with bounds checking
+    // Clamp to reasonable maximum to avoid overflow (max ~1000ms correction)
+    let correction = rtt_correction_millis.min(1000) as u32;
+    timestamp.millis = timestamp.millis.saturating_add(correction);
     if timestamp.millis >= 1_000 {
         timestamp.unix_secs = timestamp.unix_secs.saturating_add(1);
         timestamp.millis -= 1_000;
@@ -201,7 +201,7 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
 
     info!(
         "NTP timestamp: {}.{:03} UTC (RTT correction: {} ms)",
-        timestamp.unix_secs, timestamp.millis, rtt_correction_millis
+        timestamp.unix_secs, timestamp.millis, correction
     );
     Ok(timestamp)
 }

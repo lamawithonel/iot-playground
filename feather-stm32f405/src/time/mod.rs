@@ -107,7 +107,8 @@ use calendar::is_leap_year;
 
 defmt::timestamp!("{=u64:iso8601ms}", {
     let ts = get_timestamp();
-    ts.unix_secs * 1000 + ts.millis as u64
+    // Use saturating_mul to prevent overflow (Unix epoch ms won't overflow u64 until year 584,554,051 AD)
+    ts.unix_secs.saturating_mul(1000).saturating_add(ts.millis as u64)
 });
 
 #[cfg(test)]
