@@ -7,6 +7,8 @@
 //! - O(1) time complexity (no year iteration)
 //! - Correct handling of leap years
 //! - Valid for all dates in the proleptic Gregorian calendar
+#![deny(unsafe_code)]
+#![deny(warnings)]
 
 use embassy_stm32::rtc::{DateTime, DayOfWeek};
 

@@ -2,18 +2,18 @@
 //!
 //! Provides safe access to the STM32 hardware RTC and manages the time
 //! synchronization status in CCM RAM.
+#![deny(unsafe_code)]
+#![deny(warnings)]
+
+use crate::ccmram::TIME_SYNCED;
 
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::Ordering;
 use critical_section::Mutex;
-use defmt::{error, info, Format};
+use defmt::{info, Format};
 use embassy_stm32::rtc::Rtc;
 
 use super::calendar::{datetime_to_unix, unix_to_datetime};
-
-/// System time synchronization status in CCM RAM
-#[link_section = ".ccmram"]
-static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
 
 /// Global internal RTC instance
 static RTC: Mutex<RefCell<Option<Rtc>>> = Mutex::new(RefCell::new(None));
