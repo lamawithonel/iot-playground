@@ -61,7 +61,7 @@
 #![allow(unsafe_code)]
 #![deny(warnings)]
 
-use chrono::{Datelike, NaiveDateTime, Timelike};
+use chrono::{DateTime as ChronoDateTime, Datelike, NaiveDateTime, Timelike, Utc};
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 use critical_section::Mutex;
@@ -159,11 +159,13 @@ pub fn is_time_synced() -> bool {
 /// Convert Unix timestamp to RTC DateTime using chrono
 fn unix_to_datetime(unix_secs: u64) -> DateTime {
     // Use chrono for accurate date/time conversion
-    let naive_dt = NaiveDateTime::from_timestamp_opt(unix_secs as i64, 0)
+    let dt = ChronoDateTime::<Utc>::from_timestamp(unix_secs as i64, 0)
         .unwrap_or_else(|| {
-            error!("Failed to construct NaiveDateTime, falling back to epoch");
-            NaiveDateTime::from_timestamp_opt(0, 0).unwrap()
+            error!("Failed to construct DateTime, falling back to epoch");
+            ChronoDateTime::<Utc>::from_timestamp(0, 0).unwrap()
         });
+
+    let naive_dt = dt.naive_utc();
 
     DateTime::from(
         naive_dt.year() as u16,
@@ -194,8 +196,8 @@ fn datetime_to_unix(dt: DateTime) -> u64 {
 
     if let Some(date) = chrono::NaiveDate::from_ymd_opt(year, month, day) {
         if let Some(time) = chrono::NaiveTime::from_hms_opt(hour, minute, second) {
-            let naive_dt = chrono::NaiveDateTime::new(date, time);
-            return naive_dt.timestamp() as u64;
+            let naive_dt = NaiveDateTime::new(date, time);
+            return naive_dt.and_utc().timestamp() as u64;
         }
     }
 
