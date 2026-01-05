@@ -66,6 +66,7 @@ jobs:
 
       - name: Measure chrono size
         run: |
+          ls -l /tmp/baseline.elf /tmp/chrono.elf
           echo "" >> size_report.md
           echo "## With Chrono (no_std)" >> size_report.md
           echo '```' >> size_report.md
@@ -84,12 +85,12 @@ jobs:
           chrono_text=$(cat /tmp/chrono_text.txt)
           chrono_data=$(cat /tmp/chrono_data.txt)
           chrono_bss=$(cat /tmp/chrono_bss.txt)
-          
+
           diff_text=$((chrono_text - baseline_text))
           diff_data=$((chrono_data - baseline_data))
           diff_bss=$((chrono_bss - baseline_bss))
           diff_total=$((diff_text + diff_data + diff_bss))
-          
+
           echo "" >> size_report.md
           echo "## Size Difference" >> size_report.md
           echo "" >> size_report.md
@@ -100,7 +101,7 @@ jobs:
           echo "| .bss    | ${baseline_bss} | ${chrono_bss} | **+${diff_bss}** bytes |" >> size_report.md
           echo "| **Total** | **$((baseline_text + baseline_data + baseline_bss))** | **$((chrono_text + chrono_data + chrono_bss))** | **+${diff_total}** bytes |" >> size_report.md
           echo "" >> size_report.md
-          
+
           # Calculate percentage
           baseline_total=$((baseline_text + baseline_data + baseline_bss))
           percent=$(awk "BEGIN {printf \"%.2f\", ($diff_total / $baseline_total) * 100}")
