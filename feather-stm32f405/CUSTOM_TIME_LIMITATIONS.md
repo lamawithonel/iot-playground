@@ -1,13 +1,26 @@
 # Custom Time Function Limitations
 
-This document describes the limitations of the custom Unix timestamp ↔ RTC DateTime conversion functions in `src/time.rs`.
+This document describes the limitations of the custom Unix timestamp ↔ RTC DateTime conversion functions in `src/time/`.
+
+## Recent Improvements (2026-01-05)
+
+The time module has been refactored with several improvements:
+
+1. **O(1) Calendar Algorithms**: Replaced O(n) year iteration with Howard Hinnant's civil_from_days/days_from_civil algorithms
+2. **Stable Rust**: Removed dependency on unstable `is_multiple_of()` feature
+3. **Module Organization**: Split into `calendar.rs`, `rtc.rs`, `sntp.rs`, and `mod.rs`
+4. **RTT Correction**: Added round-trip time correction (RTT/2) for more accurate SNTP synchronization
+5. **Error Handling**: Fixed `write_rtc` and `read_rtc` error handling
+6. **Memory Ordering**: Use proper `Acquire`/`Release` ordering for `TIME_SYNCED`
+7. **Buffer Optimization**: Reduced UDP buffers from 512 to 64 bytes (NTP packets are 48 bytes)
 
 ## Summary
 
-**Current Implementation**: ~92 lines of custom calendar math  
+**Current Implementation**: ~200 lines of custom calendar math  
 **Binary Size**: Saves ~12.6 KB vs chrono crate  
-**Accuracy**: Good enough for NTP time synchronization (2024-2099)  
-**Risk Level**: ⚠️ LOW for current use case
+**Accuracy**: Excellent for NTP time synchronization (1970-2099)  
+**Performance**: O(1) time complexity (constant time for all dates)
+**Risk Level**: ✅ LOW for current use case
 
 ---
 
@@ -118,25 +131,18 @@ DateTime::from(
 
 ---
 
-### 5. **Performance: O(n) Year Iteration** 🟡 MINOR
+### 5. **Performance: O(1) Calendar Algorithms** ✅ FIXED
 
-**Problem**: Both conversion functions iterate through years one-by-one
+**Status**: Fixed as of 2026-01-05
 
-```rust
-for y in UNIX_EPOCH_YEAR..dt.year() {
-    days += if is_leap_year(y) { 366 } else { 365 };
-}
-```
+The implementation now uses Howard Hinnant's civil_from_days and days_from_civil algorithms,
+which provide O(1) time complexity for all date conversions regardless of the year.
 
 **Impact**:
-- ✅ Fast for near-term dates (2024-2030): ~60 iterations
-- ⚠️ Slower for far-future dates (year 2100): ~130 iterations  
-- ⚠️ Very slow for year 2500+: ~530 iterations
-- ✅ Still negligible on STM32F405 @ 168 MHz
-
-**When to Upgrade**: If you frequently convert dates far in the future (2200+).
-
-**Fix**: Use lookup tables or mathematical formulas (chrono does this).
+- ✅ Constant time for all dates (no iteration)
+- ✅ Same performance for year 2024 as year 2500
+- ✅ Uses well-tested algorithms from C++20 `<chrono>` library
+- ✅ Reference: http://howardhinnant.github.io/date_algorithms.html
 
 ---
 
