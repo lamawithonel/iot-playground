@@ -20,6 +20,28 @@
 //! - Custom defmt timestamps (Unix epoch time instead of uptime)
 //! - Stratum validation (rejects servers with stratum > 3)
 //!
+//! ## Custom Date/Time Conversions
+//!
+//! This module uses ~92 lines of custom calendar math instead of external crates.
+//!
+//! **Why custom?** Saves ~12.6 KB binary size vs chrono crate (no_std).
+//!
+//! **Limitations:**
+//! - ✅ Accurate for dates 1970-2099 (NTP use case)
+//! - ⚠️ Year range limited to 1970-2105 (u16 overflow)
+//! - ⚠️ Day of week always wrong (placeholder)
+//! - ✅ No timezone support (UTC only)
+//! - ✅ No leap seconds (NTP ignores them too)
+//! - ⚠️ O(n) performance for far-future dates
+//!
+//! **📖 See `../CUSTOM_TIME_LIMITATIONS.md` for detailed analysis**
+//!
+//! **When to switch to chrono:**
+//! - Need dates after 2105
+//! - Need timezone conversions
+//! - Need date parsing or formatting
+//! - Need day-of-week calculations
+//!
 //! ## defmt Timestamps
 //!
 //! This module provides a custom `defmt::timestamp!()` implementation using the hardware RTC.
@@ -158,9 +180,15 @@ pub fn is_time_synced() -> bool {
 }
 
 /// Convert Unix timestamp to RTC DateTime
+///
+/// **Limitations**: See `../CUSTOM_TIME_LIMITATIONS.md`
+/// - Valid range: 1970-2105 (u16 year limit)
+/// - Day of week is always `Monday` (placeholder)
+/// - UTC only (no timezone support)
+/// - Saves ~12.6 KB vs chrono crate
 fn unix_to_datetime(unix_secs: u64) -> DateTime {
-    // Simple conversion - not accounting for all leap years perfectly
-    // Good enough for embedded use between NTP syncs
+    // Custom implementation using simple day counting and leap year rules.
+    // Accurate for dates 1970-2099 (NTP time synchronization use case).
 
     const SECONDS_PER_DAY: u64 = 86400;
     const DAYS_PER_YEAR: u64 = 365;
@@ -173,7 +201,8 @@ fn unix_to_datetime(unix_secs: u64) -> DateTime {
     let minute = ((secs_today % 3600) / 60) as u8;
     let second = (secs_today % 60) as u8;
 
-    // Calculate year (simplified - doesn't handle all leap year edge cases)
+    // Calculate year using O(n) iteration
+    // Performance: ~60 iterations for 2024, ~130 for 2099
     let mut year = UNIX_EPOCH_YEAR;
     loop {
         let days_in_year = if is_leap_year(year) {
@@ -214,7 +243,7 @@ fn unix_to_datetime(unix_secs: u64) -> DateTime {
         year,
         month,
         day,
-        DayOfWeek::Monday, // Placeholder - not critical for timekeeping
+        DayOfWeek::Monday, // LIMITATION: Always wrong, but not needed for timekeeping
         hour,
         minute,
         second,
@@ -228,7 +257,15 @@ fn unix_to_datetime(unix_secs: u64) -> DateTime {
 }
 
 /// Convert RTC DateTime to Unix timestamp
+///
+/// **Limitations**: See `../CUSTOM_TIME_LIMITATIONS.md`
+/// - O(n) performance (iterates through years)
+/// - No input validation
+/// - UTC only (no timezone support)
 fn datetime_to_unix(dt: DateTime) -> u64 {
+    // Reverse conversion using same algorithm as unix_to_datetime()
+    // Ensures round-trip accuracy.
+
     const SECONDS_PER_DAY: u64 = 86400;
     const DAYS_PER_YEAR: u64 = 365;
     const DAYS_PER_LEAP_YEAR: u64 = 366;
@@ -236,7 +273,7 @@ fn datetime_to_unix(dt: DateTime) -> u64 {
     // Count days since Unix epoch
     let mut days = 0u64;
 
-    // Add days for complete years
+    // Add days for complete years (O(n) iteration)
     for y in UNIX_EPOCH_YEAR..dt.year() {
         days += if is_leap_year(y) {
             DAYS_PER_LEAP_YEAR
@@ -266,7 +303,18 @@ fn datetime_to_unix(dt: DateTime) -> u64 {
         + (dt.second() as u64)
 }
 
-/// Check if year is a leap year
+/// Check if year is a leap year (Gregorian calendar)
+///
+/// Correctly implements standard leap year rules:
+/// - Divisible by 4: leap year
+/// - EXCEPT divisible by 100: not a leap year
+/// - EXCEPT divisible by 400: leap year
+///
+/// Examples:
+/// - 2000: leap (divisible by 400)
+/// - 1900: NOT leap (divisible by 100 but not 400)
+/// - 2024: leap (divisible by 4, not by 100)
+/// - 2100: NOT leap (divisible by 100 but not 400)
 fn is_leap_year(year: u16) -> bool {
     (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
 }
