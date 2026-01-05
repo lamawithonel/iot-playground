@@ -79,8 +79,7 @@
 //! ```
 
 // Allow unsafe code for #[link_section] attribute used in CCM RAM allocation
-#![allow(unsafe_code)]
-#![allow(unused_imports)]
+#![deny(unsafe_code)]
 #![deny(warnings)]
 
 mod calendar;
@@ -88,7 +87,9 @@ mod rtc;
 mod sntp;
 
 // Re-export public API
+#[allow(unused_imports)]
 pub use rtc::{get_timestamp, initialize_rtc, is_time_synced, Timestamp};
+#[allow(unused_imports)]
 pub use sntp::{initialize_time, start_resync_task, SntpError};
 
 // Internal exports for tests

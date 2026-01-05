@@ -70,6 +70,13 @@
 #![allow(unsafe_code)]
 #![deny(warnings)]
 
+use core::sync::atomic::AtomicBool;
+
+/// System time synchronization status in CCM RAM
+#[allow(dead_code)]
+#[link_section = ".ccmram"]
+pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
+
 // ============================================================================
 // FUTURE CCM RAM ALLOCATIONS GO BELOW THIS LINE
 // ============================================================================
