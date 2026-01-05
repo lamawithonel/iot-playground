@@ -70,12 +70,33 @@
 #![allow(unsafe_code)]
 #![deny(warnings)]
 
-use core::sync::atomic::AtomicBool;
+use core::sync::atomic::{AtomicBool, AtomicU32};
 
 /// System time synchronization status in CCM RAM
 #[allow(dead_code)]
 #[link_section = ".ccmram"]
 pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
+
+/// Cached Unix timestamp in seconds for defmt timestamps (lower 32 bits)
+///
+/// Updated by tasks that read the RTC. Used by defmt timestamp macro
+/// which cannot access RTIC Shared resources.
+#[link_section = ".ccmram"]
+pub static CACHED_UNIX_SECS_LO: AtomicU32 = AtomicU32::new(0);
+
+/// Cached Unix timestamp in seconds for defmt timestamps (upper 32 bits)
+///
+/// Updated by tasks that read the RTC. Used by defmt timestamp macro
+/// which cannot access RTIC Shared resources.
+#[link_section = ".ccmram"]
+pub static CACHED_UNIX_SECS_HI: AtomicU32 = AtomicU32::new(0);
+
+/// Cached microseconds component for defmt timestamps
+///
+/// Updated by tasks that read the RTC. Used by defmt timestamp macro
+/// which cannot access RTIC Shared resources.
+#[link_section = ".ccmram"]
+pub static CACHED_MICROS: AtomicU32 = AtomicU32::new(0);
 
 // ============================================================================
 // FUTURE CCM RAM ALLOCATIONS GO BELOW THIS LINE

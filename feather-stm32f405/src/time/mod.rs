@@ -92,9 +92,16 @@ mod sntp;
 
 // Re-export public API
 #[allow(unused_imports)]
-pub use rtc::{get_timestamp, initialize_rtc, is_time_synced, Timestamp};
+pub use rtc::{
+    get_cached_timestamp, is_time_synced, read_rtc, set_time_synced, write_rtc, RtcError,
+    Timestamp,
+};
 #[allow(unused_imports)]
-pub use sntp::{initialize_time, start_resync_task, SntpError};
+pub use sntp::{initialize_time, start_resync_task, sync_sntp, SntpError};
+
+// Re-export calendar functions for users who need them
+#[allow(unused_imports)]
+pub use calendar::{datetime_to_unix, unix_to_datetime};
 
 // Internal exports for tests
 #[cfg(test)]
@@ -104,11 +111,15 @@ use calendar::is_leap_year;
 // DEFMT TIMESTAMP IMPLEMENTATION
 // ============================================================================
 // Custom defmt timestamp using hardware RTC. See module documentation for details.
+// Uses cached timestamp since defmt cannot access RTIC Shared resources.
 
 defmt::timestamp!("{=u64:iso8601ms}", {
-    let ts = get_timestamp();
+    let ts = get_cached_timestamp();
+    // Convert to milliseconds (microseconds / 1000)
     // Use saturating arithmetic to prevent overflow (not a practical concern)
-    ts.unix_secs.saturating_mul(1000).saturating_add(ts.millis as u64)
+    ts.unix_secs
+        .saturating_mul(1000)
+        .saturating_add((ts.micros / 1000) as u64)
 });
 
 #[cfg(test)]

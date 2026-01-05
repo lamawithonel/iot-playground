@@ -61,7 +61,9 @@ mod app {
     }
 
     #[shared]
-    struct Shared {}
+    struct Shared {
+        rtc: Rtc,
+    }
 
     #[local]
     struct Local {
@@ -107,9 +109,6 @@ mod app {
         let rtc = Rtc::new(p.RTC, rtc_config);
         info!("Internal RTC initialized with LSE (32.768kHz, ±20-50ppm accuracy)");
 
-        // Initialize time module with RTC
-        time::initialize_rtc(rtc);
-
         // Initialize Feather STM32F405 heartbeat LED (PC1)
         let led = Output::new(p.PC1, Level::High, Speed::Low);
 
@@ -131,7 +130,7 @@ mod app {
         network_task::spawn(net_periph).ok();
         frame_logger::spawn().ok();
 
-        (Shared {}, Local { led })
+        (Shared { rtc }, Local { led })
     }
 
     /// Heartbeat task - blinks LED to show system is alive
@@ -151,8 +150,8 @@ mod app {
     /// Priority 1: Low priority background task
     /// All network resources are constructed INSIDE this task
     /// This solves the !Send problem because nothing crosses task boundaries
-    #[task(priority = 1)]
-    async fn network_task(_cx: network_task::Context, periph: NetworkPeripherals) -> ! {
+    #[task(priority = 1, shared = [rtc])]
+    async fn network_task(mut cx: network_task::Context, periph: NetworkPeripherals) -> ! {
         info!("Network task started - initializing W5500...");
 
         // --- A. Setup SPI and GPIO ---
@@ -258,9 +257,15 @@ mod app {
             info!("Initializing SNTP time synchronization with RTC (LSE)...");
             match time::initialize_time(&stack).await {
                 Ok(ts) => {
+                    // Write timestamp to RTC
+                    cx.shared.rtc.lock(|rtc| {
+                        if let Err(e) = time::write_rtc(rtc, ts) {
+                            defmt::warn!("Failed to write RTC: {:?}", e);
+                        }
+                    });
                     info!(
-                        "SNTP sync successful: {}.{:03} UTC (written to internal RTC)",
-                        ts.unix_secs, ts.millis
+                        "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
+                        ts.unix_secs, ts.micros
                     );
                 }
                 Err(e) => {
@@ -297,20 +302,9 @@ mod app {
             }
         };
 
-        // SNTP periodic resync task (SR-NET-007: 15-minute interval)
-        // Runs concurrently with main app logic
-        // Updates internal RTC every 15 minutes to maintain accurate time
-        let sntp_resync = async {
-            // Wait for initial sync to complete
-            stack.wait_config_up().await;
-            Timer::after_secs(30).await; // Give initial sync time to complete
-
-            info!("SNTP resync task started (15-minute interval)");
-            time::start_resync_task(&stack).await // This function never returns
-        };
-
-        // Run all four concurrently - never returns
-        join4(runner.run(), runner2.run(), app_logic, sntp_resync).await;
+        // Run network infrastructure concurrently - never returns
+        // Note: SNTP resync task disabled for now - needs refactoring to access network stack
+        join4(runner.run(), runner2.run(), app_logic, async { loop { Timer::after_secs(3600).await; } }).await;
     }
 
     /// Example high-priority task that sends messages to network
@@ -318,8 +312,8 @@ mod app {
     /// Priority 3: High priority (simulates interrupt-driven sensor)
     /// Demonstrates timestamp API usage for sensor data
     /// Timestamps are read from internal RTC between SNTP syncs
-    #[task(priority = 3)]
-    async fn frame_logger(_cx: frame_logger::Context) -> ! {
+    #[task(priority = 3, shared = [rtc])]
+    async fn frame_logger(mut cx: frame_logger::Context) -> ! {
         let sender = network::network_sender();
 
         loop {
@@ -327,25 +321,29 @@ mod app {
             embassy_time::Timer::after_secs(5).await;
 
             // Get timestamp from internal RTC (SR-NET-007 requirement)
-            let timestamp = time::get_timestamp();
+            let timestamp = cx.shared.rtc.lock(|rtc| time::read_rtc(rtc).ok());
 
             // Create message with timestamp
             let mut msg_str = String::new();
-            if timestamp.unix_secs == 0 {
-                // Time not yet synced - use local monotonic counter
-                let _ = core::fmt::write(
-                    &mut msg_str,
-                    format_args!("Frame at {} ms (RTC not synced)", Mono::now().ticks()),
-                );
-            } else {
-                // Time is synced - use Unix timestamp from RTC with millisecond precision
-                let _ = core::fmt::write(
-                    &mut msg_str,
-                    format_args!(
-                        "Frame at {}.{:03} UTC (from internal RTC/LSE)",
-                        timestamp.unix_secs, timestamp.millis
-                    ),
-                );
+            match timestamp {
+                Some(ts) => {
+                    // Time is synced - use Unix timestamp from RTC with millisecond precision
+                    let millis = ts.micros / 1000;  // Convert microseconds to milliseconds
+                    let _ = core::fmt::write(
+                        &mut msg_str,
+                        format_args!(
+                            "Frame at {}.{:03} UTC (from internal RTC/LSE)",
+                            ts.unix_secs, millis
+                        ),
+                    );
+                }
+                None => {
+                    // Time not yet synced - use local monotonic counter
+                    let _ = core::fmt::write(
+                        &mut msg_str,
+                        format_args!("Frame at {} ms (RTC not synced)", Mono::now().ticks()),
+                    );
+                }
             }
 
             let msg = network::NetworkMessage::LogFrame { data: msg_str };

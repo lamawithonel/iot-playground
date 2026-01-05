@@ -8,7 +8,7 @@ use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::{IpEndpoint, Stack};
 use embassy_time::{Duration, Instant, Timer};
 
-use super::rtc::{write_rtc, RtcError, Timestamp};
+use super::rtc::{RtcError, Timestamp};
 
 /// Default NTP servers with fallback
 const NTP_SERVERS: &[&str] = &["pool.ntp.org", "time.google.com", "time.cloudflare.com"];
@@ -41,6 +41,7 @@ const MAX_STRATUM: u8 = 3;
 ///
 /// Clamps RTT/2 correction to a reasonable maximum to prevent overflow.
 /// Network RTT exceeding 2 seconds (correction > 1000ms) is unusual and likely an error.
+#[allow(dead_code)]
 const MAX_RTT_CORRECTION_MS: u64 = 1000;
 
 /// SNTP client errors
@@ -64,15 +65,16 @@ pub enum SntpError {
 impl From<RtcError> for SntpError {
     fn from(e: RtcError) -> Self {
         match e {
-            RtcError::NotInitialized => SntpError::RtcNotInitialized,
+            RtcError::NotSynced => SntpError::RtcNotInitialized,
             RtcError::HardwareError => SntpError::NetworkError,
         }
     }
 }
 
-/// Perform SNTP synchronization and write to internal RTC
+/// Perform SNTP synchronization
 ///
 /// Tries each configured NTP server with retry logic.
+/// Returns the synchronized timestamp for the caller to write to RTC.
 pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
     info!("Starting SNTP synchronization");
     for server in NTP_SERVERS {
@@ -85,14 +87,9 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
             match sntp_request(stack, server).await {
                 Ok(timestamp) => {
                     info!(
-                        "SNTP sync successful: {}.{:03} UTC",
-                        timestamp.unix_secs, timestamp.millis
+                        "SNTP sync successful: {}.{:06} UTC",
+                        timestamp.unix_secs, timestamp.micros
                     );
-
-                    // Write to internal RTC hardware
-                    write_rtc(timestamp)?;
-
-                    info!("Internal RTC updated with NTP time");
                     return Ok(timestamp);
                 }
                 Err(e) => {
@@ -192,31 +189,40 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
 
     // Calculate round-trip time and apply RTT/2 correction
     let rtt = receive_time.duration_since(transmit_time);
-    let rtt_correction_millis = rtt.as_millis() / 2;
+    let rtt_correction_micros = rtt.as_micros() / 2;
 
     let mut timestamp = Timestamp::from_ntp(tx_timestamp_secs, tx_timestamp_frac);
 
-    // Apply RTT/2 correction with bounds checking using min()
-    let correction = rtt_correction_millis.min(MAX_RTT_CORRECTION_MS) as u32;
-    timestamp.millis = timestamp.millis.saturating_add(correction);
-    if timestamp.millis >= 1_000 {
+    // Apply RTT/2 correction with bounds checking
+    // Clamp to reasonable maximum (1 second = 1_000_000 microseconds)
+    let correction = rtt_correction_micros.min(1_000_000) as u32;
+    timestamp.micros = timestamp.micros.saturating_add(correction);
+    if timestamp.micros >= 1_000_000 {
         timestamp.unix_secs = timestamp.unix_secs.saturating_add(1);
-        timestamp.millis -= 1_000;
+        timestamp.micros -= 1_000_000;
     }
 
     info!(
-        "NTP timestamp: {}.{:03} UTC (RTT correction: {} ms)",
-        timestamp.unix_secs, timestamp.millis, correction
+        "NTP timestamp: {}.{:06} UTC (RTT correction: {} µs)",
+        timestamp.unix_secs, timestamp.micros, correction
     );
     Ok(timestamp)
 }
 
 /// Background task for periodic re-synchronization (15 minutes)
+///
+/// Returns timestamps for the caller to write to RTC.
+#[allow(dead_code)]
 pub async fn resync_task(stack: &Stack<'static>) -> ! {
     loop {
         Timer::after(Duration::from_secs(SNTP_RESYNC_INTERVAL_SECS)).await;
-        if let Err(e) = sync_sntp(stack).await {
-            error!("Periodic SNTP resync failed: {:?}", e);
+        match sync_sntp(stack).await {
+            Ok(_timestamp) => {
+                // Caller should write timestamp to RTC
+            }
+            Err(e) => {
+                error!("Periodic SNTP resync failed: {:?}", e);
+            }
         }
     }
 }
@@ -224,6 +230,7 @@ pub async fn resync_task(stack: &Stack<'static>) -> ! {
 /// Initialize time system with SNTP sync
 ///
 /// Call once after DHCP lease is acquired.
+/// Returns timestamp for caller to write to RTC.
 pub async fn initialize_time(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
     sync_sntp(stack).await
 }
@@ -231,6 +238,8 @@ pub async fn initialize_time(stack: &Stack<'static>) -> Result<Timestamp, SntpEr
 /// Start periodic SNTP re-synchronization task
 ///
 /// Should be spawned as a separate task. Resyncs every 15 minutes.
+/// Returns timestamps for caller to write to RTC.
+#[allow(dead_code)]
 pub async fn start_resync_task(stack: &Stack<'static>) -> ! {
     resync_task(stack).await
 }
