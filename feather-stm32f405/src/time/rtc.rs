@@ -76,6 +76,12 @@ pub fn is_time_synced() -> bool {
 /// Write timestamp to internal RTC hardware
 ///
 /// Only sets TIME_SYNCED flag if the write succeeds.
+///
+/// **Note**: The milliseconds component of the timestamp is not written to the RTC.
+/// The RTC subsecond counter will start from 0 after the write. This is acceptable
+/// because this function is primarily used during NTP synchronization, where the
+/// subsecond precision comes from the network round-trip time and begins counting
+/// immediately after the RTC is set.
 pub fn write_rtc(timestamp: Timestamp) -> Result<(), RtcError> {
     let datetime = unix_to_datetime(timestamp.unix_secs);
 
