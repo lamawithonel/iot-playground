@@ -35,9 +35,9 @@ pub fn network_receiver() -> Receiver<'static, CriticalSectionRawMutex, NetworkM
     NETWORK_CHANNEL.receiver()
 }
 
-/// Run the main network application logic
+/// Run the network monitor task
 /// This handles DHCP configuration, IP logging, message processing, and statistics
-pub async fn run_app_logic(stack: &Stack<'static>) {
+pub async fn run_network_monitor(stack: &Stack<'static>) {
     use defmt::info;
 
     let receiver = network_receiver();
