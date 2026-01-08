@@ -156,14 +156,27 @@ mod app {
         }
     }
 
-    /// Network Actor Task - Init-Inside-Task Pattern (RTIC-First)
+    /// Network Actor Task - Init-Inside-Task Pattern (RTIC-First Architecture)
     ///
     /// Priority 1: Low priority background task
     /// All network resources are constructed INSIDE this task
     /// This solves the !Send problem because nothing crosses task boundaries
     ///
-    /// This task now runs ONLY the W5500 and embassy-net runners.
-    /// Application logic is handled via message passing.
+    /// ## RTIC-First Design
+    ///
+    /// This task runs ONLY the essential network runners (W5500 + embassy-net).
+    /// Application logic is handled via message passing to allow proper MCU sleep:
+    ///
+    /// - Network runners use `embassy_futures::join()` which yields properly
+    /// - Message handler awaits on channel, allowing WFI when no messages
+    /// - SNTP sync is requested via messages from separate RTIC task
+    /// - No polling loops or continuous work that prevents sleep
+    ///
+    /// ## SPI Bus Mutex
+    ///
+    /// Uses `embassy_sync::mutex::Mutex` as required by embassy-embedded-hal's
+    /// shared SPI bus API. This is a lightweight critical-section-based mutex
+    /// that doesn't prevent sleep since the SPI operations complete quickly.
     #[task(priority = 1)]
     async fn network_task(
         _cx: network_task::Context,
@@ -329,7 +342,18 @@ mod app {
     /// SNTP periodic resync task (RTIC-First approach)
     ///
     /// Priority 2: Medium priority
-    /// This task uses Mono::delay() for interrupt-driven scheduling
+    ///
+    /// ## Interrupt-Driven Scheduling
+    ///
+    /// This task uses `Mono::delay(15.minutes()).await` for periodic scheduling.
+    /// Unlike Embassy's polling timers, this allows the MCU to enter WFI sleep
+    /// because the delay is implemented using the TIM2 hardware timer interrupt.
+    ///
+    /// ## Architecture
+    ///
+    /// - Sends SNTP sync request to network task via message channel
+    /// - Network task owns the Stack (!Send) and performs actual sync
+    /// - 15-minute interval per SR-NET-007 requirement
     #[task(priority = 2)]
     async fn sntp_resync(
         _cx: sntp_resync::Context,
@@ -355,9 +379,16 @@ mod app {
     /// Example high-priority task that sends messages to network (RTIC-First)
     ///
     /// Priority 3: High priority (simulates interrupt-driven sensor)
-    /// Demonstrates timestamp API usage for sensor data
-    /// Timestamps are read from internal RTC between SNTP syncs
-    /// Uses Mono::delay() for interrupt-driven scheduling
+    ///
+    /// ## Timestamp API Usage
+    ///
+    /// Demonstrates reading timestamps from internal RTC between SNTP syncs.
+    /// The RTC continues counting with LSE accuracy (±20-50ppm) between syncs.
+    ///
+    /// ## Interrupt-Driven Scheduling
+    ///
+    /// Uses `Mono::delay(5.secs()).await` for periodic execution. This is
+    /// interrupt-driven via TIM2, allowing MCU to enter WFI sleep between frames.
     #[task(priority = 3)]
     async fn frame_logger(
         _cx: frame_logger::Context,
