@@ -193,7 +193,7 @@ mod app {
         // NOTE: This returns (Device, Runner) - both are !Send
         // The last parameter is the RESET PIN (OutputPin), not the chip type
         // Chip type W5500 is inferred from context
-        let (device, runner): (
+        let (w5500_device, w5500_runner): (
             embassy_net_wiznet::Device<'_>,
             embassy_net_wiznet::Runner<'_, W5500, _, _, _>,
         ) = embassy_net_wiznet::new(mac_addr, state, spi_device, hardware.int, hardware.reset)
@@ -209,8 +209,12 @@ mod app {
         static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
         static STACK: StaticCell<Stack<'static>> = StaticCell::new();
 
-        let (stack_val, mut runner2) =
-            embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
+        let (stack_val, mut net_runner) = embassy_net::new(
+            w5500_device,
+            config,
+            RESOURCES.init(StackResources::new()),
+            seed,
+        );
 
         let stack = STACK.init(stack_val);
 
@@ -230,8 +234,8 @@ mod app {
 
         // Run all three concurrently - never returns
         join3(
-            runner.run(),
-            runner2.run(),
+            w5500_runner.run(),
+            net_runner.run(),
             net::run_network_monitor(stack),
         )
         .await;
