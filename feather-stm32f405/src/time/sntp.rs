@@ -9,7 +9,7 @@ use embassy_net::dns::DnsQueryType;
 use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::{IpEndpoint, Stack};
 use embassy_time::{Duration, Instant, Timer};
-use rtic_monotonics::fugit::ExtU64;
+use rtic_monotonics::fugit::ExtU64; // For .millis() extension method
 use rtic_monotonics::Monotonic;
 
 use super::rtc::{write_rtc, RtcError, Timestamp};
