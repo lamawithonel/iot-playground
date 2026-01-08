@@ -95,6 +95,7 @@ pub fn write_rtc(timestamp: Timestamp) -> Result<(), RtcError> {
 /// Read timestamp from internal RTC hardware
 ///
 /// Returns an error if time has not been synchronized yet.
+#[allow(dead_code)]
 pub fn read_rtc() -> Result<Timestamp, RtcError> {
     if !TIME_SYNCED.load(Ordering::Acquire) {
         return Err(RtcError::NotInitialized);
@@ -115,6 +116,7 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
 /// Get current timestamp from internal RTC hardware
 ///
 /// Returns `Timestamp` with `unix_secs = 0` until first sync.
+#[allow(dead_code)]
 pub fn get_timestamp() -> Timestamp {
     read_rtc().unwrap_or(Timestamp::new(0, 0))
 }
