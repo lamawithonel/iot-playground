@@ -31,7 +31,6 @@ mod app {
     use embassy_stm32::spi::{self, Spi};
     use embassy_stm32::time::Hertz;
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-    use heapless::String;
     use rtic_sync::make_channel;
     use static_cell::StaticCell;
 
@@ -136,9 +135,6 @@ mod app {
 
         heartbeat::spawn().ok();
         network_task::spawn(net_periph, net_receiver).ok();
-
-        // Start frame_logger task
-        frame_logger::spawn(net_sender.clone()).ok();
 
         // Start SNTP resync task
         sntp_resync::spawn(net_sender).ok();
@@ -289,9 +285,6 @@ mod app {
             loop {
                 match receiver.recv().await {
                     Ok(msg) => match msg {
-                        network::NetworkMessage::LogFrame { data } => {
-                            info!("Received frame: {}", data.as_str());
-                        }
                         network::NetworkMessage::SntpSync => {
                             info!("SNTP sync requested");
                             match time::sntp::sync_sntp(&stack).await {
@@ -353,59 +346,6 @@ mod app {
             {
                 warn!("Failed to send SNTP sync request");
             }
-        }
-    }
-
-    /// Example high-priority task that sends messages to network (RTIC-First)
-    ///
-    /// Priority 3: High priority (simulates interrupt-driven sensor)
-    ///
-    /// ## Timestamp API Usage
-    ///
-    /// Demonstrates reading timestamps from internal RTC between SNTP syncs.
-    /// The RTC continues counting with LSE accuracy (±20-50ppm) between syncs.
-    ///
-    /// ## Interrupt-Driven Scheduling
-    ///
-    /// Uses `Mono::delay(5.secs()).await` for periodic execution. This is
-    /// interrupt-driven via TIM2, allowing MCU to enter WFI sleep between frames.
-    #[task(priority = 3)]
-    async fn frame_logger(
-        _cx: frame_logger::Context,
-        mut sender: rtic_sync::channel::Sender<'static, network::NetworkMessage, 8>,
-    ) -> ! {
-        loop {
-            // Wait 5 seconds between frames
-            Mono::delay(5.secs()).await;
-
-            // Get timestamp from internal RTC (SR-NET-007 requirement)
-            let timestamp = time::get_timestamp();
-
-            // Create message with timestamp
-            let mut msg_str = String::new();
-            if timestamp.unix_secs == 0 {
-                // Time not yet synced - use local monotonic counter
-                let _ = core::fmt::write(
-                    &mut msg_str,
-                    format_args!("Frame at {} ms (RTC not synced)", Mono::now().ticks()),
-                );
-            } else {
-                // Time is synced - use Unix timestamp from RTC
-                let _ = core::fmt::write(
-                    &mut msg_str,
-                    format_args!(
-                        "Frame at {} UTC (from internal RTC/LSE)",
-                        timestamp.unix_secs
-                    ),
-                );
-            }
-
-            let msg = network::NetworkMessage::LogFrame { data: msg_str };
-
-            // Send to network task (non-blocking in async context)
-            sender.send(msg).await.ok();
-
-            info!("Sent RTC-timestamped frame to network task");
         }
     }
 

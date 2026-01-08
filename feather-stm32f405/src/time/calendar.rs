@@ -73,6 +73,7 @@ pub fn unix_to_datetime(unix_secs: u64) -> DateTime {
 /// **Limitations**: See `../CUSTOM_TIME_LIMITATIONS.md`
 /// - O(1) performance
 /// - UTC only (no timezone support)
+#[allow(dead_code)]
 pub fn datetime_to_unix(dt: DateTime) -> u64 {
     const SECONDS_PER_DAY: u64 = 86400;
 
@@ -131,6 +132,7 @@ fn civil_from_days(days_since_epoch: i32) -> (u16, u8, u8) {
 /// Reference: http://howardhinnant.github.io/date_algorithms.html
 ///
 /// This is an O(1) algorithm that correctly handles all leap years.
+#[allow(dead_code)]
 fn days_from_civil(year: u16, month: u8, day: u8) -> i32 {
     let y = year as i32;
     let m = month as i32;
