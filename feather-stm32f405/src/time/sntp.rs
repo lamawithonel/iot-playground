@@ -9,6 +9,7 @@ use embassy_net::dns::DnsQueryType;
 use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::{IpEndpoint, Stack};
 use embassy_time::{Duration, Instant, Timer};
+use rtic_monotonics::fugit::ExtU64;
 use rtic_monotonics::Monotonic;
 
 use super::rtc::{write_rtc, RtcError, Timestamp};
@@ -24,9 +25,6 @@ const SNTP_TIMEOUT_MS: u64 = 5000;
 
 /// Number of retry attempts per server
 const SNTP_RETRY_COUNT: usize = 3;
-
-/// Retry backoff delay
-const SNTP_RETRY_BACKOFF_MS: u64 = 2000;
 
 /// Maximum accepted stratum level
 ///
@@ -104,7 +102,7 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
                 }
                 Err(e) => {
                     warn!("SNTP sync failed: {:?}, retrying...", e);
-                    Timer::after(Duration::from_millis(SNTP_RETRY_BACKOFF_MS)).await;
+                    Mono::delay(2000_u64.millis()).await; // 2 second backoff
                 }
             }
         }
@@ -157,6 +155,8 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
     info!("Sent NTP request to {}", Debug2Format(&server_endpoint));
 
     // Receive response with timeout
+    // Note: Using embassy_time::Timer here is correct - this is an I/O timeout
+    // racing against the actual network operation, not a periodic delay
     let mut response = [0u8; 48];
     let timeout_future = Timer::after(Duration::from_millis(SNTP_TIMEOUT_MS));
     let recv_future = socket.recv_from(&mut response);
