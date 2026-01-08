@@ -221,8 +221,8 @@ mod app {
         join4(
             runner.run(),
             runner2.run(),
-            net::run_app_logic(&stack),
-            net::run_sntp_resync(&stack),
+            net::run_app_logic(stack),
+            net::run_sntp_resync(stack),
         )
         .await;
     }
