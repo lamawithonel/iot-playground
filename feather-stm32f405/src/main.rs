@@ -7,15 +7,15 @@ use defmt_rtt as _; // global logger
 use heapless::String;
 use panic_probe as _;
 use rtic::app;
-use rtic_monotonics::systick::prelude::*;
+use rtic_monotonics::stm32::prelude::*;
 
 mod ccmram;
 mod network;
 mod time;
 
-systick_monotonic!(Mono, 1_000);
+stm32_tim2_monotonic!(Mono, 1_000_000);
 
-#[app(device = embassy_stm32, peripherals = true, dispatchers = [USART1, USART2, USART3])]
+#[app(device = stm32_metapac, peripherals = false, dispatchers = [USART1, USART2, USART3])]
 mod app {
     use super::*;
     use defmt::info;
@@ -70,11 +70,8 @@ mod app {
     }
 
     #[init]
-    fn init(cx: init::Context) -> (Shared, Local) {
+    fn init(_cx: init::Context) -> (Shared, Local) {
         info!("IoT Playground starting...");
-
-        // Initialize RTIC monotonic
-        Mono::start(cx.core.SYST, 168_000_000);
 
         // Configure embassy-stm32 with proper clock sources
         // Adafruit Feather STM32F405 has:
@@ -102,6 +99,13 @@ mod app {
         let p = embassy_stm32::init(config);
 
         info!("System initialized with HSE (12MHz) and LSE (32.768kHz)");
+
+        // Initialize TIM2 monotonic timer at 1 MHz
+        // TIM2 is on APB1. When APB1 prescaler != 1, timer clock = 2*APB1
+        // With default config: APB1 = 42 MHz, so TIM2 clock = 84 MHz
+        let timer_clock_hz = 84_000_000;
+        Mono::start(timer_clock_hz);
+        info!("TIM2 monotonic timer initialized at 1 MHz");
 
         // Initialize internal RTC with LSE clock
         let rtc_config = RtcConfig::default();
