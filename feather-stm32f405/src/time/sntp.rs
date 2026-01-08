@@ -2,11 +2,14 @@
 //!
 //! Handles SNTP requests, DNS resolution, and server communication.
 
+use crate::ccmram;
+use crate::Mono;
 use defmt::{error, info, warn, Debug2Format, Format};
 use embassy_net::dns::DnsQueryType;
 use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::{IpEndpoint, Stack};
 use embassy_time::{Duration, Instant, Timer};
+use rtic_monotonics::Monotonic;
 
 use super::rtc::{write_rtc, RtcError, Timestamp};
 
@@ -86,7 +89,18 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
                     // Write to internal RTC hardware
                     write_rtc(timestamp)?;
 
-                    info!("Internal RTC updated with NTP time");
+                    // Calibrate wall-clock time system with NTP timestamp + monotonic timer
+                    let mono_micros = Mono::now().ticks() as u32;
+                    ccmram::calibrate_wallclock(
+                        timestamp.unix_secs as u32,
+                        timestamp.micros,
+                        mono_micros,
+                    );
+
+                    info!(
+                        "Wall-clock calibrated: RTC updated, mono={} µs",
+                        mono_micros
+                    );
                     return Ok(timestamp);
                 }
                 Err(e) => {
