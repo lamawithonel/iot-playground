@@ -8,7 +8,6 @@
 //! - Time is written to STM32 hardware internal RTC
 //! - Between syncs, timestamps are read from internal RTC hardware
 //! - Sync status stored atomically in CCM RAM
-//! - defmt timestamps use RTC for Unix epoch time display
 //!
 //! ## Features
 //! - UDP socket communication with NTP servers
@@ -17,7 +16,6 @@
 //! - 15-minute automatic re-synchronization
 //! - Hardware internal RTC for accurate timekeeping between syncs
 //! - Atomic sync status in CCM RAM
-//! - Custom defmt timestamps (Unix epoch time instead of uptime)
 //! - Stratum validation (rejects servers with stratum > 3)
 //! - RTT/2 correction for more accurate synchronization
 //!
@@ -42,11 +40,6 @@
 //!
 //! **📖 See `../CUSTOM_TIME_LIMITATIONS.md` for detailed analysis**
 //!
-//! ## defmt Timestamps
-//!
-//! This module provides a custom `defmt::timestamp!()` implementation using the hardware RTC.
-//! Returns Unix epoch time in seconds (u64) formatted as ISO8601 date-time.
-//!
 //! ### Behavior:
 //! - Before first NTP sync: Shows 0 (timestamp not available)
 //! - After NTP sync: Shows ISO8601 formatted time from RTC (1-second resolution)
@@ -55,8 +48,6 @@
 //! ### Format:
 //! The `:iso8601s` display hint formats Unix epoch seconds as ISO8601 date-time strings.
 //! Example: `1767571200` → `2026-01-05T01:00:00Z`
-//!
-//! See: <https://defmt.ferrous-systems.com/timestamps>
 //!
 //! ## Usage
 //! ```no_run
@@ -95,13 +86,6 @@ pub mod sntp;
 // Internal exports for tests
 #[cfg(test)]
 use calendar::is_leap_year;
-
-// ============================================================================
-// DEFMT TIMESTAMP IMPLEMENTATION
-// ============================================================================
-// Custom defmt timestamp using hardware RTC. See module documentation for details.
-
-defmt::timestamp!("{=u64:iso8601s}", { get_timestamp().unix_secs });
 
 #[cfg(test)]
 mod tests {
