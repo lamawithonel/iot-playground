@@ -94,7 +94,7 @@ pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
 // doesn't have native 64-bit atomics. This limits us but is workable:
 // - Seconds stored as u32 (wraps in 2106, acceptable for embedded systems)
 // - Microseconds within second stored separately (0-999999)
-// - Monotonic ticks in microseconds (wraps after ~71 minutes, but handled via wrapping arithmetic)
+// - Monotonic ticks in microseconds (wraps after ~71.6 minutes, but handled via wrapping arithmetic)
 
 /// Base Unix time in seconds at calibration
 ///
@@ -115,7 +115,7 @@ static BASE_UNIX_MICROS: AtomicU32 = AtomicU32::new(0);
 ///
 /// Set during NTP synchronization to the monotonic timer ticks (microseconds)
 /// at the moment of calibration. This is captured at the same instant as BASE_UNIX_SECS/MICROS.
-/// Using u32 for microseconds means it wraps every ~71 minutes, but wrapping_sub handles this correctly.
+/// Using u32 for microseconds means it wraps every ~71.6 minutes, but wrapping_sub handles this correctly.
 #[link_section = ".ccmram"]
 static BASE_MONO_MICROS: AtomicU32 = AtomicU32::new(0);
 
