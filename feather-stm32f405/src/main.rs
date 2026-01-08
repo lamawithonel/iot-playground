@@ -236,52 +236,56 @@ mod app {
         let (stack, mut net_runner) =
             embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
 
-        info!("Network stack initialized - waiting for DHCP...");
+        info!("Network stack initialized");
 
-        // Wait for network to come up
-        stack.wait_config_up().await;
-        info!("Network is UP!");
+        // --- D. Run network runners and application logic concurrently ---
+        // The runners MUST be running for DHCP and network operations to work.
+        // We structure this as three concurrent futures:
+        // 1. W5500 hardware driver
+        // 2. Embassy-net TCP/IP stack
+        // 3. Application logic (DHCP wait, SNTP, message handling)
 
-        // Log IP address
-        if let Some(config) = stack.config_v4() {
-            let ip = config.address.address();
-            let octets = ip.octets();
-            info!(
-                "IP: {}.{}.{}.{}",
-                octets[0], octets[1], octets[2], octets[3]
-            );
+        let app_logic = async {
+            // Wait for network to come up (DHCP)
+            info!("Waiting for DHCP...");
+            stack.wait_config_up().await;
+            info!("Network is UP!");
 
-            if let Some(gateway) = config.gateway {
-                let gw_octets = gateway.octets();
+            // Log IP address
+            if let Some(config) = stack.config_v4() {
+                let ip = config.address.address();
+                let octets = ip.octets();
                 info!(
-                    "Gateway: {}.{}.{}.{}",
-                    gw_octets[0], gw_octets[1], gw_octets[2], gw_octets[3]
+                    "IP: {}.{}.{}.{}",
+                    octets[0], octets[1], octets[2], octets[3]
                 );
+
+                if let Some(gateway) = config.gateway {
+                    let gw_octets = gateway.octets();
+                    info!(
+                        "Gateway: {}.{}.{}.{}",
+                        gw_octets[0], gw_octets[1], gw_octets[2], gw_octets[3]
+                    );
+                }
             }
-        }
 
-        // Initialize SNTP time synchronization
-        info!("Initializing SNTP time synchronization with RTC (LSE)...");
-        match time::sntp::sync_sntp(&stack).await {
-            Ok(ts) => {
-                info!(
-                    "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
-                    ts.unix_secs, ts.micros
-                );
+            // Initialize SNTP time synchronization
+            info!("Initializing SNTP time synchronization with RTC (LSE)...");
+            match time::sntp::sync_sntp(&stack).await {
+                Ok(ts) => {
+                    info!(
+                        "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
+                        ts.unix_secs, ts.micros
+                    );
+                }
+                Err(e) => {
+                    warn!("SNTP initialization failed: {:?}", e);
+                }
             }
-            Err(e) => {
-                warn!("SNTP initialization failed: {:?}", e);
-            }
-        }
 
-        info!("Network initialization complete - entering main loop");
+            info!("Network initialization complete - processing messages");
 
-        info!("Network initialization complete - entering main loop");
-
-        // --- D. Run network runners and message handler with join() ---
-        // Using join() is simpler than select3() and ensures all futures run concurrently.
-        // The message handler processes SNTP sync requests from other tasks.
-        let message_handler = async {
+            // Main message loop
             loop {
                 match receiver.recv().await {
                     Ok(msg) => match msg {
@@ -312,7 +316,7 @@ mod app {
         };
 
         // Run all three futures concurrently - they never return
-        join3(w5500_runner.run(), net_runner.run(), message_handler).await;
+        join3(w5500_runner.run(), net_runner.run(), app_logic).await;
     }
 
     /// SNTP periodic resync task (RTIC-First approach)
