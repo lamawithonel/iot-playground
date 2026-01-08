@@ -20,7 +20,7 @@ mod app {
     use super::*;
     use defmt::info;
     use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice as SpiDeviceBus;
-    use embassy_futures::join::join4;
+    use embassy_futures::join::join3;
     use embassy_net::{Stack, StackResources};
     use embassy_net_wiznet::chip::W5500;
     use embassy_stm32::exti::ExtiInput;
@@ -41,6 +41,11 @@ mod app {
         reset: Output<'static>,
         int: ExtiInput<'static>,
     }
+
+    /// Global network stack pointer (initialized by network_task)
+    /// Using AtomicPtr for thread-safe access
+    static NETWORK_STACK_PTR: core::sync::atomic::AtomicPtr<Stack<'static>> =
+        core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
 
     #[shared]
     struct Shared {}
@@ -137,6 +142,7 @@ mod app {
 
         heartbeat::spawn().ok();
         network_task::spawn(net_hardware).ok();
+        sntp_resync_task::spawn().ok();
         frame_logger::spawn().ok();
 
         (Shared {}, Local { led })
@@ -210,21 +216,70 @@ mod app {
 
         info!("Network stack initialized");
 
+        // Store stack pointer for SNTP task (safe because stack is 'static)
+        NETWORK_STACK_PTR.store(
+            stack as *const _ as *mut _,
+            core::sync::atomic::Ordering::Release,
+        );
+
         // --- D. Run Everything Concurrently ---
         // We need to run:
         // 1. W5500 runner (handles SPI/IRQ)
         // 2. Stack runner (handles TCP/IP state machine)
-        // 3. Application logic (from net module)
-        // 4. SNTP resync task (from net module)
+        // 3. Network monitor (from net module)
 
-        // Run all four concurrently - never returns
-        join4(
+        // Run all three concurrently - never returns
+        join3(
             runner.run(),
             runner2.run(),
             net::run_network_monitor(stack),
-            net::run_sntp_resync(stack),
         )
         .await;
+    }
+
+    /// SNTP periodic resync task
+    ///
+    /// Priority 1: Low priority background task
+    /// Uses RTIC monotonic timer to wake every 15 minutes and sync time (SR-NET-007)
+    #[task(priority = 1)]
+    #[allow(unsafe_code)] // Required to access global stack pointer
+    async fn sntp_resync_task(_cx: sntp_resync_task::Context) -> ! {
+        info!("SNTP resync task started, waiting for network stack...");
+
+        // Wait for network stack pointer to be set
+        let stack = loop {
+            let ptr = NETWORK_STACK_PTR.load(core::sync::atomic::Ordering::Acquire);
+            if !ptr.is_null() {
+                // Safety: The pointer is valid because:
+                // 1. It points to a 'static Stack that never moves or gets deallocated
+                // 2. We only read through this reference, never write
+                // 3. The Stack is initialized before this pointer is set
+                unsafe { break &*ptr };
+            }
+            // Wait a bit before checking again
+            Mono::delay(100.millis()).await;
+        };
+
+        info!("Network stack ready, waiting for initial DHCP...");
+
+        // Wait for network to come up
+        stack.wait_config_up().await;
+
+        // Wait for initial time sync to complete
+        Mono::delay(30.secs()).await;
+
+        info!("Starting SNTP periodic resync (15-minute interval using RTIC Mono timer)");
+
+        // Periodic resync every 15 minutes using RTIC monotonic timer
+        loop {
+            Mono::delay((15 * 60).secs()).await; // 15 minutes
+
+            if let Err(e) = time::sync_sntp(stack).await {
+                defmt::warn!("Periodic SNTP resync failed: {:?}", e);
+            } else {
+                info!("SNTP periodic resync successful");
+            }
+        }
     }
 
     /// Example high-priority task that sends messages to network

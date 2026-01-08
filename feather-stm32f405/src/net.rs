@@ -109,6 +109,8 @@ pub async fn run_network_monitor(stack: &Stack<'static>) {
 
 /// Run the SNTP periodic resync task
 /// This task syncs time every 15 minutes per SR-NET-007
+/// Note: Currently unused - SNTP resync is handled by dedicated RTIC task
+#[allow(dead_code)]
 pub async fn run_sntp_resync(stack: &Stack<'static>) -> ! {
     use defmt::info;
     use embassy_time::Timer;
@@ -118,5 +120,11 @@ pub async fn run_sntp_resync(stack: &Stack<'static>) -> ! {
     Timer::after_secs(30).await; // Give initial sync time to complete
 
     info!("SNTP resync task started (15-minute interval)");
-    time::start_resync_task(stack).await // This function never returns
+    
+    loop {
+        Timer::after_secs(15 * 60).await; // 15 minutes
+        if let Err(e) = crate::time::sync_sntp(stack).await {
+            defmt::warn!("Periodic SNTP resync failed: {:?}", e);
+        }
+    }
 }
