@@ -14,6 +14,8 @@ use heapless::String;
 pub enum NetworkMessage {
     /// Log a message (for demonstration)
     LogFrame { data: String<128> },
+    /// Request SNTP synchronization
+    SntpSync,
 }
 
 // Note: With rtic-sync, channels are created using make_channel! macro

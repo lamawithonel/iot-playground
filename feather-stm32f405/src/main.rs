@@ -4,7 +4,6 @@
 #![no_std]
 
 use defmt_rtt as _; // global logger
-use heapless::String;
 use panic_probe as _;
 use rtic::app;
 use rtic_monotonics::stm32::prelude::*;
@@ -18,9 +17,9 @@ stm32_tim2_monotonic!(Mono, 1_000_000);
 #[app(device = embassy_stm32, peripherals = true, dispatchers = [USART1, USART2, USART3])]
 mod app {
     use super::*;
-    use defmt::info;
+    use defmt::{info, warn};
     use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice as SpiDeviceBus;
-    use embassy_futures::join::join4;
+    use embassy_futures::join::join;
     use embassy_net::StackResources;
     use embassy_net_wiznet::chip::W5500;
     use embassy_stm32::exti::ExtiInput;
@@ -32,7 +31,7 @@ mod app {
     use embassy_stm32::spi::{self, Spi};
     use embassy_stm32::time::Hertz;
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-    use embassy_time::Timer;
+    use heapless::String;
     use rtic_sync::make_channel;
     use static_cell::StaticCell;
 
@@ -136,14 +135,17 @@ mod app {
         let (net_sender, net_receiver) = make_channel!(network::NetworkMessage, 8);
 
         heartbeat::spawn().ok();
-        network_task::spawn(net_periph, net_receiver).ok();
+        network_task::spawn(net_periph, net_receiver, net_sender.clone()).ok();
+
+        // Start frame_logger task
         frame_logger::spawn(net_sender).ok();
 
         (Shared {}, Local { led })
     }
 
     /// Heartbeat task - blinks LED to show system is alive
-    #[task(local = [led])]
+    /// Priority 1: Low priority background task
+    #[task(priority = 1, local = [led])]
     async fn heartbeat(cx: heartbeat::Context) {
         info!("Heartbeat task started");
         loop {
@@ -154,16 +156,20 @@ mod app {
         }
     }
 
-    /// Network Actor Task - Init-Inside-Task Pattern
+    /// Network Actor Task - Init-Inside-Task Pattern (RTIC-First)
     ///
     /// Priority 1: Low priority background task
     /// All network resources are constructed INSIDE this task
     /// This solves the !Send problem because nothing crosses task boundaries
+    ///
+    /// This task now runs ONLY the W5500 and embassy-net runners.
+    /// Application logic is handled via message passing.
     #[task(priority = 1)]
     async fn network_task(
         _cx: network_task::Context,
         periph: NetworkPeripherals,
         mut receiver: rtic_sync::channel::Receiver<'static, network::NetworkMessage, 8>,
+        sender: rtic_sync::channel::Sender<'static, network::NetworkMessage, 8>,
     ) -> ! {
         info!("Network task started - initializing W5500...");
 
@@ -185,12 +191,12 @@ mod app {
         let mut reset = Output::new(periph.reset, Level::High, Speed::Low);
         let int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
 
-        // Hardware reset
+        // Hardware reset - using RTIC Monotonic for delays
         info!("Performing W5500 hardware reset...");
         reset.set_low();
-        Timer::after_millis(1).await;
+        Mono::delay(1.millis()).await;
         reset.set_high();
-        Timer::after_millis(2).await;
+        Mono::delay(2.millis()).await;
 
         // --- B. Create SPI Device (async version with Mutex wrapper) ---
         type SpiBusType = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, Spi<'static, Async>>;
@@ -233,16 +239,11 @@ mod app {
 
         info!("Network stack initialized");
 
-        // --- E. Run Everything Concurrently ---
-        // We need to run:
-        // 1. W5500 runner (handles SPI/IRQ)
-        // 2. Stack runner (handles TCP/IP state machine)
-        // 3. Application logic
-        // 4. SNTP resync task (after initial sync)
+        // --- E. Run network runners and message handler concurrently ---
+        // The runners yield properly when there's no work, allowing WFI sleep
+        let runners = join(runner.run(), runner2.run());
 
-        let app_logic = async {
-            // Use receiver from task parameter
-
+        let message_handler = async {
             // Wait for network to come up
             stack.wait_config_up().await;
             info!("Network is UP!");
@@ -266,78 +267,105 @@ mod app {
             }
 
             // Initialize SNTP time synchronization (SR-NET-006)
-            // This will write the time to internal RTC (clocked by LSE)
             info!("Initializing SNTP time synchronization with RTC (LSE)...");
-            match time::initialize_time(&stack).await {
+            match time::sntp::sync_sntp(&stack).await {
                 Ok(ts) => {
                     info!(
                         "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
                         ts.unix_secs, ts.micros
                     );
+                    // Spawn the periodic SNTP resync task
+                    sntp_resync::spawn(sender.clone()).ok();
                 }
                 Err(e) => {
-                    defmt::warn!("SNTP initialization failed: {:?}", e);
+                    warn!("SNTP initialization failed: {:?}", e);
+                    // Spawn the resync task anyway, it will retry
+                    sntp_resync::spawn(sender.clone()).ok();
                 }
             }
 
-            // Main event loop
-            let mut stats_timer =
-                embassy_time::Ticker::every(embassy_time::Duration::from_secs(10));
-
+            // Main message loop
             loop {
-                // Use select to handle both channel messages and periodic stats
-                embassy_futures::select::select(receiver.recv(), stats_timer.next()).await;
-
-                // Check for messages
-                while let Ok(msg) = receiver.try_recv() {
-                    match msg {
+                // Wait for messages from other tasks
+                match receiver.recv().await {
+                    Ok(msg) => match msg {
                         network::NetworkMessage::LogFrame { data } => {
                             info!("Received frame: {}", data.as_str());
                         }
+                        network::NetworkMessage::SntpSync => {
+                            info!("SNTP sync requested");
+                            match time::sntp::sync_sntp(&stack).await {
+                                Ok(ts) => {
+                                    info!(
+                                        "SNTP sync successful: {}.{:06} UTC",
+                                        ts.unix_secs, ts.micros
+                                    );
+                                }
+                                Err(e) => {
+                                    warn!("SNTP sync failed: {:?}", e);
+                                }
+                            }
+                        }
+                    },
+                    Err(_) => {
+                        // Channel closed, shouldn't happen
+                        warn!("Network message channel closed");
+                        Mono::delay(1.secs()).await;
                     }
-                }
-
-                // Log network statistics
-                if let Some(config) = stack.config_v4() {
-                    let ip = config.address.address();
-                    let octets = ip.octets();
-                    info!(
-                        "IP: {}.{}.{}.{}",
-                        octets[0], octets[1], octets[2], octets[3]
-                    );
                 }
             }
         };
 
-        // SNTP periodic resync task (SR-NET-007: 15-minute interval)
-        // Runs concurrently with main app logic
-        // Updates internal RTC every 15 minutes to maintain accurate time
-        let sntp_resync = async {
-            // Wait for initial sync to complete
-            stack.wait_config_up().await;
-            Timer::after_secs(30).await; // Give initial sync time to complete
+        // Run both the network runners and message handler
+        // Using select to allow both to run concurrently
+        embassy_futures::select::select(runners, message_handler).await;
 
-            info!("SNTP resync task started (15-minute interval)");
-            time::start_resync_task(&stack).await // This function never returns
-        };
-
-        // Run all four concurrently - never returns
-        join4(runner.run(), runner2.run(), app_logic, sntp_resync).await;
+        // This point should never be reached
+        loop {
+            Mono::delay(1.secs()).await;
+        }
     }
 
-    /// Example high-priority task that sends messages to network
+    /// SNTP periodic resync task (RTIC-First approach)
+    ///
+    /// Priority 2: Medium priority
+    /// This task uses Mono::delay() for interrupt-driven scheduling
+    #[task(priority = 2)]
+    async fn sntp_resync(
+        _cx: sntp_resync::Context,
+        mut sender: rtic_sync::channel::Sender<'static, network::NetworkMessage, 8>,
+    ) -> ! {
+        loop {
+            // Wait 15 minutes between syncs
+            Mono::delay(15.minutes()).await;
+
+            info!("SNTP resync task triggered");
+
+            // Send SNTP sync request to network task
+            if sender
+                .send(network::NetworkMessage::SntpSync)
+                .await
+                .is_err()
+            {
+                warn!("Failed to send SNTP sync request");
+            }
+        }
+    }
+
+    /// Example high-priority task that sends messages to network (RTIC-First)
     ///
     /// Priority 3: High priority (simulates interrupt-driven sensor)
     /// Demonstrates timestamp API usage for sensor data
     /// Timestamps are read from internal RTC between SNTP syncs
+    /// Uses Mono::delay() for interrupt-driven scheduling
     #[task(priority = 3)]
     async fn frame_logger(
         _cx: frame_logger::Context,
         mut sender: rtic_sync::channel::Sender<'static, network::NetworkMessage, 8>,
     ) -> ! {
         loop {
-            // Simulate periodic data
-            embassy_time::Timer::after_secs(5).await;
+            // Wait 5 seconds between frames
+            Mono::delay(5.secs()).await;
 
             // Get timestamp from internal RTC (SR-NET-007 requirement)
             let timestamp = time::get_timestamp();
@@ -367,6 +395,20 @@ mod app {
             sender.send(msg).await.ok();
 
             info!("Sent RTC-timestamped frame to network task");
+        }
+    }
+
+    /// RTIC idle task - enables MCU sleep mode (WFI)
+    ///
+    /// Priority 0 (lowest): Runs when no other tasks are active
+    /// Allows the MCU to enter Wait-For-Interrupt (WFI) mode to save power
+    #[idle]
+    fn idle(_cx: idle::Context) -> ! {
+        info!("Idle task started - entering WFI loop");
+        loop {
+            // Wait For Interrupt - MCU enters sleep mode
+            // Will wake up on any interrupt (timer, network, etc.)
+            cortex_m::asm::wfi();
         }
     }
 }
