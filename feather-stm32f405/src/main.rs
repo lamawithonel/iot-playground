@@ -15,7 +15,7 @@ mod time;
 
 stm32_tim2_monotonic!(Mono, 1_000_000);
 
-#[app(device = stm32_metapac, peripherals = false, dispatchers = [USART1, USART2, USART3])]
+#[app(device = embassy_stm32, peripherals = true, dispatchers = [USART1, USART2, USART3])]
 mod app {
     use super::*;
     use defmt::info;

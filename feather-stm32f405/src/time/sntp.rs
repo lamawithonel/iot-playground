@@ -90,6 +90,8 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
                     write_rtc(timestamp)?;
 
                     // Calibrate wall-clock time system with NTP timestamp + monotonic timer
+                    // Note: Mono::now().ticks() returns timer ticks. With TIM2 at 1MHz, each tick = 1µs
+                    // We truncate to u32 which wraps every ~71.6 minutes, but wrapping arithmetic handles this
                     let mono_micros = Mono::now().ticks() as u32;
                     ccmram::calibrate_wallclock(
                         timestamp.unix_secs as u32,
