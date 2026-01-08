@@ -5,6 +5,8 @@
 //! This module handles IP-level networking operations including DHCP, DNS, and stack management.
 //! It provides a clean abstraction over embassy-net for application use.
 
+pub mod udp;
+
 use defmt::info;
 use embassy_net::Stack;
 
