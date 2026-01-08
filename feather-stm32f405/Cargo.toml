@@ -64,11 +64,17 @@ features = [
   "unstable-pac",
 ]
 
+[dependencies.embassy-sync]
+version = "0.7.0"
+features = ["defmt"]
+# Note: Required by embassy-embedded-hal for SPI bus sharing within network task
+# Uses lightweight CriticalSection-based mutex that doesn't prevent WFI sleep
+
 [dependencies.embassy-time]
 version = "0.5.0"
 features = [
   "defmt",
-  # Note: defmt-timestamp-uptime removed in favor of custom RTC timestamps
+  "defmt-timestamp-uptime",
   "generic-queue-16",
 ]
 
@@ -81,17 +87,6 @@ default-features = false
 version = "1.0.0"
 features = ["print-defmt"]
 
-[dependencies.embassy-sync]
-version = "0.7.0"
-features = ["defmt"]
-# Note: Required by embassy-embedded-hal for SPI bus sharing within network task
-# Uses lightweight CriticalSection-based mutex that doesn't prevent WFI sleep
-
-[dependencies.rtic-sync]
-git = "https://github.com/rtic-rs/rtic.git"
-tag = "v2.2.0"
-features = ["defmt-03"]
-
 [dependencies.rtic]
 git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
@@ -102,10 +97,15 @@ git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
 features = [
   "cortex-m-systick",
+  "defmt",
   "stm32_tim2",
   "stm32f405rg",
-  "defmt",
 ]
+
+[dependencies.rtic-sync]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+features = ["defmt-03"]
 
 [dependencies.rtic-time]
 git = "https://github.com/rtic-rs/rtic.git"

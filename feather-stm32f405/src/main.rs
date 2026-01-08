@@ -149,10 +149,10 @@ mod app {
     async fn heartbeat(cx: heartbeat::Context) {
         info!("Heartbeat task started");
         loop {
-            cx.local.led.set_low();
-            Mono::delay(100.millis()).await;
             cx.local.led.set_high();
-            Mono::delay(900.millis()).await;
+            Mono::delay(100.millis()).await;
+            cx.local.led.set_low();
+            Mono::delay(4900.millis()).await;
         }
     }
 
@@ -233,7 +233,7 @@ mod app {
         // NOTE: This returns (Device, Runner) - both are !Send
         // The last parameter is the RESET PIN (OutputPin), not the chip type
         // Chip type W5500 is inferred from context
-        let (device, runner): (
+        let (device, w5500_runner): (
             embassy_net_wiznet::Device<'_>,
             embassy_net_wiznet::Runner<'_, W5500, _, _, _>,
         ) = embassy_net_wiznet::new(mac_addr, state, spi_device, int, reset)
@@ -247,14 +247,14 @@ mod app {
         let seed = 0x1234_5678_u64; // TODO: Use proper RNG
 
         static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-        let (stack, mut runner2) =
+        let (stack, mut net_runner) =
             embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
 
         info!("Network stack initialized");
 
         // --- E. Run network runners and message handler concurrently ---
         // The runners yield properly when there's no work, allowing WFI sleep
-        let runners = join(runner.run(), runner2.run());
+        let runners = join(w5500_runner.run(), net_runner.run());
 
         let message_handler = async {
             // Wait for network to come up
@@ -303,7 +303,7 @@ mod app {
                 match receiver.recv().await {
                     Ok(msg) => match msg {
                         network::NetworkMessage::LogFrame { data } => {
-                            info!("Received frame: {}", data.as_str());
+                            info!("Received frame from: {}", data.as_str());
                         }
                         network::NetworkMessage::SntpSync => {
                             info!("SNTP sync requested");
@@ -354,7 +354,7 @@ mod app {
     /// - Sends SNTP sync request to network task via message channel
     /// - Network task owns the Stack (!Send) and performs actual sync
     /// - 15-minute interval per SR-NET-007 requirement
-    #[task(priority = 2)]
+    #[task(priority = 3)]
     async fn sntp_resync(
         _cx: sntp_resync::Context,
         mut sender: rtic_sync::channel::Sender<'static, network::NetworkMessage, 8>,
