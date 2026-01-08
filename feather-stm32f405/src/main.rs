@@ -9,6 +9,8 @@ use rtic::app;
 use rtic_monotonics::stm32::prelude::*;
 
 mod ccmram;
+mod eth;
+mod net;
 mod network;
 mod time;
 
@@ -18,21 +20,15 @@ stm32_tim2_monotonic!(Mono, 1_000_000);
 mod app {
     use super::*;
     use defmt::{info, warn};
-    use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice as SpiDeviceBus;
     use embassy_futures::join::join3;
-    use embassy_net::StackResources;
-    use embassy_net_wiznet::chip::W5500;
     use embassy_stm32::exti::ExtiInput;
     use embassy_stm32::gpio::{Level, Output, Pull, Speed};
-    use embassy_stm32::mode::Async;
     use embassy_stm32::peripherals;
     use embassy_stm32::rcc::{Hse, HseMode, LsConfig, LseConfig, LseMode};
     use embassy_stm32::rtc::{Rtc, RtcConfig};
     use embassy_stm32::spi::{self, Spi};
     use embassy_stm32::time::Hertz;
-    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use rtic_sync::make_channel;
-    use static_cell::StaticCell;
 
     type SpiPeripheral = embassy_stm32::Peri<'static, peripherals::SPI2>;
     type PinPB13 = embassy_stm32::Peri<'static, peripherals::PB13>;
@@ -155,11 +151,14 @@ mod app {
         }
     }
 
-    /// Network Actor Task - Simplified RTIC-First Design
+    /// Network Actor Task - Modular RTIC-First Design
     ///
     /// Priority 1: Low priority background task
     ///
-    /// This task handles network initialization and message processing.
+    /// This task coordinates the network layer initialization using the new modular structure:
+    /// - eth module: Ethernet hardware (W5500)
+    /// - net module: IP layer (DHCP, DNS, Stack)
+    ///
     /// The Stack is kept here since it's !Send and can't cross task boundaries.
     #[task(priority = 1)]
     async fn network_task(
@@ -167,7 +166,7 @@ mod app {
         periph: NetworkPeripherals,
         mut receiver: rtic_sync::channel::Receiver<'static, network::NetworkMessage, 8>,
     ) -> ! {
-        info!("Network task started - initializing W5500...");
+        info!("Network task started");
 
         // --- A. Setup SPI and GPIO ---
         let mut spi_config = spi::Config::default();
@@ -184,55 +183,31 @@ mod app {
         );
 
         let cs = Output::new(periph.cs, Level::High, Speed::VeryHigh);
-        let mut reset = Output::new(periph.reset, Level::High, Speed::Low);
+        let reset = Output::new(periph.reset, Level::High, Speed::Low);
         let int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
 
-        // Hardware reset - using RTIC Monotonic for delays
-        info!("Performing W5500 hardware reset...");
-        reset.set_low();
-        Mono::delay(1.millis()).await;
-        reset.set_high();
-        Mono::delay(2.millis()).await;
-
-        // --- B. Create SPI Device (using minimal Mutex wrapper) ---
-        // Note: We keep the Mutex as it's required by embassy-embedded-hal's SPI device API.
-        // It's a lightweight critical-section mutex that doesn't impact sleep performance.
-        type SpiBusType = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, Spi<'static, Async>>;
-        static SPI_BUS: StaticCell<SpiBusType> = StaticCell::new();
-        let spi_bus = SPI_BUS.init(embassy_sync::mutex::Mutex::new(spi));
-        let spi_device = SpiDeviceBus::new(spi_bus, cs);
-
-        // --- C. Initialize W5500 Driver ---
+        // --- B. Initialize Ethernet layer (eth module) ---
+        let eth_periph = eth::EthPeripherals {
+            spi,
+            cs,
+            reset,
+            int,
+        };
         let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+        let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
 
-        info!(
-            "MAC address: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]
-        );
+        // --- C. Initialize IP network layer ---
+        let (stack, mut net_runner) = {
+            use embassy_net::{Config, StackResources};
+            use static_cell::StaticCell;
 
-        // State for W5500 driver
-        static STATE: StaticCell<embassy_net_wiznet::State<8, 8>> = StaticCell::new();
-        let state = STATE.init(embassy_net_wiznet::State::<8, 8>::new());
+            let config = Config::dhcpv4(Default::default());
+            let seed = 0x1234_5678_u64;
 
-        // Create W5500 device and runner
-        let (device, w5500_runner): (
-            embassy_net_wiznet::Device<'_>,
-            embassy_net_wiznet::Runner<'_, W5500, _, _, _>,
-        ) = embassy_net_wiznet::new(mac_addr, state, spi_device, int, reset)
-            .await
-            .unwrap();
-
-        info!("W5500 initialized");
-
-        // --- D. Initialize embassy-net Stack ---
-        let config = embassy_net::Config::dhcpv4(Default::default());
-        let seed = 0x1234_5678_u64; // TODO: Use proper RNG
-
-        static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-        let (stack, mut net_runner) =
-            embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
-
-        info!("Network stack initialized");
+            static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+            embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed)
+        };
+        info!("Network stack initialized with DHCP");
 
         // --- D. Run network runners and application logic concurrently ---
         // The runners MUST be running for DHCP and network operations to work.
@@ -242,28 +217,8 @@ mod app {
         // 3. Application logic (DHCP wait, SNTP, message handling)
 
         let app_logic = async {
-            // Wait for network to come up (DHCP)
-            info!("Waiting for DHCP...");
-            stack.wait_config_up().await;
-            info!("Network is UP!");
-
-            // Log IP address
-            if let Some(config) = stack.config_v4() {
-                let ip = config.address.address();
-                let octets = ip.octets();
-                info!(
-                    "IP: {}.{}.{}.{}",
-                    octets[0], octets[1], octets[2], octets[3]
-                );
-
-                if let Some(gateway) = config.gateway {
-                    let gw_octets = gateway.octets();
-                    info!(
-                        "Gateway: {}.{}.{}.{}",
-                        gw_octets[0], gw_octets[1], gw_octets[2], gw_octets[3]
-                    );
-                }
-            }
+            // Wait for network to come up (DHCP) using net module
+            net::wait_for_config(&stack).await;
 
             // Initialize SNTP time synchronization
             info!("Initializing SNTP time synchronization with RTC (LSE)...");
