@@ -82,19 +82,19 @@ pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
 // ============================================================================
 //
 // This implements a high-precision wall-clock time system similar to Linux:
-// - CLOCK_MONOTONIC: TIM2 or SysTick running at high frequency (1kHz+ precision)
+// - CLOCK_MONOTONIC: TIM2 running at 1MHz (microsecond precision)
 // - CLOCK_REALTIME: CLOCK_MONOTONIC + Unix time offset from NTP calibration
 // - RTC: Backup only (not used for primary timekeeping)
 //
 // When NTP sync occurs, we capture:
 // 1. Unix time from NTP (seconds and microseconds parts, stored separately)
-// 2. Monotonic timer value at that exact moment (milliseconds)
+// 2. Monotonic timer value at that exact moment (microseconds)
 //
 // Note: Using 32-bit AtomicU32 instead of AtomicU64 since ARMv7-M (Cortex-M4)
 // doesn't have native 64-bit atomics. This limits us but is workable:
 // - Seconds stored as u32 (wraps in 2106, acceptable for embedded systems)
 // - Microseconds within second stored separately (0-999999)
-// - Monotonic ticks in milliseconds (wraps after ~49 days, must recalibrate)
+// - Monotonic ticks in microseconds (wraps after ~71 minutes, but handled via wrapping arithmetic)
 
 /// Base Unix time in seconds at calibration
 ///
@@ -111,13 +111,13 @@ static BASE_UNIX_SECS: AtomicU32 = AtomicU32::new(0);
 #[link_section = ".ccmram"]
 static BASE_UNIX_MICROS: AtomicU32 = AtomicU32::new(0);
 
-/// Base monotonic timer value at calibration (milliseconds)
+/// Base monotonic timer value at calibration (microseconds)
 ///
-/// Set during NTP synchronization to the monotonic timer ticks (milliseconds)
+/// Set during NTP synchronization to the monotonic timer ticks (microseconds)
 /// at the moment of calibration. This is captured at the same instant as BASE_UNIX_SECS/MICROS.
-/// Using milliseconds avoids u32 overflow for ~49 days.
+/// Using u32 for microseconds means it wraps every ~71 minutes, but wrapping_sub handles this correctly.
 #[link_section = ".ccmram"]
-static BASE_MONO_MS: AtomicU32 = AtomicU32::new(0);
+static BASE_MONO_MICROS: AtomicU32 = AtomicU32::new(0);
 
 /// Calibrate the wall-clock time system
 ///
@@ -127,12 +127,12 @@ static BASE_MONO_MS: AtomicU32 = AtomicU32::new(0);
 /// # Arguments
 /// * `unix_secs` - Unix epoch time in seconds from NTP
 /// * `unix_micros` - Microseconds within the second (0-999999)
-/// * `mono_ms` - Monotonic timer ticks in milliseconds at calibration moment
+/// * `mono_micros` - Monotonic timer ticks in microseconds at calibration moment
 #[allow(dead_code)]
-pub fn calibrate_wallclock(unix_secs: u32, unix_micros: u32, mono_ms: u32) {
+pub fn calibrate_wallclock(unix_secs: u32, unix_micros: u32, mono_micros: u32) {
     BASE_UNIX_SECS.store(unix_secs, Ordering::Release);
     BASE_UNIX_MICROS.store(unix_micros, Ordering::Release);
-    BASE_MONO_MS.store(mono_ms, Ordering::Release);
+    BASE_MONO_MICROS.store(mono_micros, Ordering::Release);
     TIME_SYNCED.store(true, Ordering::Release);
 }
 
@@ -143,33 +143,35 @@ pub fn calibrate_wallclock(unix_secs: u32, unix_micros: u32, mono_ms: u32) {
 /// Returns (0, 0) if not yet calibrated (TIME_SYNCED == false).
 ///
 /// # Arguments
-/// * `current_mono_ms` - Current monotonic timer value in milliseconds
+/// * `current_mono_micros` - Current monotonic timer value in microseconds
 ///
 /// # Returns
 /// Tuple of (unix_seconds, microseconds) or (0, 0) if not calibrated
 #[allow(dead_code)]
-pub fn now_unix_time(current_mono_ms: u32) -> (u32, u32) {
+pub fn now_unix_time(current_mono_micros: u32) -> (u32, u32) {
     if !TIME_SYNCED.load(Ordering::Acquire) {
         return (0, 0); // Not yet calibrated
     }
 
     let base_secs = BASE_UNIX_SECS.load(Ordering::Acquire);
     let base_micros = BASE_UNIX_MICROS.load(Ordering::Acquire);
-    let base_mono = BASE_MONO_MS.load(Ordering::Acquire);
+    let base_mono = BASE_MONO_MICROS.load(Ordering::Acquire);
 
     // Compute elapsed time since calibration (handling wrap-around)
-    let elapsed_ms = current_mono_ms.wrapping_sub(base_mono);
+    let elapsed_micros = current_mono_micros.wrapping_sub(base_mono);
 
-    // Convert elapsed ms to seconds and microseconds
-    let elapsed_secs = elapsed_ms / 1000;
-    let elapsed_micros = (elapsed_ms % 1000) * 1000;
+    // Convert elapsed microseconds to seconds and remaining microseconds
+    let elapsed_secs = elapsed_micros / 1_000_000;
+    let elapsed_micros_remainder = elapsed_micros % 1_000_000;
 
     // Add to base time
-    let total_micros = base_micros + elapsed_micros;
+    let total_micros = base_micros + elapsed_micros_remainder;
     let micros_overflow = total_micros / 1_000_000;
     let final_micros = total_micros % 1_000_000;
 
-    let final_secs = base_secs.wrapping_add(elapsed_secs).wrapping_add(micros_overflow);
+    let final_secs = base_secs
+        .wrapping_add(elapsed_secs)
+        .wrapping_add(micros_overflow);
 
     (final_secs, final_micros)
 }
