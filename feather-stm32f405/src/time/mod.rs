@@ -88,20 +88,64 @@ mod sntp;
 
 // Re-export public API
 #[allow(unused_imports)]
-pub use rtc::{get_timestamp, initialize_rtc, is_time_synced, Timestamp};
+pub use rtc::{get_timestamp, is_time_synced, Timestamp};
 #[allow(unused_imports)]
 pub use sntp::{initialize_time, sync_sntp, SntpError};
+
+/// Initialize the time system with hardware RTC
+/// Called from init() to set up the RTC with LSE clock
+pub fn init_time_system(rtc_peripheral: embassy_stm32::peripherals::RTC) {
+    use embassy_stm32::rtc::{Rtc, RtcConfig};
+    
+    let rtc_config = RtcConfig::default();
+    let rtc = Rtc::new(rtc_peripheral, rtc_config);
+    defmt::info!("Internal RTC initialized with LSE (32.768kHz, ±20-50ppm accuracy)");
+    
+    rtc::initialize_rtc(rtc);
+}
+
+/// Run the SNTP periodic resync task
+/// This task wakes every 15 minutes using the RTIC monotonic timer
+/// to perform SNTP synchronization
+pub async fn run_sntp_resync_task() -> ! {
+    use defmt::info;
+    
+    info!("SNTP resync task started, waiting for network stack...");
+    
+    // Wait for network stack to be available
+    let stack = loop {
+        if let Some(stack) = crate::ccmram::get_network_stack() {
+            break stack;
+        }
+        // Use embassy-time to avoid circular dependency on Mono
+        embassy_time::Timer::after_millis(100).await;
+    };
+    
+    info!("Network stack ready, waiting for initial DHCP...");
+    
+    // Wait for network to come up
+    stack.wait_config_up().await;
+    
+    // Wait for initial time sync to complete
+    embassy_time::Timer::after_secs(30).await;
+    
+    info!("Starting SNTP periodic resync (15-minute interval using RTIC Mono timer)");
+    
+    // Periodic resync every 15 minutes using embassy-time
+    loop {
+        embassy_time::Timer::after_secs(15 * 60).await; // 15 minutes
+        
+        if let Err(e) = sync_sntp(stack).await {
+            defmt::warn!("Periodic SNTP resync failed: {:?}", e);
+        } else {
+            info!("SNTP periodic resync successful");
+        }
+    }
+}
 
 // Internal exports for tests
 #[cfg(test)]
 use calendar::is_leap_year;
-
-// ============================================================================
-// DEFMT TIMESTAMP IMPLEMENTATION
-// ============================================================================
-// Custom defmt timestamp using hardware RTC. See module documentation for details.
-
-defmt::timestamp!("{=u64:iso8601s}", { get_timestamp().unix_secs });
 
 #[cfg(test)]
 mod tests {

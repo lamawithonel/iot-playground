@@ -2,17 +2,93 @@
 #![deny(warnings)]
 //! Network module: W5500 Ethernet with embassy-net
 //!
-//! This module contains network logic isolated from hardware setup:
-//! - Hardware setup occurs in RTIC init() task
-//! - Driver initialization happens in the network task
-//! - Application logic is encapsulated in this module
+//! This module contains all network-related functionality:
+//! - Hardware initialization
+//! - Network stack management
+//! - Application logic
 
 use embassy_net::Stack;
+use embassy_stm32::exti::ExtiInput;
+use embassy_stm32::gpio::{Level, Output, Pull, Speed};
+use embassy_stm32::mode::Async;
+use embassy_stm32::peripherals;
+use embassy_stm32::spi::{self, Spi};
+use embassy_stm32::time::Hertz;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, Receiver, Sender};
 use heapless::String;
 
-use crate::time;
+use crate::{ccmram, time};
+
+/// Bundle of initialized hardware for W5500 network
+/// This contains hardware that has been set up in init() and is ready to use
+pub struct NetworkHardware {
+    pub spi: Spi<'static, Async>,
+    pub cs: Output<'static>,
+    pub reset: Output<'static>,
+    pub int: ExtiInput<'static>,
+}
+
+/// Initialize W5500 network hardware
+/// Called from init() to set up SPI, GPIO, and perform hardware reset
+pub fn init_hardware(
+    spi2: peripherals::SPI2,
+    pb13: peripherals::PB13,
+    pb15: peripherals::PB15,
+    pb14: peripherals::PB14,
+    pc6: peripherals::PC6,
+    pc3: peripherals::PC3,
+    pc2: peripherals::PC2,
+    exti2: peripherals::EXTI2,
+    dma1_ch4: peripherals::DMA1_CH4,
+    dma1_ch3: peripherals::DMA1_CH3,
+) -> NetworkHardware {
+    use defmt::info;
+
+    info!("Setting up W5500 network hardware...");
+
+    // Setup SPI for W5500
+    let mut spi_config = spi::Config::default();
+    spi_config.frequency = Hertz(10_000_000); // 10 MHz for W5500
+
+    let spi = Spi::new(
+        spi2,   // SPI Bus 2
+        pb13,   // SCK
+        pb15,   // MOSI
+        pb14,   // MISO
+        dma1_ch4, // TX DMA
+        dma1_ch3, // RX DMA
+        spi_config,
+    );
+
+    // Setup GPIO pins
+    let cs = Output::new(pc6, Level::High, Speed::VeryHigh);
+    let mut reset = Output::new(pc3, Level::High, Speed::Low);
+    let int = ExtiInput::new(pc2, exti2, Pull::Up);
+
+    // Perform hardware reset
+    info!("Performing W5500 hardware reset...");
+    reset.set_low();
+    // Note: Using blocking delay in init() is acceptable
+    cortex_m::asm::delay(168_000); // ~1ms at 168 MHz
+    reset.set_high();
+    cortex_m::asm::delay(336_000); // ~2ms at 168 MHz
+
+    info!("W5500 hardware setup complete");
+
+    NetworkHardware {
+        spi,
+        cs,
+        reset,
+        int,
+    }
+}
+
+/// Register the network stack for access by other tasks
+/// This stores the stack pointer in a safe, thread-safe location (ccmram module)
+pub fn register_stack(stack: &'static Stack<'static>) {
+    ccmram::set_network_stack(stack);
+}
 
 /// Messages that can be sent to the network task
 #[derive(Clone, Debug)]

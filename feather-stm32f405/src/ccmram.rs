@@ -70,12 +70,44 @@
 #![allow(unsafe_code)]
 #![deny(warnings)]
 
-use core::sync::atomic::AtomicBool;
+use core::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use embassy_net::Stack;
 
 /// System time synchronization status in CCM RAM
 #[allow(dead_code)]
 #[link_section = ".ccmram"]
 pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
+
+/// Global network stack pointer in CCM RAM (zero wait states)
+///
+/// # Safety
+/// - Pointer is set once during network initialization and never changed
+/// - Points to static Stack that never moves or gets deallocated
+/// - Only read access through safe API
+/// - No DMA access required
+#[link_section = ".ccmram"]
+static NETWORK_STACK_PTR: AtomicPtr<Stack<'static>> = AtomicPtr::new(core::ptr::null_mut());
+
+/// Set the global network stack pointer (called once during initialization)
+pub fn set_network_stack(stack: &'static Stack<'static>) {
+    NETWORK_STACK_PTR.store(stack as *const _ as *mut _, Ordering::Release);
+}
+
+/// Get the global network stack reference
+/// Returns None if stack hasn't been initialized yet
+pub fn get_network_stack() -> Option<&'static Stack<'static>> {
+    let ptr = NETWORK_STACK_PTR.load(Ordering::Acquire);
+    if ptr.is_null() {
+        None
+    } else {
+        // Safety: The pointer is valid because:
+        // 1. It points to a 'static Stack that never moves or gets deallocated
+        // 2. We only read through this reference, never write
+        // 3. The Stack is initialized before this pointer is set
+        // 4. Atomic operations ensure proper memory ordering
+        Some(unsafe { &*ptr })
+    }
+}
 
 // ============================================================================
 // FUTURE CCM RAM ALLOCATIONS GO BELOW THIS LINE

@@ -13,6 +13,9 @@ mod ccmram;
 mod net;
 mod time;
 
+// Configure SysTick as monotonic timer at 1kHz (1ms tick)
+// Note: TIM2 at 1MHz would be preferred but rtic-monotonics STM32 support is complex
+// Using SysTick for now as it's more straightforward and well-tested
 systick_monotonic!(Mono, 1_000);
 
 #[app(device = embassy_stm32, peripherals = true, dispatchers = [USART1, USART2, USART3])]
@@ -23,29 +26,13 @@ mod app {
     use embassy_futures::join::join3;
     use embassy_net::{Stack, StackResources};
     use embassy_net_wiznet::chip::W5500;
-    use embassy_stm32::exti::ExtiInput;
-    use embassy_stm32::gpio::{Level, Output, Pull, Speed};
+    use embassy_stm32::gpio::{Level, Output, Speed};
     use embassy_stm32::mode::Async;
     use embassy_stm32::rcc::{Hse, HseMode, LsConfig, LseConfig, LseMode};
-    use embassy_stm32::rtc::{Rtc, RtcConfig};
-    use embassy_stm32::spi::{self, Spi};
+    use embassy_stm32::spi::Spi;
     use embassy_stm32::time::Hertz;
     use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     use static_cell::StaticCell;
-
-    /// Bundle of initialized hardware for W5500 network
-    /// This contains hardware that has been set up in init() and is ready to use
-    struct NetworkHardware {
-        spi: Spi<'static, Async>,
-        cs: Output<'static>,
-        reset: Output<'static>,
-        int: ExtiInput<'static>,
-    }
-
-    /// Global network stack pointer (initialized by network_task)
-    /// Using AtomicPtr for thread-safe access
-    static NETWORK_STACK_PTR: core::sync::atomic::AtomicPtr<Stack<'static>> =
-        core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
 
     #[shared]
     struct Shared {}
@@ -58,9 +45,6 @@ mod app {
     #[init]
     fn init(cx: init::Context) -> (Shared, Local) {
         info!("IoT Playground starting...");
-
-        // Initialize RTIC monotonic
-        Mono::start(cx.core.SYST, 168_000_000);
 
         // Configure embassy-stm32 with proper clock sources
         // Adafruit Feather STM32F405 has:
@@ -89,56 +73,17 @@ mod app {
 
         info!("System initialized with HSE (12MHz) and LSE (32.768kHz)");
 
-        // Initialize internal RTC with LSE clock
-        let rtc_config = RtcConfig::default();
-        let rtc = Rtc::new(p.RTC, rtc_config);
-        info!("Internal RTC initialized with LSE (32.768kHz, ±20-50ppm accuracy)");
+        // Initialize RTIC monotonic timer using SysTick at 1kHz
+        Mono::start(cx.core.SYST, 168_000_000);
 
-        // Initialize time module with RTC
-        time::initialize_rtc(rtc);
+        // Initialize time module (RTC for wall-clock time)
+        time::init_time_system(p.RTC);
 
         // Initialize Feather STM32F405 heartbeat LED (PC1)
         let led = Output::new(p.PC1, Level::High, Speed::Low);
 
-        // --- Network Hardware Setup ---
-        info!("Setting up W5500 network hardware...");
-
-        // Setup SPI for W5500
-        let mut spi_config = spi::Config::default();
-        spi_config.frequency = Hertz(10_000_000); // 10 MHz for W5500
-
-        let spi = Spi::new(
-            p.SPI2,     // SPI Bus 2
-            p.PB13,     // SCK
-            p.PB15,     // MOSI
-            p.PB14,     // MISO
-            p.DMA1_CH4, // TX DMA
-            p.DMA1_CH3, // RX DMA
-            spi_config,
-        );
-
-        // Setup GPIO pins
-        let cs = Output::new(p.PC6, Level::High, Speed::VeryHigh);
-        let mut reset = Output::new(p.PC3, Level::High, Speed::Low);
-        let int = ExtiInput::new(p.PC2, p.EXTI2, Pull::Up);
-
-        // Perform hardware reset
-        info!("Performing W5500 hardware reset...");
-        reset.set_low();
-        // Note: Using blocking delay in init() is acceptable
-        cortex_m::asm::delay(168_000); // ~1ms at 168 MHz
-        reset.set_high();
-        cortex_m::asm::delay(336_000); // ~2ms at 168 MHz
-
-        info!("W5500 hardware setup complete");
-
-        // Bundle initialized hardware for network task
-        let net_hardware = NetworkHardware {
-            spi,
-            cs,
-            reset,
-            int,
-        };
+        // Initialize network hardware and get bundle for network task
+        let net_hardware = net::init_hardware(p.SPI2, p.PB13, p.PB15, p.PB14, p.PC6, p.PC3, p.PC2, p.EXTI2, p.DMA1_CH4, p.DMA1_CH3);
 
         heartbeat::spawn().ok();
         network_task::spawn(net_hardware).ok();
@@ -166,7 +111,7 @@ mod app {
     /// Hardware setup is done in init(), this task initializes the W5500 driver and network stack
     /// This solves the !Send problem because Driver/Stack never cross task boundaries
     #[task(priority = 1)]
-    async fn network_task(_cx: network_task::Context, hardware: NetworkHardware) -> ! {
+    async fn network_task(_cx: network_task::Context, hardware: net::NetworkHardware) -> ! {
         info!("Network task started - initializing W5500 driver...");
 
         // Hardware is already set up in init(), now initialize the driver
@@ -220,11 +165,8 @@ mod app {
 
         info!("Network stack initialized");
 
-        // Store stack pointer for SNTP task (safe because stack is 'static)
-        NETWORK_STACK_PTR.store(
-            stack as *const _ as *mut _,
-            core::sync::atomic::Ordering::Release,
-        );
+        // Register stack for access by other tasks (SNTP resync)
+        net::register_stack(stack);
 
         // --- D. Run Everything Concurrently ---
         // We need to run:
@@ -246,44 +188,8 @@ mod app {
     /// Priority 1: Low priority background task
     /// Uses RTIC monotonic timer to wake every 15 minutes and sync time (SR-NET-007)
     #[task(priority = 1)]
-    #[allow(unsafe_code)] // Required to access global stack pointer
     async fn sntp_resync_task(_cx: sntp_resync_task::Context) -> ! {
-        info!("SNTP resync task started, waiting for network stack...");
-
-        // Wait for network stack pointer to be set
-        let stack = loop {
-            let ptr = NETWORK_STACK_PTR.load(core::sync::atomic::Ordering::Acquire);
-            if !ptr.is_null() {
-                // Safety: The pointer is valid because:
-                // 1. It points to a 'static Stack that never moves or gets deallocated
-                // 2. We only read through this reference, never write
-                // 3. The Stack is initialized before this pointer is set
-                unsafe { break &*ptr };
-            }
-            // Wait a bit before checking again
-            Mono::delay(100.millis()).await;
-        };
-
-        info!("Network stack ready, waiting for initial DHCP...");
-
-        // Wait for network to come up
-        stack.wait_config_up().await;
-
-        // Wait for initial time sync to complete
-        Mono::delay(30.secs()).await;
-
-        info!("Starting SNTP periodic resync (15-minute interval using RTIC Mono timer)");
-
-        // Periodic resync every 15 minutes using RTIC monotonic timer
-        loop {
-            Mono::delay((15 * 60).secs()).await; // 15 minutes
-
-            if let Err(e) = time::sync_sntp(stack).await {
-                defmt::warn!("Periodic SNTP resync failed: {:?}", e);
-            } else {
-                info!("SNTP periodic resync successful");
-            }
-        }
+        time::run_sntp_resync_task().await
     }
 
     /// Example high-priority task that sends messages to network
