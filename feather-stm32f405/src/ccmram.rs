@@ -70,12 +70,115 @@
 #![allow(unsafe_code)]
 #![deny(warnings)]
 
-use core::sync::atomic::AtomicBool;
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// System time synchronization status in CCM RAM
 #[allow(dead_code)]
 #[link_section = ".ccmram"]
 pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
+
+// ============================================================================
+// CLOCK_REALTIME IMPLEMENTATION (Linux-style wall-clock time)
+// ============================================================================
+//
+// This implements a high-precision wall-clock time system similar to Linux:
+// - CLOCK_MONOTONIC: TIM2 or SysTick running at high frequency (1kHz+ precision)
+// - CLOCK_REALTIME: CLOCK_MONOTONIC + Unix time offset from NTP calibration
+// - RTC: Backup only (not used for primary timekeeping)
+//
+// When NTP sync occurs, we capture:
+// 1. Unix time from NTP (seconds and microseconds parts, stored separately)
+// 2. Monotonic timer value at that exact moment (milliseconds)
+//
+// Note: Using 32-bit AtomicU32 instead of AtomicU64 since ARMv7-M (Cortex-M4)
+// doesn't have native 64-bit atomics. This limits us but is workable:
+// - Seconds stored as u32 (wraps in 2106, acceptable for embedded systems)
+// - Microseconds within second stored separately (0-999999)
+// - Monotonic ticks in milliseconds (wraps after ~49 days, must recalibrate)
+
+/// Base Unix time in seconds at calibration
+///
+/// Set during NTP synchronization to the Unix epoch seconds
+/// at the moment of calibration. Zero means not yet calibrated.
+/// Using u32 limits us to year 2106 (acceptable for embedded).
+#[link_section = ".ccmram"]
+static BASE_UNIX_SECS: AtomicU32 = AtomicU32::new(0);
+
+/// Base microseconds within second at calibration
+///  
+/// The fractional part of Unix time (0-999999 microseconds)
+/// captured at calibration moment.
+#[link_section = ".ccmram"]
+static BASE_UNIX_MICROS: AtomicU32 = AtomicU32::new(0);
+
+/// Base monotonic timer value at calibration (milliseconds)
+///
+/// Set during NTP synchronization to the monotonic timer ticks (milliseconds)
+/// at the moment of calibration. This is captured at the same instant as BASE_UNIX_SECS/MICROS.
+/// Using milliseconds avoids u32 overflow for ~49 days.
+#[link_section = ".ccmram"]
+static BASE_MONO_MS: AtomicU32 = AtomicU32::new(0);
+
+/// Calibrate the wall-clock time system
+///
+/// Called after successful NTP synchronization with the Unix time and
+/// the monotonic timer value captured at the same instant.
+///
+/// # Arguments
+/// * `unix_secs` - Unix epoch time in seconds from NTP
+/// * `unix_micros` - Microseconds within the second (0-999999)
+/// * `mono_ms` - Monotonic timer ticks in milliseconds at calibration moment
+#[allow(dead_code)]
+pub fn calibrate_wallclock(unix_secs: u32, unix_micros: u32, mono_ms: u32) {
+    BASE_UNIX_SECS.store(unix_secs, Ordering::Release);
+    BASE_UNIX_MICROS.store(unix_micros, Ordering::Release);
+    BASE_MONO_MS.store(mono_ms, Ordering::Release);
+    TIME_SYNCED.store(true, Ordering::Release);
+}
+
+/// Get current Unix time in seconds and microseconds
+///
+/// Computes CLOCK_REALTIME as: base_unix + (current_mono - base_mono)
+///
+/// Returns (0, 0) if not yet calibrated (TIME_SYNCED == false).
+///
+/// # Arguments
+/// * `current_mono_ms` - Current monotonic timer value in milliseconds
+///
+/// # Returns
+/// Tuple of (unix_seconds, microseconds) or (0, 0) if not calibrated
+#[allow(dead_code)]
+pub fn now_unix_time(current_mono_ms: u32) -> (u32, u32) {
+    if !TIME_SYNCED.load(Ordering::Acquire) {
+        return (0, 0); // Not yet calibrated
+    }
+
+    let base_secs = BASE_UNIX_SECS.load(Ordering::Acquire);
+    let base_micros = BASE_UNIX_MICROS.load(Ordering::Acquire);
+    let base_mono = BASE_MONO_MS.load(Ordering::Acquire);
+
+    // Compute elapsed time since calibration (handling wrap-around)
+    let elapsed_ms = current_mono_ms.wrapping_sub(base_mono);
+
+    // Convert elapsed ms to seconds and microseconds
+    let elapsed_secs = elapsed_ms / 1000;
+    let elapsed_micros = (elapsed_ms % 1000) * 1000;
+
+    // Add to base time
+    let total_micros = base_micros + elapsed_micros;
+    let micros_overflow = total_micros / 1_000_000;
+    let final_micros = total_micros % 1_000_000;
+
+    let final_secs = base_secs.wrapping_add(elapsed_secs).wrapping_add(micros_overflow);
+
+    (final_secs, final_micros)
+}
+
+/// Check if wall-clock time is calibrated
+#[allow(dead_code)]
+pub fn is_wallclock_calibrated() -> bool {
+    TIME_SYNCED.load(Ordering::Acquire)
+}
 
 // ============================================================================
 // FUTURE CCM RAM ALLOCATIONS GO BELOW THIS LINE
