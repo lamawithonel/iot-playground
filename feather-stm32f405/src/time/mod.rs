@@ -84,13 +84,13 @@
 
 mod calendar;
 mod rtc;
-mod sntp;
 
 // Re-export public API
 #[allow(unused_imports)]
 pub use rtc::{get_timestamp, initialize_rtc, is_time_synced, Timestamp};
-#[allow(unused_imports)]
-pub use sntp::{initialize_time, start_resync_task, SntpError};
+
+// Export sntp module for direct access to sync_sntp
+pub mod sntp;
 
 // Internal exports for tests
 #[cfg(test)]

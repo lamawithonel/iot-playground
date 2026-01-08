@@ -28,9 +28,6 @@ const SNTP_RETRY_COUNT: usize = 3;
 /// Retry backoff delay
 const SNTP_RETRY_BACKOFF_MS: u64 = 2000;
 
-/// Re-synchronization interval (15 minutes)
-const SNTP_RESYNC_INTERVAL_SECS: u64 = 900;
-
 /// Maximum accepted stratum level
 ///
 /// Stratum 0 = reference clock (GPS, atomic)
@@ -220,28 +217,4 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
         timestamp.unix_secs, timestamp.micros, rtt_correction_micros
     );
     Ok(timestamp)
-}
-
-/// Background task for periodic re-synchronization (15 minutes)
-pub async fn resync_task(stack: &Stack<'static>) -> ! {
-    loop {
-        Timer::after(Duration::from_secs(SNTP_RESYNC_INTERVAL_SECS)).await;
-        if let Err(e) = sync_sntp(stack).await {
-            error!("Periodic SNTP resync failed: {:?}", e);
-        }
-    }
-}
-
-/// Initialize time system with SNTP sync
-///
-/// Call once after DHCP lease is acquired.
-pub async fn initialize_time(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
-    sync_sntp(stack).await
-}
-
-/// Start periodic SNTP re-synchronization task
-///
-/// Should be spawned as a separate task. Resyncs every 15 minutes.
-pub async fn start_resync_task(stack: &Stack<'static>) -> ! {
-    resync_task(stack).await
 }
