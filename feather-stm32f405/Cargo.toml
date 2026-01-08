@@ -64,15 +64,11 @@ features = [
   "unstable-pac",
 ]
 
-[dependencies.embassy-sync]
-version = "0.7.0"
-features = ["defmt"]
-
 [dependencies.embassy-time]
 version = "0.5.0"
 features = [
   "defmt",
-  "defmt-timestamp-uptime",  # Use embassy-time uptime for defmt timestamps
+  # Note: defmt-timestamp-uptime removed in favor of custom RTC timestamps
   "generic-queue-16",
 ]
 
@@ -84,6 +80,16 @@ default-features = false
 [dependencies.panic-probe]
 version = "1.0.0"
 features = ["print-defmt"]
+
+[dependencies.embassy-sync]
+version = "0.7.0"
+features = ["defmt"]
+# Note: Only used for internal Mutex in network task, not for inter-task communication
+
+[dependencies.rtic-sync]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+features = ["defmt-03"]
 
 [dependencies.rtic]
 git = "https://github.com/rtic-rs/rtic.git"
