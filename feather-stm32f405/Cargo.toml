@@ -84,7 +84,8 @@ features = ["print-defmt"]
 [dependencies.embassy-sync]
 version = "0.7.0"
 features = ["defmt"]
-# Note: Only used for internal Mutex in network task, not for inter-task communication
+# Note: Required by embassy-embedded-hal for SPI bus sharing within network task
+# Uses lightweight CriticalSection-based mutex that doesn't prevent WFI sleep
 
 [dependencies.rtic-sync]
 git = "https://github.com/rtic-rs/rtic.git"
