@@ -90,7 +90,7 @@ mod sntp;
 #[allow(unused_imports)]
 pub use rtc::{get_timestamp, initialize_rtc, is_time_synced, Timestamp};
 #[allow(unused_imports)]
-pub use sntp::{initialize_time, start_resync_task, SntpError};
+pub use sntp::{initialize_time, sync_sntp, SntpError};
 
 // Internal exports for tests
 #[cfg(test)]

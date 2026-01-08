@@ -26,6 +26,8 @@ const SNTP_RETRY_COUNT: usize = 3;
 const SNTP_RETRY_BACKOFF_MS: u64 = 2000;
 
 /// Re-synchronization interval (15 minutes)
+/// Note: Currently unused as RTIC task uses its own timer
+#[allow(dead_code)]
 const SNTP_RESYNC_INTERVAL_SECS: u64 = 900;
 
 /// Maximum accepted stratum level
@@ -207,6 +209,9 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
 }
 
 /// Background task for periodic re-synchronization (15 minutes)
+/// Periodic SNTP re-synchronization loop
+/// Note: Currently unused as RTIC task implements resync with monotonic timer
+#[allow(dead_code)]
 pub async fn resync_task(stack: &Stack<'static>) -> ! {
     loop {
         Timer::after(Duration::from_secs(SNTP_RESYNC_INTERVAL_SECS)).await;
@@ -226,6 +231,8 @@ pub async fn initialize_time(stack: &Stack<'static>) -> Result<Timestamp, SntpEr
 /// Start periodic SNTP re-synchronization task
 ///
 /// Should be spawned as a separate task. Resyncs every 15 minutes.
+/// Note: Currently unused as RTIC task implements resync with monotonic timer
+#[allow(dead_code)]
 pub async fn start_resync_task(stack: &Stack<'static>) -> ! {
     resync_task(stack).await
 }
