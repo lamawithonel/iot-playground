@@ -1,8 +1,6 @@
 #![deny(unsafe_code)]
 #![deny(warnings)]
 //! Ethernet hardware layer module
-//!
-//! This module handles the W5500 Ethernet hardware initialization and management.
 
 use defmt::info;
 use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice as SpiDeviceBus;
@@ -25,8 +23,7 @@ pub struct EthPeripherals<'a> {
 
 /// Initialize the W5500 Ethernet hardware
 ///
-/// Returns the network device and runner that must be used to operate the hardware.
-/// The runner must be continuously polled for the device to function.
+/// Returns device and runner. Runner must be continuously polled for device operation.
 pub async fn init_w5500(
     periph: EthPeripherals<'static>,
     mac_addr: [u8; 6],
@@ -47,14 +44,12 @@ pub async fn init_w5500(
         int,
     } = periph;
 
-    // Hardware reset using embassy_time delays
     info!("Performing W5500 hardware reset...");
     reset.set_low();
     embassy_time::Timer::after_millis(1).await;
     reset.set_high();
     embassy_time::Timer::after_millis(2).await;
 
-    // Create SPI Device with Mutex wrapper
     type SpiBusType = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, Spi<'static, Async>>;
     static SPI_BUS: StaticCell<SpiBusType> = StaticCell::new();
     let spi_bus = SPI_BUS.init(embassy_sync::mutex::Mutex::new(spi));
@@ -65,11 +60,9 @@ pub async fn init_w5500(
         mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]
     );
 
-    // State for W5500 driver
     static STATE: StaticCell<embassy_net_wiznet::State<8, 8>> = StaticCell::new();
     let state = STATE.init(embassy_net_wiznet::State::<8, 8>::new());
 
-    // Create W5500 device and runner
     let (device, runner) = embassy_net_wiznet::new(mac_addr, state, spi_device, int, reset)
         .await
         .unwrap();
