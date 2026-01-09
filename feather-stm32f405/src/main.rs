@@ -127,7 +127,7 @@ mod app {
         };
 
         // Create network message channel using rtic-sync
-        let (net_sender, net_receiver) = make_channel!(network::NetworkMessage, 8);
+        let (net_sender, net_receiver) = make_channel!(net::NetworkMessage, 8);
 
         heartbeat::spawn().ok();
         network_task::spawn(net_periph, net_receiver).ok();
@@ -164,7 +164,7 @@ mod app {
     async fn network_task(
         _cx: network_task::Context,
         periph: NetworkPeripherals,
-        mut receiver: rtic_sync::channel::Receiver<'static, network::NetworkMessage, 8>,
+        mut receiver: rtic_sync::channel::Receiver<'static, net::NetworkMessage, 8>,
     ) -> ! {
         info!("Network task started");
 
@@ -240,7 +240,7 @@ mod app {
             loop {
                 match receiver.recv().await {
                     Ok(msg) => match msg {
-                        network::NetworkMessage::SntpSync => {
+                        net::NetworkMessage::SntpSync => {
                             info!("SNTP sync requested");
                             match time::sntp::sync_sntp(&stack).await {
                                 Ok(ts) => {
@@ -285,7 +285,7 @@ mod app {
     #[task(priority = 3)]
     async fn sntp_resync(
         _cx: sntp_resync::Context,
-        mut sender: rtic_sync::channel::Sender<'static, network::NetworkMessage, 8>,
+        mut sender: rtic_sync::channel::Sender<'static, net::NetworkMessage, 8>,
     ) -> ! {
         loop {
             // Wait 15 minutes between syncs
@@ -294,11 +294,7 @@ mod app {
             info!("SNTP resync task triggered");
 
             // Send SNTP sync request to network task
-            if sender
-                .send(network::NetworkMessage::SntpSync)
-                .await
-                .is_err()
-            {
+            if sender.send(net::NetworkMessage::SntpSync).await.is_err() {
                 warn!("Failed to send SNTP sync request");
             }
         }
