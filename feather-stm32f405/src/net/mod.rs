@@ -10,6 +10,13 @@ pub mod udp;
 use defmt::info;
 use embassy_net::Stack;
 
+/// Messages that can be sent to the network task
+#[derive(Clone, Debug)]
+pub enum NetworkMessage {
+    /// Request SNTP synchronization
+    SntpSync,
+}
+
 /// Wait for network to be configured and log the assigned IP address
 pub async fn wait_for_config(stack: &Stack<'_>) {
     info!("Waiting for DHCP...");
