@@ -1,7 +1,4 @@
 //! RTC (Real-Time Clock) wrapper and timestamp operations
-//!
-//! Provides safe access to the STM32 hardware RTC and manages the time
-//! synchronization status in CCM RAM.
 #![deny(unsafe_code)]
 #![deny(warnings)]
 
@@ -55,8 +52,6 @@ pub enum RtcError {
 }
 
 /// Initialize internal RTC
-///
-/// Must be called once during system initialization before any time operations.
 pub fn initialize_rtc(rtc: Rtc) {
     critical_section::with(|cs| {
         RTC.borrow(cs).replace(Some(rtc));
@@ -65,23 +60,17 @@ pub fn initialize_rtc(rtc: Rtc) {
 }
 
 /// Check if time has been synchronized with NTP
-///
-/// Returns `true` if at least one successful NTP sync has occurred.
-/// Time read from `get_timestamp()` is only valid when this returns `true`.
 #[allow(dead_code)]
 pub fn is_time_synced() -> bool {
     TIME_SYNCED.load(Ordering::Acquire)
 }
 
 /// Write timestamp to internal RTC hardware
-///
-/// Only sets TIME_SYNCED flag if the write succeeds.
 pub fn write_rtc(timestamp: Timestamp) -> Result<(), RtcError> {
     let datetime = unix_to_datetime(timestamp.unix_secs);
 
     critical_section::with(|cs| {
         if let Some(rtc) = RTC.borrow(cs).borrow_mut().as_mut() {
-            // Only set TIME_SYNCED if set_datetime succeeds
             rtc.set_datetime(datetime)
                 .map_err(|_| RtcError::HardwareError)?;
             TIME_SYNCED.store(true, Ordering::Release);
@@ -93,8 +82,6 @@ pub fn write_rtc(timestamp: Timestamp) -> Result<(), RtcError> {
 }
 
 /// Read timestamp from internal RTC hardware
-///
-/// Returns an error if time has not been synchronized yet.
 #[allow(dead_code)]
 pub fn read_rtc() -> Result<Timestamp, RtcError> {
     if !TIME_SYNCED.load(Ordering::Acquire) {
@@ -105,7 +92,6 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
         if let Some(rtc) = RTC.borrow(cs).borrow_mut().as_mut() {
             let datetime = rtc.now().map_err(|_| RtcError::HardwareError)?;
             let unix_secs = datetime_to_unix(datetime);
-            // Internal RTC only has 1-second resolution
             Ok(Timestamp::new(unix_secs, 0))
         } else {
             Err(RtcError::NotInitialized)
@@ -114,8 +100,6 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
 }
 
 /// Get current timestamp from internal RTC hardware
-///
-/// Returns `Timestamp` with `unix_secs = 0` until first sync.
 #[allow(dead_code)]
 pub fn get_timestamp() -> Timestamp {
     read_rtc().unwrap_or(Timestamp::new(0, 0))

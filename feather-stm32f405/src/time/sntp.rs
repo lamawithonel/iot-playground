@@ -1,6 +1,4 @@
 //! SNTP client implementation
-//!
-//! Handles SNTP requests, DNS resolution, and server communication.
 
 use crate::ccmram;
 use crate::Mono;
@@ -63,8 +61,6 @@ impl From<RtcError> for SntpError {
 }
 
 /// Perform SNTP synchronization and write to internal RTC
-///
-/// Tries each configured NTP server with retry logic.
 pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
     info!("Starting SNTP synchronization");
     for server in NTP_SERVERS {
@@ -81,12 +77,10 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
                         timestamp.unix_secs, timestamp.micros
                     );
 
-                    // Write to internal RTC hardware
                     write_rtc(timestamp)?;
 
-                    // Calibrate wall-clock time system with NTP timestamp + monotonic timer
-                    // Note: Mono::now().ticks() returns timer ticks. With TIM2 at 1MHz, each tick = 1µs
-                    // We truncate to u32 which wraps every ~71.6 minutes, but wrapping arithmetic handles this
+                    // Calibrate wall-clock: Mono::now().ticks() at 1MHz = 1µs per tick
+                    // u32 wraps every ~71.6 minutes but wrapping arithmetic handles this correctly
                     let mono_micros = Mono::now().ticks() as u32;
                     ccmram::calibrate_wallclock(
                         timestamp.unix_secs as u32,
@@ -102,7 +96,7 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
                 }
                 Err(e) => {
                     warn!("SNTP sync failed: {:?}, retrying...", e);
-                    Mono::delay(2000_u64.millis()).await; // 2 second backoff
+                    Mono::delay(2000_u64.millis()).await;
                 }
             }
         }
@@ -113,7 +107,6 @@ pub async fn sync_sntp(stack: &Stack<'static>) -> Result<Timestamp, SntpError> {
 
 /// Send SNTP request and parse response
 async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp, SntpError> {
-    // Resolve DNS hostname to IP
     let server_ip = match stack
         .dns_query(server, DnsQueryType::A)
         .await
@@ -126,7 +119,6 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
     let server_endpoint = IpEndpoint::new(server_ip, SNTP_PORT);
     info!("Resolved {} to {}", server, Debug2Format(&server_endpoint));
 
-    // Create UDP socket with optimized buffers (NTP packets are 48 bytes)
     let mut rx_meta = [PacketMetadata::EMPTY; 2];
     let mut rx_buffer = [0u8; 64];
     let mut tx_meta = [PacketMetadata::EMPTY; 2];
@@ -140,23 +132,17 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
     );
     socket.bind(0).map_err(|_| SntpError::NetworkError)?;
 
-    // Create NTP request packet (48 bytes, Mode 3 = Client)
+    // NTP request: LI=0, VN=3, Mode=3 (Client)
     let mut ntp_packet = [0u8; 48];
-    ntp_packet[0] = 0x1B; // LI=0, VN=3, Mode=3
-
-    // Record transmit time for RTT calculation
+    ntp_packet[0] = 0x1B;
     let transmit_time = Instant::now();
-
-    // Send NTP request
     socket
         .send_to(&ntp_packet, server_endpoint)
         .await
         .map_err(|_| SntpError::NetworkError)?;
     info!("Sent NTP request to {}", Debug2Format(&server_endpoint));
 
-    // Receive response with timeout
-    // Note: Using embassy_time::Timer here is correct - this is an I/O timeout
-    // racing against the actual network operation, not a periodic delay
+    // embassy_time::Timer used for I/O timeout racing network operation
     let mut response = [0u8; 48];
     let timeout_future = Timer::after(Duration::from_millis(SNTP_TIMEOUT_MS));
     let recv_future = socket.recv_from(&mut response);
@@ -168,7 +154,6 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
             }
         };
 
-    // Record receive time for RTT calculation
     let receive_time = Instant::now();
 
     info!(
@@ -177,12 +162,10 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
         Debug2Format(&from_addr)
     );
 
-    // Validate response length and source
     if recv_len < 48 || from_addr.endpoint.addr != server_ip {
         return Err(SntpError::InvalidResponse);
     }
 
-    // Validate stratum (byte 1)
     let stratum = response[1];
     info!("NTP server stratum: {}", stratum);
 
@@ -191,19 +174,15 @@ async fn sntp_request(stack: &Stack<'static>, server: &str) -> Result<Timestamp,
         return Err(SntpError::InvalidStratum);
     }
 
-    // Extract transmit timestamp (bytes 40-47)
     let tx_timestamp_secs =
         u32::from_be_bytes([response[40], response[41], response[42], response[43]]) as u64;
     let tx_timestamp_frac =
         u32::from_be_bytes([response[44], response[45], response[46], response[47]]);
 
-    // Calculate round-trip time and apply RTT/2 correction
     let rtt = receive_time.duration_since(transmit_time);
     let rtt_correction_micros = rtt.as_micros() / 2;
 
     let mut timestamp = Timestamp::from_ntp(tx_timestamp_secs, tx_timestamp_frac);
-
-    // Apply RTT/2 correction
     timestamp.micros = timestamp
         .micros
         .saturating_add(rtt_correction_micros as u32);
