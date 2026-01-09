@@ -1,8 +1,6 @@
 #![deny(unsafe_code)]
 #![deny(warnings)]
-//! Network IP layer module
-
-pub mod udp;
+//! Thin wrapper around embassy-net enforcing no-alloc/buffer ownership rules
 
 use defmt::info;
 use embassy_net::Stack;
