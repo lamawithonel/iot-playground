@@ -18,6 +18,9 @@ use super::client::NetworkClient;
 use super::config::SntpConfig;
 use super::error::NetworkError;
 
+/// SNTP/NTP port (UDP 123)
+const SNTP_PORT: u16 = 123;
+
 impl From<RtcError> for NetworkError {
     fn from(e: RtcError) -> Self {
         match e {
@@ -99,7 +102,7 @@ impl SntpClient {
             .copied()
             .ok_or(NetworkError::DnsError)?;
 
-        let server_endpoint = IpEndpoint::new(server_ip, 123);
+        let server_endpoint = IpEndpoint::new(server_ip, SNTP_PORT);
         info!("Resolved {} to {}", server, Debug2Format(&server_endpoint));
 
         let mut rx_meta = [PacketMetadata::EMPTY; 2];
