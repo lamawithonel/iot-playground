@@ -78,6 +78,24 @@ mod app {
             mode: HseMode::Oscillator,
         });
 
+        // Configure PLL for system clock and RNG (48MHz required for RNG)
+        // HSE (12 MHz) / PREDIV(6) = 2 MHz (PLL input)
+        // 2 MHz * MUL(168) = 336 MHz (VCO)
+        // VCO / DIVP(4) = 84 MHz (SYSCLK)
+        // VCO / DIVQ(7) = 48 MHz (USB/RNG clock) ✓
+        config.rcc.pll_src = embassy_stm32::rcc::PllSource::HSE;
+        config.rcc.pll = Some(embassy_stm32::rcc::Pll {
+            prediv: embassy_stm32::rcc::PllPreDiv::DIV6, // 12 MHz / 6 = 2 MHz
+            mul: embassy_stm32::rcc::PllMul::MUL168,     // 2 MHz * 168 = 336 MHz (VCO)
+            divp: Some(embassy_stm32::rcc::PllPDiv::DIV4), // 336 MHz / 4 = 84 MHz (SYSCLK)
+            divq: Some(embassy_stm32::rcc::PllQDiv::DIV7), // 336 MHz / 7 = 48 MHz (RNG)
+            divr: None,
+        });
+        config.rcc.sys = embassy_stm32::rcc::Sysclk::PLL1_P;
+        config.rcc.ahb_pre = embassy_stm32::rcc::AHBPrescaler::DIV1; // 84 MHz
+        config.rcc.apb1_pre = embassy_stm32::rcc::APBPrescaler::DIV2; // 42 MHz
+        config.rcc.apb2_pre = embassy_stm32::rcc::APBPrescaler::DIV1; // 84 MHz
+
         config.rcc.ls = LsConfig {
             rtc: embassy_stm32::rcc::RtcClockSource::LSE,
             lsi: false,
@@ -90,6 +108,7 @@ mod app {
         let p = embassy_stm32::init(config);
 
         info!("System initialized with HSE (12MHz) and LSE (32.768kHz)");
+        info!("PLL configured: SYSCLK=84MHz, PLLQ=48MHz for RNG");
 
         // TIM2 on APB1: timer clock = 2*APB1 when prescaler != 1
         // Default: APB1 = 42 MHz, TIM2 = 84 MHz
