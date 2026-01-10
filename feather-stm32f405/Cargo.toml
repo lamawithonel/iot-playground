@@ -79,13 +79,22 @@ features = [
 ]
 
 # NOTE: Replace with rustls-wolfcrypt-provider for FIPS 140-3 compliance
+# Using specific commit just after dccd96634679d52a7eac7a0ed216b9c24dbfb122
+# which includes improved cipher suite support
 [dependencies.embedded-tls]
-version = "0.17"
+git = "https://github.com/drogue-iot/embedded-tls"
+rev = "dccd96634679d52a7eac7a0ed216b9c24dbfb122"
 default-features = false
+features = ["defmt"]
 
 [dependencies.panic-probe]
 version = "1.0.0"
 features = ["print-defmt"]
+
+# RNG for TLS handshake (version must match embedded-tls dependency)
+[dependencies.rand_core]
+version = "0.6"
+default-features = false
 
 [dependencies.rtic]
 git = "https://github.com/rtic-rs/rtic.git"

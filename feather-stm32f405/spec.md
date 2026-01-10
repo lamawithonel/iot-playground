@@ -160,12 +160,13 @@ TODO: Decide on timer requirements
  └─ Firmware update buffer:    4KB
 
  CCM RAM (64KB) - CPU-only, zero wait states:
- ├─ TLS read buffer:          16KB (.ccmram section)
- ├─ TLS write buffer:          8KB (.ccmram section)
- ├─ MQTT buffers:             16KB (.ccmram section)
- └─ Critical variables:       24KB (.ccmram section)
+ ├─ Critical variables:        <1KB
+ │   └─ TIME_SYNCED flag
+ └─ Reserved for future:       63KB+
+     └─ Available for timing-critical data
 
- Note: Stack in main RAM allows more flexibility and prevents
+ Note: TLS buffers (34KB: 18KB read + 16KB write) now in main SRAM.
+ Stack in main RAM allows more flexibility and prevents
        linker conflicts between stack and .ccmram section.
 ```
 
@@ -291,7 +292,7 @@ TODO: Decide on failed message DLQ maximum size and what to do about its content
 - [x] DHCP and Layer 2 networking
 - [x] Newtwork stack abstraction
 - [x] SNTP client (`sntpc`)
-- [ ] TLS 1.3 handshake
+- [x] TLS 1.3 handshake
 - [ ] MQTT client with AWS IoT Core
 - [ ] Interrupt-driven packet reception
 

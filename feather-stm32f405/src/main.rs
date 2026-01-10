@@ -12,6 +12,7 @@ mod ccmram;
 mod eth;
 mod network;
 mod time;
+mod tls_buffers;
 
 stm32_tim2_monotonic!(Mono, 1_000_000);
 
@@ -54,6 +55,11 @@ mod app {
         dma_rx: DmaRx,
     }
 
+    // RNG interrupt binding for hardware random number generator
+    embassy_stm32::bind_interrupts!(struct RngIrqs {
+        RNG => embassy_stm32::rng::InterruptHandler<peripherals::RNG>;
+    });
+
     #[shared]
     struct Shared {}
 
@@ -73,6 +79,24 @@ mod app {
             mode: HseMode::Oscillator,
         });
 
+        // Configure PLL for system clock and RNG (48MHz required for RNG)
+        // HSE (12 MHz) / PREDIV(6) = 2 MHz (PLL input)
+        // 2 MHz * MUL(168) = 336 MHz (VCO)
+        // VCO / DIVP(4) = 84 MHz (SYSCLK)
+        // VCO / DIVQ(7) = 48 MHz (USB/RNG clock) ✓
+        config.rcc.pll_src = embassy_stm32::rcc::PllSource::HSE;
+        config.rcc.pll = Some(embassy_stm32::rcc::Pll {
+            prediv: embassy_stm32::rcc::PllPreDiv::DIV6, // 12 MHz / 6 = 2 MHz
+            mul: embassy_stm32::rcc::PllMul::MUL168,     // 2 MHz * 168 = 336 MHz (VCO)
+            divp: Some(embassy_stm32::rcc::PllPDiv::DIV4), // 336 MHz / 4 = 84 MHz (SYSCLK)
+            divq: Some(embassy_stm32::rcc::PllQDiv::DIV7), // 336 MHz / 7 = 48 MHz (RNG)
+            divr: None,
+        });
+        config.rcc.sys = embassy_stm32::rcc::Sysclk::PLL1_P;
+        config.rcc.ahb_pre = embassy_stm32::rcc::AHBPrescaler::DIV1; // 84 MHz
+        config.rcc.apb1_pre = embassy_stm32::rcc::APBPrescaler::DIV2; // 42 MHz
+        config.rcc.apb2_pre = embassy_stm32::rcc::APBPrescaler::DIV1; // 84 MHz
+
         config.rcc.ls = LsConfig {
             rtc: embassy_stm32::rcc::RtcClockSource::LSE,
             lsi: false,
@@ -85,6 +109,7 @@ mod app {
         let p = embassy_stm32::init(config);
 
         info!("System initialized with HSE (12MHz) and LSE (32.768kHz)");
+        info!("PLL configured: SYSCLK=84MHz, PLLQ=48MHz for RNG");
 
         // TIM2 on APB1: timer clock = 2*APB1 when prescaler != 1
         // Default: APB1 = 42 MHz, TIM2 = 84 MHz
@@ -114,7 +139,7 @@ mod app {
         };
 
         heartbeat::spawn().ok();
-        network_task::spawn(net_periph).ok();
+        network_task::spawn(net_periph, p.RNG).ok();
 
         (Shared {}, Local { led })
     }
@@ -135,34 +160,17 @@ mod app {
     ///
     /// Stack is !Send and must remain within this task.
     #[task(priority = 1)]
-    async fn network_task(_cx: network_task::Context, periph: NetworkPeripherals) -> ! {
+    async fn network_task(
+        _cx: network_task::Context,
+        periph: NetworkPeripherals,
+        rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
+    ) -> ! {
         use embassy_net::{Config, StackResources};
         use static_cell::StaticCell;
 
         info!("Network task started");
 
-        let eth_periph = setup_spi_and_eth(periph);
-        let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
-        let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
-
-        static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-        let (stack, mut net_runner) = embassy_net::new(
-            device,
-            Config::dhcpv4(Default::default()),
-            RESOURCES.init(StackResources::new()),
-            0x1234_5678_u64,
-        );
-        info!("Network stack initialized with DHCP");
-
-        let app_logic = async {
-            manager::wait_for_config(&stack).await;
-            run_clients(&stack).await;
-        };
-
-        join3(w5500_runner.run(), net_runner.run(), app_logic).await;
-    }
-
-    fn setup_spi_and_eth(periph: NetworkPeripherals) -> eth::EthPeripherals<'static> {
+        // Setup ethernet peripherals
         let mut spi_config = spi::Config::default();
         spi_config.frequency = Hertz(10_000_000); // 10 MHz for W5500
 
@@ -180,15 +188,38 @@ mod app {
         let reset = Output::new(periph.reset, Level::High, Speed::Low);
         let int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
 
-        eth::EthPeripherals {
+        let eth_periph = eth::EthPeripherals {
             spi,
             cs,
             reset,
             int,
-        }
+        };
+
+        let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+        let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
+
+        static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+        let (stack, mut net_runner) = embassy_net::new(
+            device,
+            Config::dhcpv4(Default::default()),
+            RESOURCES.init(StackResources::new()),
+            0x1234_5678_u64,
+        );
+        info!("Network stack initialized with DHCP");
+
+        let app_logic = async {
+            manager::wait_for_config(&stack).await;
+            run_clients(&stack, rng_periph).await;
+        };
+
+        join3(w5500_runner.run(), net_runner.run(), app_logic).await;
     }
 
-    async fn run_clients(stack: &embassy_net::Stack<'static>) -> ! {
+    async fn run_clients(
+        stack: &embassy_net::Stack<'static>,
+        rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
+    ) -> ! {
+        use embassy_stm32::rng::Rng;
         let mut sntp = SntpClient::new();
 
         // Initial SNTP sync
@@ -199,6 +230,25 @@ mod app {
                 ts.unix_secs, ts.micros
             ),
             Err(e) => warn!("SNTP initialization failed: {:?}", e),
+        }
+
+        // TLS 1.3 handshake test (Phase 1)
+        info!("Testing TLS 1.3 handshake with 192.168.1.1:8883...");
+
+        // Initialize hardware RNG just before TLS handshake
+        info!("Initializing hardware RNG for TLS...");
+        let mut rng = Rng::new(rng_periph, RngIrqs);
+        info!("Hardware RNG initialized");
+
+        let tls_config = network::tls::TlsClientConfig {
+            server_name: "192.168.1.1",
+            server_port: 8883,
+            verify_server: false, // Phase 1: skip verification
+        };
+        let tls_client = network::tls::TlsClient::new(tls_config);
+        match tls_client.test_handshake(stack, &mut rng).await {
+            Ok(()) => info!("TLS 1.3 handshake test PASSED ✓"),
+            Err(e) => warn!("TLS 1.3 handshake test FAILED: {:?}", e),
         }
 
         info!("Network initialization complete - entering periodic sync loop");

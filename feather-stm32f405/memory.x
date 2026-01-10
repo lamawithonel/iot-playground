@@ -43,10 +43,12 @@ SECTIONS
  └─ Firmware update buffer:    4KB
 
  CCM RAM (64KB) - CPU-only, zero wait states:
- ├─ TLS read buffer:          16KB (.ccmram section)
- ├─ TLS write buffer:          8KB (.ccmram section)
- ├─ MQTT buffers:             16KB (.ccmram section)
- └─ Critical variables:       24KB (.ccmram section)
+ ├─ Critical variables:        <1KB
+ │   └─ TIME_SYNCED flag
+ └─ Reserved for future:       63KB+
+     └─ Available for timing-critical data
+
+ Note: TLS buffers (34KB) now in main SRAM for size flexibility.
 
  Note: Stack in main RAM allows more flexibility and prevents
        linker conflicts between stack and .ccmram section.
