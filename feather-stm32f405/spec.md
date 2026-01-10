@@ -160,10 +160,11 @@ TODO: Decide on timer requirements
  └─ Firmware update buffer:    4KB
 
  CCM RAM (64KB) - CPU-only, zero wait states:
- ├─ TLS read buffer:          16KB (.ccmram section)
- ├─ TLS write buffer:          8KB (.ccmram section)
- ├─ MQTT buffers:             16KB (.ccmram section)
- └─ Critical variables:       24KB (.ccmram section)
+ ├─ TLS record buffers:       32KB
+ │   ├─ Read buffer:          16KB (TLS_READ_BUF)
+ │   └─ Write buffer:         16KB (TLS_WRITE_BUF)
+ ├─ MQTT buffers:             24KB (future use)
+ └─ Critical variables:        8KB
 
  Note: Stack in main RAM allows more flexibility and prevents
        linker conflicts between stack and .ccmram section.

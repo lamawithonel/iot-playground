@@ -201,6 +201,19 @@ mod app {
             Err(e) => warn!("SNTP initialization failed: {:?}", e),
         }
 
+        // TLS 1.3 handshake test (Phase 1)
+        info!("Testing TLS 1.3 handshake with test.mosquitto.org:8883...");
+        let tls_config = network::tls::TlsClientConfig {
+            server_name: "test.mosquitto.org",
+            server_port: 8883,
+            verify_server: false, // Phase 1: skip verification
+        };
+        let tls_client = network::tls::TlsClient::new(tls_config);
+        match tls_client.test_handshake(stack).await {
+            Ok(()) => info!("TLS 1.3 handshake test PASSED ✓"),
+            Err(e) => warn!("TLS 1.3 handshake test FAILED: {:?}", e),
+        }
+
         info!("Network initialization complete - entering periodic sync loop");
 
         // Periodic resync using RTIC monotonic timer
