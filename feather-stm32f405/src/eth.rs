@@ -13,6 +13,10 @@ use embassy_stm32::spi::Spi;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use static_cell::StaticCell;
 
+/// Type alias for the W5500 device used with embassy-net
+#[allow(dead_code)]
+pub type W5500Device = Device<'static>;
+
 /// Ethernet peripherals bundle
 pub struct EthPeripherals<'a> {
     pub spi: Spi<'a, Async>,

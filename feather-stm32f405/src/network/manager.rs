@@ -1,16 +1,14 @@
 #![deny(unsafe_code)]
 #![deny(warnings)]
-//! Thin wrapper around embassy-net enforcing no-alloc/buffer ownership rules
+//! Network stack manager
+//!
+//! Handles W5500 hardware initialization and embassy-net stack creation.
+//! This module isolates hardware setup from application logic.
 
 use defmt::info;
 use embassy_net::Stack;
 
-#[derive(Clone, Debug)]
-pub enum NetworkMessage {
-    SntpSync,
-}
-
-/// Wait for network to be configured and log the assigned IP address
+/// Wait for network configuration (DHCP) and log IP address
 pub async fn wait_for_config(stack: &Stack<'_>) {
     info!("Waiting for DHCP...");
     stack.wait_config_up().await;
