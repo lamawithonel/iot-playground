@@ -52,7 +52,6 @@ mod app {
         exti: ExtiChannel,
         dma_tx: DmaTx,
         dma_rx: DmaRx,
-        rng: embassy_stm32::Peri<'static, peripherals::RNG>,
     }
 
     // RNG interrupt binding for hardware random number generator
@@ -117,11 +116,10 @@ mod app {
             exti: p.EXTI2,
             dma_tx: p.DMA1_CH4,
             dma_rx: p.DMA1_CH3,
-            rng: p.RNG,
         };
 
         heartbeat::spawn().ok();
-        network_task::spawn(net_periph).ok();
+        network_task::spawn(net_periph, p.RNG).ok();
 
         (Shared {}, Local { led })
     }
@@ -142,18 +140,17 @@ mod app {
     ///
     /// Stack is !Send and must remain within this task.
     #[task(priority = 1)]
-    async fn network_task(_cx: network_task::Context, periph: NetworkPeripherals) -> ! {
+    async fn network_task(
+        _cx: network_task::Context,
+        periph: NetworkPeripherals,
+        rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
+    ) -> ! {
         use embassy_net::{Config, StackResources};
-        use embassy_stm32::rng::Rng;
         use static_cell::StaticCell;
 
         info!("Network task started");
 
-        // Initialize hardware RNG for TLS
-        let mut rng = Rng::new(periph.rng, RngIrqs);
-        info!("Hardware RNG initialized");
-
-        // Setup ethernet peripherals inline (can't use periph after moving rng)
+        // Setup ethernet peripherals
         let mut spi_config = spi::Config::default();
         spi_config.frequency = Hertz(10_000_000); // 10 MHz for W5500
 
@@ -192,16 +189,17 @@ mod app {
 
         let app_logic = async {
             manager::wait_for_config(&stack).await;
-            run_clients(&stack, &mut rng).await;
+            run_clients(&stack, rng_periph).await;
         };
 
         join3(w5500_runner.run(), net_runner.run(), app_logic).await;
     }
 
-    async fn run_clients<RNG>(stack: &embassy_net::Stack<'static>, rng: &mut RNG) -> !
-    where
-        RNG: rand_core::RngCore + rand_core::CryptoRng,
-    {
+    async fn run_clients(
+        stack: &embassy_net::Stack<'static>,
+        rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
+    ) -> ! {
+        use embassy_stm32::rng::Rng;
         let mut sntp = SntpClient::new();
 
         // Initial SNTP sync
@@ -216,13 +214,19 @@ mod app {
 
         // TLS 1.3 handshake test (Phase 1)
         info!("Testing TLS 1.3 handshake with test.mosquitto.org:8883...");
+
+        // Initialize hardware RNG just before TLS handshake
+        info!("Initializing hardware RNG for TLS...");
+        let mut rng = Rng::new(rng_periph, RngIrqs);
+        info!("Hardware RNG initialized");
+
         let tls_config = network::tls::TlsClientConfig {
             server_name: "test.mosquitto.org",
             server_port: 8883,
             verify_server: false, // Phase 1: skip verification
         };
         let tls_client = network::tls::TlsClient::new(tls_config);
-        match tls_client.test_handshake(stack, rng).await {
+        match tls_client.test_handshake(stack, &mut rng).await {
             Ok(()) => info!("TLS 1.3 handshake test PASSED ✓"),
             Err(e) => warn!("TLS 1.3 handshake test FAILED: {:?}", e),
         }
