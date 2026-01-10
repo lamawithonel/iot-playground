@@ -10,7 +10,7 @@ use rtic_monotonics::stm32::prelude::*;
 
 mod ccmram;
 mod eth;
-mod net;
+mod network;
 mod time;
 
 stm32_tim2_monotonic!(Mono, 1_000_000);
@@ -27,7 +27,8 @@ mod app {
     use embassy_stm32::rtc::{Rtc, RtcConfig};
     use embassy_stm32::spi::{self, Spi};
     use embassy_stm32::time::Hertz;
-    use rtic_sync::make_channel;
+
+    use network::{manager, NetworkClient, SntpClient};
 
     type SpiPeripheral = embassy_stm32::Peri<'static, peripherals::SPI2>;
     type PinPB13 = embassy_stm32::Peri<'static, peripherals::PB13>;
@@ -112,11 +113,8 @@ mod app {
             dma_rx: p.DMA1_CH3,
         };
 
-        let (net_sender, net_receiver) = make_channel!(net::NetworkMessage, 8);
-
         heartbeat::spawn().ok();
-        network_task::spawn(net_periph, net_receiver).ok();
-        sntp_resync::spawn(net_sender).ok();
+        network_task::spawn(net_periph).ok();
 
         (Shared {}, Local { led })
     }
@@ -133,17 +131,38 @@ mod app {
         }
     }
 
-    /// Network task - coordinates modular network layers
+    /// Network task - orchestrates network stack and protocol clients
     ///
     /// Stack is !Send and must remain within this task.
     #[task(priority = 1)]
-    async fn network_task(
-        _cx: network_task::Context,
-        periph: NetworkPeripherals,
-        mut receiver: rtic_sync::channel::Receiver<'static, net::NetworkMessage, 8>,
-    ) -> ! {
+    async fn network_task(_cx: network_task::Context, periph: NetworkPeripherals) -> ! {
+        use embassy_net::{Config, StackResources};
+        use static_cell::StaticCell;
+
         info!("Network task started");
 
+        let eth_periph = setup_spi_and_eth(periph);
+        let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+        let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
+
+        static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+        let (stack, mut net_runner) = embassy_net::new(
+            device,
+            Config::dhcpv4(Default::default()),
+            RESOURCES.init(StackResources::new()),
+            0x1234_5678_u64,
+        );
+        info!("Network stack initialized with DHCP");
+
+        let app_logic = async {
+            manager::wait_for_config(&stack).await;
+            run_clients(&stack).await;
+        };
+
+        join3(w5500_runner.run(), net_runner.run(), app_logic).await;
+    }
+
+    fn setup_spi_and_eth(periph: NetworkPeripherals) -> eth::EthPeripherals<'static> {
         let mut spi_config = spi::Config::default();
         spi_config.frequency = Hertz(10_000_000); // 10 MHz for W5500
 
@@ -161,92 +180,39 @@ mod app {
         let reset = Output::new(periph.reset, Level::High, Speed::Low);
         let int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
 
-        let eth_periph = eth::EthPeripherals {
+        eth::EthPeripherals {
             spi,
             cs,
             reset,
             int,
-        };
-        let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
-        let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
-
-        let (stack, mut net_runner) = {
-            use embassy_net::{Config, StackResources};
-            use static_cell::StaticCell;
-
-            let config = Config::dhcpv4(Default::default());
-            let seed = 0x1234_5678_u64;
-
-            static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-            embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed)
-        };
-        info!("Network stack initialized with DHCP");
-
-        // Runners must execute for DHCP and network operations
-        let app_logic = async {
-            net::wait_for_config(&stack).await;
-
-            // Initialize SNTP time synchronization
-            info!("Initializing SNTP time synchronization with RTC (LSE)...");
-            match time::sntp::sync_sntp(&stack).await {
-                Ok(ts) => {
-                    info!(
-                        "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
-                        ts.unix_secs, ts.micros
-                    );
-                }
-                Err(e) => {
-                    warn!("SNTP initialization failed: {:?}", e);
-                }
-            }
-
-            info!("Network initialization complete - processing messages");
-
-            loop {
-                match receiver.recv().await {
-                    Ok(msg) => match msg {
-                        net::NetworkMessage::SntpSync => {
-                            info!("SNTP sync requested");
-                            match time::sntp::sync_sntp(&stack).await {
-                                Ok(ts) => {
-                                    info!(
-                                        "SNTP sync successful: {}.{:06} UTC",
-                                        ts.unix_secs, ts.micros
-                                    );
-                                }
-                                Err(e) => {
-                                    warn!("SNTP sync failed: {:?}", e);
-                                }
-                            }
-                        }
-                    },
-                    Err(_) => {
-                        warn!("Network message channel closed");
-                        Mono::delay(1.secs()).await;
-                    }
-                }
-            }
-        };
-
-        join3(w5500_runner.run(), net_runner.run(), app_logic).await;
+        }
     }
 
-    /// SNTP periodic resync task
-    ///
-    /// Uses Mono::delay() for interrupt-driven scheduling via TIM2 timer.
-    /// Sends sync requests to network task which owns the Stack (!Send).
-    #[task(priority = 3)]
-    async fn sntp_resync(
-        _cx: sntp_resync::Context,
-        mut sender: rtic_sync::channel::Sender<'static, net::NetworkMessage, 8>,
-    ) -> ! {
+    async fn run_clients(stack: &embassy_net::Stack<'static>) -> ! {
+        let mut sntp = SntpClient::new();
+
+        // Initial SNTP sync
+        info!("Initializing SNTP time synchronization with RTC (LSE)...");
+        match sntp.run(stack).await {
+            Ok(ts) => info!(
+                "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
+                ts.unix_secs, ts.micros
+            ),
+            Err(e) => warn!("SNTP initialization failed: {:?}", e),
+        }
+
+        info!("Network initialization complete - entering periodic sync loop");
+
+        // Periodic resync using RTIC monotonic timer
         loop {
             Mono::delay(15.minutes()).await;
-
-            info!("SNTP resync task triggered");
-
-            if sender.send(net::NetworkMessage::SntpSync).await.is_err() {
-                warn!("Failed to send SNTP sync request");
+            info!("SNTP resync triggered");
+            match sntp.run(stack).await {
+                Ok(ts) => info!(
+                    "SNTP sync successful: {}.{:06} UTC",
+                    ts.unix_secs, ts.micros
+                ),
+                Err(e) => warn!("SNTP sync failed: {:?}", e),
             }
         }
     }
