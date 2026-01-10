@@ -28,7 +28,7 @@
 #![deny(warnings)]
 
 mod calendar;
-pub mod rtc;
+mod rtc;
 
 // Re-export public API
 #[allow(unused_imports)]
