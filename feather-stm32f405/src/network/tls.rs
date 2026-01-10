@@ -34,64 +34,6 @@ use crate::ccmram;
 use super::error::NetworkError;
 use super::socket::AsyncTcpSocket;
 
-/// Simple counter-based RNG for Phase 1 testing
-///
-/// WARNING: This is NOT cryptographically secure and should be replaced
-/// with a hardware RNG (STM32F4 has RNG peripheral) for production use.
-///
-/// This implementation uses a simple counter that increments on each random
-/// number generation. It satisfies the RngCore trait requirements for embedded-tls
-/// but does not provide cryptographic security.
-#[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
-struct SimpleRng {
-    counter: u64,
-}
-
-impl SimpleRng {
-    #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
-    fn new() -> Self {
-        // TODO: Use STM32F4 hardware RNG peripheral for production
-        // For Phase 1 testing, initialize with a fixed but non-zero seed
-        // This provides reproducible behavior for debugging while still
-        // satisfying the RngCore trait requirements
-        Self {
-            counter: 0x0123_4567_89AB_CDEF,
-        }
-    }
-}
-
-impl rand_core::RngCore for SimpleRng {
-    fn next_u32(&mut self) -> u32 {
-        // Increment using golden ratio to ensure good distribution
-        // 0x9E3779B97F4A7C15 is the 64-bit fractional part of the golden ratio
-        // This constant is commonly used in hash functions for good avalanche properties
-        self.counter = self.counter.wrapping_add(0x9E3779B97F4A7C15);
-        (self.counter >> 32) as u32
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        // Increment using golden ratio constant for good distribution
-        self.counter = self.counter.wrapping_add(0x9E3779B97F4A7C15);
-        self.counter
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        for chunk in dest.chunks_mut(8) {
-            let random = self.next_u64();
-            let bytes = random.to_le_bytes();
-            let len = chunk.len().min(8);
-            chunk[..len].copy_from_slice(&bytes[..len]);
-        }
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
-        self.fill_bytes(dest);
-        Ok(())
-    }
-}
-
-impl rand_core::CryptoRng for SimpleRng {}
-
 /// TLS client configuration
 #[derive(Clone, Copy)]
 #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
@@ -146,7 +88,7 @@ impl TlsClient {
     /// This function:
     /// 1. Resolves the server hostname via DNS
     /// 2. Establishes a TCP connection
-    /// 3. Performs the TLS 1.3 handshake
+    /// 3. Performs the TLS 1.3 handshake using hardware RNG
     /// 4. Closes the connection
     ///
     /// # Phase 1 Limitation
@@ -158,6 +100,7 @@ impl TlsClient {
     /// # Arguments
     ///
     /// * `stack` - Embassy network stack for DNS and TCP operations
+    /// * `rng` - Hardware random number generator (STM32F405 RNG peripheral)
     ///
     /// # Returns
     ///
@@ -172,10 +115,17 @@ impl TlsClient {
     ///
     /// ```no_run
     /// let client = TlsClient::new(TlsClientConfig::default());
-    /// client.test_handshake(stack).await?;
+    /// client.test_handshake(stack, &mut rng).await?;
     /// ```
     #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
-    pub async fn test_handshake(&self, stack: &Stack<'static>) -> Result<(), NetworkError> {
+    pub async fn test_handshake<RNG>(
+        &self,
+        stack: &Stack<'static>,
+        rng: &mut RNG,
+    ) -> Result<(), NetworkError>
+    where
+        RNG: rand_core::RngCore + rand_core::CryptoRng,
+    {
         info!(
             "Starting TLS handshake test with {}:{}",
             self.config.server_name, self.config.server_port
@@ -235,15 +185,12 @@ impl TlsClient {
         let mut tls_connection =
             TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, read_buf, write_buf);
 
-        // Step 7: Create a simple RNG for TLS handshake
-        let mut rng = SimpleRng::new();
-
-        // Step 8: Create TLS context and perform handshake
-        info!("Initiating TLS 1.3 handshake...");
-        let tls_context = TlsContext::new(&config, &mut rng);
+        // Step 7: Create TLS context with hardware RNG and perform handshake
+        info!("Initiating TLS 1.3 handshake with hardware RNG...");
+        let tls_context = TlsContext::new(&config, rng);
 
         tls_connection
-            .open::<SimpleRng, NoVerify>(tls_context)
+            .open::<RNG, NoVerify>(tls_context)
             .await
             .map_err(|e| {
                 error!("TLS handshake failed: {:?}", Debug2Format(&e));
@@ -252,7 +199,7 @@ impl TlsClient {
 
         info!("TLS 1.3 handshake completed successfully!");
 
-        // Step 9: Close the connection
+        // Step 8: Close the connection
         tls_connection.close().await.map_err(|(_socket, e)| {
             warn!("TLS close returned error: {:?}", Debug2Format(&e));
             NetworkError::TlsConnectionClosed

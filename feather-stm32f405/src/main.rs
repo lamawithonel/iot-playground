@@ -52,7 +52,13 @@ mod app {
         exti: ExtiChannel,
         dma_tx: DmaTx,
         dma_rx: DmaRx,
+        rng: embassy_stm32::Peri<'static, peripherals::RNG>,
     }
+
+    // RNG interrupt binding for hardware random number generator
+    embassy_stm32::bind_interrupts!(struct RngIrqs {
+        RNG => embassy_stm32::rng::InterruptHandler<peripherals::RNG>;
+    });
 
     #[shared]
     struct Shared {}
@@ -111,6 +117,7 @@ mod app {
             exti: p.EXTI2,
             dma_tx: p.DMA1_CH4,
             dma_rx: p.DMA1_CH3,
+            rng: p.RNG,
         };
 
         heartbeat::spawn().ok();
@@ -137,32 +144,16 @@ mod app {
     #[task(priority = 1)]
     async fn network_task(_cx: network_task::Context, periph: NetworkPeripherals) -> ! {
         use embassy_net::{Config, StackResources};
+        use embassy_stm32::rng::Rng;
         use static_cell::StaticCell;
 
         info!("Network task started");
 
-        let eth_periph = setup_spi_and_eth(periph);
-        let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
-        let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
+        // Initialize hardware RNG for TLS
+        let mut rng = Rng::new(periph.rng, RngIrqs);
+        info!("Hardware RNG initialized");
 
-        static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-        let (stack, mut net_runner) = embassy_net::new(
-            device,
-            Config::dhcpv4(Default::default()),
-            RESOURCES.init(StackResources::new()),
-            0x1234_5678_u64,
-        );
-        info!("Network stack initialized with DHCP");
-
-        let app_logic = async {
-            manager::wait_for_config(&stack).await;
-            run_clients(&stack).await;
-        };
-
-        join3(w5500_runner.run(), net_runner.run(), app_logic).await;
-    }
-
-    fn setup_spi_and_eth(periph: NetworkPeripherals) -> eth::EthPeripherals<'static> {
+        // Setup ethernet peripherals inline (can't use periph after moving rng)
         let mut spi_config = spi::Config::default();
         spi_config.frequency = Hertz(10_000_000); // 10 MHz for W5500
 
@@ -180,15 +171,37 @@ mod app {
         let reset = Output::new(periph.reset, Level::High, Speed::Low);
         let int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
 
-        eth::EthPeripherals {
+        let eth_periph = eth::EthPeripherals {
             spi,
             cs,
             reset,
             int,
-        }
+        };
+
+        let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+        let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
+
+        static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+        let (stack, mut net_runner) = embassy_net::new(
+            device,
+            Config::dhcpv4(Default::default()),
+            RESOURCES.init(StackResources::new()),
+            0x1234_5678_u64,
+        );
+        info!("Network stack initialized with DHCP");
+
+        let app_logic = async {
+            manager::wait_for_config(&stack).await;
+            run_clients(&stack, &mut rng).await;
+        };
+
+        join3(w5500_runner.run(), net_runner.run(), app_logic).await;
     }
 
-    async fn run_clients(stack: &embassy_net::Stack<'static>) -> ! {
+    async fn run_clients<RNG>(stack: &embassy_net::Stack<'static>, rng: &mut RNG) -> !
+    where
+        RNG: rand_core::RngCore + rand_core::CryptoRng,
+    {
         let mut sntp = SntpClient::new();
 
         // Initial SNTP sync
@@ -209,7 +222,7 @@ mod app {
             verify_server: false, // Phase 1: skip verification
         };
         let tls_client = network::tls::TlsClient::new(tls_config);
-        match tls_client.test_handshake(stack).await {
+        match tls_client.test_handshake(stack, rng).await {
             Ok(()) => info!("TLS 1.3 handshake test PASSED ✓"),
             Err(e) => warn!("TLS 1.3 handshake test FAILED: {:?}", e),
         }
