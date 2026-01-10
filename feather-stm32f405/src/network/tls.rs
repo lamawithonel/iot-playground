@@ -50,8 +50,10 @@ struct SimpleRng {
 impl SimpleRng {
     #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
     fn new() -> Self {
-        // Initialize with a simple seed based on system tick
-        // In production, use hardware RNG or better seeding
+        // TODO: Use STM32F4 hardware RNG peripheral for production
+        // For Phase 1 testing, initialize with a fixed but non-zero seed
+        // This provides reproducible behavior for debugging while still
+        // satisfying the RngCore trait requirements
         Self {
             counter: 0x0123_4567_89AB_CDEF,
         }
@@ -60,11 +62,15 @@ impl SimpleRng {
 
 impl rand_core::RngCore for SimpleRng {
     fn next_u32(&mut self) -> u32 {
+        // Increment using golden ratio to ensure good distribution
+        // 0x9E3779B97F4A7C15 is the 64-bit fractional part of the golden ratio
+        // This constant is commonly used in hash functions for good avalanche properties
         self.counter = self.counter.wrapping_add(0x9E3779B97F4A7C15);
         (self.counter >> 32) as u32
     }
 
     fn next_u64(&mut self) -> u64 {
+        // Increment using golden ratio constant for good distribution
         self.counter = self.counter.wrapping_add(0x9E3779B97F4A7C15);
         self.counter
     }

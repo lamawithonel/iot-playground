@@ -243,7 +243,7 @@ static mut TLS_WRITE_BUF: [u8; TLS_WRITE_BUF_SIZE] = [0; TLS_WRITE_BUF_SIZE];
 /// ```
 #[allow(dead_code)]
 pub unsafe fn tls_read_buffer() -> &'static mut [u8] {
-    unsafe { &mut *core::ptr::addr_of_mut!(TLS_READ_BUF) }
+    &mut *core::ptr::addr_of_mut!(TLS_READ_BUF)
 }
 
 /// Get mutable reference to TLS write buffer
@@ -267,7 +267,7 @@ pub unsafe fn tls_read_buffer() -> &'static mut [u8] {
 /// ```
 #[allow(dead_code)]
 pub unsafe fn tls_write_buffer() -> &'static mut [u8] {
-    unsafe { &mut *core::ptr::addr_of_mut!(TLS_WRITE_BUF) }
+    &mut *core::ptr::addr_of_mut!(TLS_WRITE_BUF)
 }
 
 /// Get mutable references to both TLS buffers at once
@@ -295,12 +295,10 @@ pub unsafe fn tls_write_buffer() -> &'static mut [u8] {
 /// ```
 #[allow(dead_code)]
 pub unsafe fn tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
-    unsafe {
-        (
-            &mut *core::ptr::addr_of_mut!(TLS_READ_BUF),
-            &mut *core::ptr::addr_of_mut!(TLS_WRITE_BUF),
-        )
-    }
+    (
+        &mut *core::ptr::addr_of_mut!(TLS_READ_BUF),
+        &mut *core::ptr::addr_of_mut!(TLS_WRITE_BUF),
+    )
 }
 
 // ============================================================================
