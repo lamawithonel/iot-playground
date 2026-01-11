@@ -233,7 +233,7 @@ mod app {
         }
 
         // TLS 1.3 handshake test (Phase 1)
-        info!("Testing TLS 1.3 handshake with broker.emqx.io:8883...");
+        info!("Testing TLS 1.3 handshake with test.mosquitto.org:8883...");
 
         // Initialize hardware RNG just before TLS handshake
         info!("Initializing hardware RNG for TLS...");
@@ -241,7 +241,7 @@ mod app {
         info!("Hardware RNG initialized");
 
         let tls_config = network::tls::TlsClientConfig {
-            server_name: "broker.emqx.io",
+            server_name: "test.mosquitto.org",
             server_port: 8883,
             verify_server: false, // Phase 1: skip verification
         };

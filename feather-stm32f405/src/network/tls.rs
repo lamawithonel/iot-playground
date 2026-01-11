@@ -14,7 +14,7 @@
 //!
 //! - Certificate verification is disabled (set `verify_server: false`)
 //! - Single connection at a time (due to static CCM RAM buffers)
-//! - Test server: `broker.emqx.io:8883` (public MQTT broker with TLS support)
+//! - Test server: `test.mosquitto.org:8883` (public MQTT broker with TLS support)
 //!
 //! # Memory Usage
 //!
@@ -27,7 +27,7 @@
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_net::dns::DnsQueryType;
 use embassy_net::{IpEndpoint, Stack};
-use embedded_tls::{Aes256GcmSha384, NoVerify, TlsConfig, TlsConnection, TlsContext};
+use embedded_tls::{Aes128GcmSha256, NoVerify, TlsConfig, TlsConnection, TlsContext};
 
 use crate::tls_buffers;
 
@@ -181,9 +181,9 @@ impl TlsClient {
             warn!("Phase 1: proceeding without verification");
         }
 
-        // Step 6: Create TLS connection with buffers (using AES-256-GCM-SHA384 for better compatibility)
+        // Step 6: Create TLS connection with buffers (using AES-128-GCM-SHA256 - the only cipher suite implemented in embedded-tls 0.17)
         let mut tls_connection =
-            TlsConnection::<AsyncTcpSocket, Aes256GcmSha384>::new(socket, read_buf, write_buf);
+            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, read_buf, write_buf);
 
         // Step 7: Create TLS context with hardware RNG and perform handshake
         info!("Initiating TLS 1.3 handshake with hardware RNG...");
