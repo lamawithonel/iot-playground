@@ -14,7 +14,7 @@
 //!
 //! - Certificate verification is disabled (set `verify_server: false`)
 //! - Single connection at a time (due to static CCM RAM buffers)
-//! - Test server: `test.mosquitto.org:8883`
+//! - Test server: `broker.emqx.io:8883` (public MQTT broker with TLS support)
 //!
 //! # Memory Usage
 //!
