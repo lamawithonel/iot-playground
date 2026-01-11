@@ -12,6 +12,7 @@ mod ccmram;
 mod eth;
 mod network;
 mod time;
+mod tls_buffers;
 
 stm32_tim2_monotonic!(Mono, 1_000_000);
 

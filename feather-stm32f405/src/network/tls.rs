@@ -18,18 +18,18 @@
 //!
 //! # Memory Usage
 //!
-//! - TLS read buffer: 16 KB in CCM RAM
-//! - TLS write buffer: 16 KB in CCM RAM
+//! - TLS read buffer: 18 KB in main SRAM (see `src/tls_buffers.rs`)
+//! - TLS write buffer: 16 KB in main SRAM (see `src/tls_buffers.rs`)
 //! - TCP socket buffers: 8 KB in main SRAM (4 KB RX + 4 KB TX)
 
-#![allow(unsafe_code)] // Required for CCM RAM buffer access
+#![allow(unsafe_code)] // Required for static TLS buffer access
 
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_net::dns::DnsQueryType;
 use embassy_net::{IpEndpoint, Stack};
 use embedded_tls::{Aes128GcmSha256, NoVerify, TlsConfig, TlsConnection, TlsContext};
 
-use crate::ccmram;
+use crate::tls_buffers;
 
 use super::error::NetworkError;
 use super::socket::AsyncTcpSocket;
@@ -162,13 +162,13 @@ impl TlsClient {
         socket.connect(endpoint).await?;
         info!("TCP connection established to {}", Debug2Format(&endpoint));
 
-        // Step 4: Get TLS buffers from CCM RAM (unsafe - single use only)
+        // Step 4: Get TLS buffers from main SRAM (unsafe - single use only)
         // SAFETY: These static buffers are only used by one TLS connection at a time.
         // The buffers are obtained once and used for the duration of this function.
-        let (read_buf, write_buf) = unsafe { ccmram::tls_buffers() };
+        let (read_buf, write_buf) = unsafe { tls_buffers::tls_buffers() };
 
         debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
+            "TLS buffers allocated: read={} bytes, write={} bytes (main SRAM)",
             read_buf.len(),
             write_buf.len()
         );

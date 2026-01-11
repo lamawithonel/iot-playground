@@ -27,13 +27,14 @@
 //!
 //! ```text
 //! CCM RAM (64KB) - CPU-only, zero wait states:
-//! ├─ TLS record buffers:       33KB
-//! │   ├─ Read buffer:          17KB (TLS_READ_BUF) - increased for TLS 1.3 overhead
-//! │   └─ Write buffer:         16KB (TLS_WRITE_BUF)
-//! ├─ MQTT buffers:             23KB (future use)
-//! └─ Critical variables:        8KB
-//!     └─ TIME_SYNCED flag: 1 byte (in time.rs)
+//! ├─ Critical variables:        <1KB
+//! │   └─ TIME_SYNCED flag: 1 byte (in time.rs)
+//! └─ Reserved for future use:   63KB+
+//!     └─ Potential uses: hot-path variables, timing-critical buffers
 //! ```
+//!
+//! Note: TLS buffers (34KB) are now in main SRAM for better size flexibility.
+//! See `src/tls_buffers.rs` for TLS buffer management.
 //!
 //! # Current Allocations
 //!
@@ -41,12 +42,6 @@
 //!   - Tracks whether RTC has been synchronized with NTP
 //!   - Placed in CCM RAM for zero-wait-state access
 //!   - Time itself is stored in hardware RTC peripheral
-//! - **TLS_READ_BUF**: 17 KB buffer for TLS record reads
-//!   - Sized for TLS 1.3 maximum record (16384 bytes) plus overhead
-//!   - Overhead includes: 5-byte header + 16-byte auth tag + padding margin
-//! - **TLS_WRITE_BUF**: 16 KB buffer for TLS record writes
-//!   - Used by embedded-tls for sending encrypted data
-//!   - Increased from 8KB to support TLS 1.3 record size (16KB max)
 //!
 //! # Safety Requirements
 //!
@@ -193,117 +188,9 @@ pub fn is_wallclock_calibrated() -> bool {
 // TLS BUFFERS (32 KB total)
 // ============================================================================
 
-/// TLS read buffer size (16 KB)
-const TLS_READ_BUF_SIZE: usize = 16 * 1024;
-
-/// TLS write buffer size (16 KB) - increased from 8KB for TLS 1.3
-const TLS_WRITE_BUF_SIZE: usize = 16 * 1024;
-
-/// TLS read buffer in CCM RAM (16 KB)
-///
-/// Used for receiving TLS records from the network.
-/// Placed in CCM RAM for zero-wait-state CPU access.
-///
-/// # Safety
-/// - No DMA access required (CPU-only processing)
-/// - Within CCM RAM budget (32 KB for TLS, 64 KB total)
-/// - Must be accessed via `tls_read_buffer()` for single-use guarantee
-#[link_section = ".ccmram"]
-static mut TLS_READ_BUF: [u8; TLS_READ_BUF_SIZE] = [0; TLS_READ_BUF_SIZE];
-
-/// TLS write buffer in CCM RAM (16 KB)
-///
-/// Used for sending TLS records to the network.
-/// Placed in CCM RAM for zero-wait-state CPU access.
-///
-/// # Safety
-/// - No DMA access required (CPU-only processing)
-/// - Within CCM RAM budget (32 KB for TLS, 64 KB total)
-/// - Must be accessed via `tls_write_buffer()` for single-use guarantee
-#[link_section = ".ccmram"]
-static mut TLS_WRITE_BUF: [u8; TLS_WRITE_BUF_SIZE] = [0; TLS_WRITE_BUF_SIZE];
-
-/// Get mutable reference to TLS read buffer
-///
-/// # Safety
-///
-/// This function is unsafe because:
-/// 1. Returns a mutable reference to static memory
-/// 2. No synchronization - caller must ensure single-use
-/// 3. Should only be called once during TLS client initialization
-///
-/// The caller must ensure:
-/// - Only one TLS connection is active at a time
-/// - Buffer is not accessed from multiple contexts
-///
-/// # Example
-///
-/// ```no_run
-/// let read_buf = unsafe { ccmram::tls_read_buffer() };
-/// let tls_config = TlsConfig::new().with_read_buffer(read_buf);
-/// ```
-#[allow(dead_code)]
-pub unsafe fn tls_read_buffer() -> &'static mut [u8] {
-    &mut *core::ptr::addr_of_mut!(TLS_READ_BUF)
-}
-
-/// Get mutable reference to TLS write buffer
-///
-/// # Safety
-///
-/// This function is unsafe because:
-/// 1. Returns a mutable reference to static memory
-/// 2. No synchronization - caller must ensure single-use
-/// 3. Should only be called once during TLS client initialization
-///
-/// The caller must ensure:
-/// - Only one TLS connection is active at a time
-/// - Buffer is not accessed from multiple contexts
-///
-/// # Example
-///
-/// ```no_run
-/// let write_buf = unsafe { ccmram::tls_write_buffer() };
-/// let tls_config = TlsConfig::new().with_write_buffer(write_buf);
-/// ```
-#[allow(dead_code)]
-pub unsafe fn tls_write_buffer() -> &'static mut [u8] {
-    &mut *core::ptr::addr_of_mut!(TLS_WRITE_BUF)
-}
-
-/// Get mutable references to both TLS buffers at once
-///
-/// This is a convenience function that returns both buffers in a single call,
-/// ensuring they're obtained atomically.
-///
-/// # Safety
-///
-/// This function has the same safety requirements as calling `tls_read_buffer()`
-/// and `tls_write_buffer()` separately:
-/// - Only one TLS connection should be active at a time
-/// - Buffers must not be accessed from multiple contexts
-/// - Should only be called once during TLS client initialization
-///
-/// # Returns
-///
-/// A tuple of (read_buffer, write_buffer)
-///
-/// # Example
-///
-/// ```no_run
-/// let (read_buf, write_buf) = unsafe { ccmram::tls_buffers() };
-/// let tls_connection = TlsConnection::new(socket, read_buf, write_buf);
-/// ```
-#[allow(dead_code)]
-pub unsafe fn tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
-    (
-        &mut *core::ptr::addr_of_mut!(TLS_READ_BUF),
-        &mut *core::ptr::addr_of_mut!(TLS_WRITE_BUF),
-    )
-}
-
 // ============================================================================
 // FUTURE CCM RAM ALLOCATIONS GO BELOW THIS LINE
 // ============================================================================
 //
-// Remaining space: ~32 KB for MQTT buffers and critical variables
+// Remaining space: ~64 KB available for timing-critical variables and buffers
+// TLS buffers have been moved to main SRAM (see src/tls_buffers.rs)
