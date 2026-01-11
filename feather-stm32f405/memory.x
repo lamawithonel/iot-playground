@@ -43,10 +43,10 @@ SECTIONS
  └─ Firmware update buffer:    4KB
 
  CCM RAM (64KB) - CPU-only, zero wait states:
- ├─ TLS record buffers:       32KB
- │   ├─ Read buffer:          16KB (TLS_READ_BUF)
+ ├─ TLS record buffers:       33KB
+ │   ├─ Read buffer:          17KB (TLS_READ_BUF, increased for TLS 1.3 overhead)
  │   └─ Write buffer:         16KB (TLS_WRITE_BUF)
- ├─ MQTT buffers:             24KB (future use)
+ ├─ MQTT buffers:             23KB (future use)
  └─ Critical variables:        8KB
 
  Note: Stack in main RAM allows more flexibility and prevents

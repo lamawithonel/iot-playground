@@ -27,10 +27,10 @@
 //!
 //! ```text
 //! CCM RAM (64KB) - CPU-only, zero wait states:
-//! ├─ TLS record buffers:       32KB
-//! │   ├─ Read buffer:          16KB (TLS_READ_BUF)
+//! ├─ TLS record buffers:       33KB
+//! │   ├─ Read buffer:          17KB (TLS_READ_BUF) - increased for TLS 1.3 overhead
 //! │   └─ Write buffer:         16KB (TLS_WRITE_BUF)
-//! ├─ MQTT buffers:             24KB (future use)
+//! ├─ MQTT buffers:             23KB (future use)
 //! └─ Critical variables:        8KB
 //!     └─ TIME_SYNCED flag: 1 byte (in time.rs)
 //! ```
@@ -41,8 +41,9 @@
 //!   - Tracks whether RTC has been synchronized with NTP
 //!   - Placed in CCM RAM for zero-wait-state access
 //!   - Time itself is stored in hardware RTC peripheral
-//! - **TLS_READ_BUF**: 16 KB buffer for TLS record reads
-//!   - Used by embedded-tls for receiving encrypted data
+//! - **TLS_READ_BUF**: 17 KB buffer for TLS record reads
+//!   - Sized for TLS 1.3 maximum record (16384 bytes) plus overhead
+//!   - Overhead includes: 5-byte header + 16-byte auth tag + padding margin
 //! - **TLS_WRITE_BUF**: 16 KB buffer for TLS record writes
 //!   - Used by embedded-tls for sending encrypted data
 //!   - Increased from 8KB to support TLS 1.3 record size (16KB max)
