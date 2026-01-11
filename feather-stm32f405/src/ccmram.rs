@@ -27,16 +27,18 @@
 //!
 //! ```text
 //! CCM RAM (64KB) - CPU-only, zero wait states:
-//! ├─ TLS read buffer:          16KB (.ccmram section)
-//! ├─ TLS write buffer:          8KB (.ccmram section)
-//! ├─ MQTT buffers:             16KB (.ccmram section)
-//! └─ Critical variables:       24KB (.ccmram section)
-//!     └─ TIME_SYNCED flag: 1 byte (in time.rs)
+//! ├─ Critical variables:        <1KB
+//! │   └─ TIME_SYNCED flag: 1 byte (in time.rs)
+//! └─ Reserved for future use:   63KB+
+//!     └─ Potential uses: hot-path variables, timing-critical buffers
 //! ```
+//!
+//! Note: TLS buffers (34KB) are now in main SRAM for better size flexibility.
+//! See `src/tls_buffers.rs` for TLS buffer management.
 //!
 //! # Current Allocations
 //!
-//! - **TIME_SYNCED**: AtomicBool in `time.rs` (~1 byte)
+//! - **TIME_SYNCED**: AtomicBool (~1 byte)
 //!   - Tracks whether RTC has been synchronized with NTP
 //!   - Placed in CCM RAM for zero-wait-state access
 //!   - Time itself is stored in hardware RTC peripheral
@@ -183,20 +185,12 @@ pub fn is_wallclock_calibrated() -> bool {
 }
 
 // ============================================================================
+// TLS BUFFERS (32 KB total)
+// ============================================================================
+
+// ============================================================================
 // FUTURE CCM RAM ALLOCATIONS GO BELOW THIS LINE
 // ============================================================================
 //
-// When adding new CCM RAM allocations:
-// 1. Document size and justification
-// 2. Update memory budget comment at top of file
-// 3. Verify no DMA access required
-// 4. Add safety documentation
-//
-// Example:
-// /// TLS read buffer in CCM RAM (16 KB)
-// ///
-// /// # Safety
-// /// - No DMA access required
-// /// - Within CCM RAM budget
-// #[link_section = ".ccmram"]
-// pub static mut TLS_READ_BUFFER: [u8; 16384] = [0; 16384];
+// Remaining space: ~64 KB available for timing-critical variables and buffers
+// TLS buffers have been moved to main SRAM (see src/tls_buffers.rs)

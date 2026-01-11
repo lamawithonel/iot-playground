@@ -82,6 +82,12 @@ features = [
 [dependencies.embedded-tls]
 version = "0.17"
 default-features = false
+features = ["defmt"]
+
+# RNG for TLS handshake (version must match embedded-tls dependency)
+[dependencies.rand_core]
+version = "0.6"
+default-features = false
 
 [dependencies.panic-probe]
 version = "1.0.0"
