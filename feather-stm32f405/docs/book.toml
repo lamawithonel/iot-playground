@@ -1,0 +1,14 @@
+[book]
+title = "Embedded Rust IoT Firmware"
+authors = ["Lucas Yamanishi"]
+language = "en"
+multilingual = false
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "rust"
+git-repository-url = "https://github.com/lamawithonel/iot-playground"
+edit-url-template = "https://github.com/lamawithonel/iot-playground/edit/main/feather-stm32f405/docs/{path}"
