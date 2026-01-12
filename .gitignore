@@ -8,6 +8,9 @@ Cargo.lock
 book-target/
 *.local.toml
 
+# mdBook build output
+**/docs/book/
+
 .DS_Store
 .vscode/
 *qemu.log
