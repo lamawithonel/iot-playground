@@ -295,19 +295,65 @@ mod app {
             Err(e) => warn!("MQTT connection test FAILED: {:?}", e),
         }
 
-        info!("Network initialization complete - entering periodic SNTP sync loop");
+        info!("Network initialization complete - entering periodic event loop");
 
-        // Periodic resync using RTIC monotonic timer
-        // Future enhancement: integrate MQTT publishes here
+        // Periodic event loop with SNTP and MQTT test publishing
+        let mut sntp_counter = 0u32;
+        let mut mqtt_counter = 0u32;
+
         loop {
-            Mono::delay(15.minutes()).await;
-            info!("SNTP resync triggered");
-            match sntp.run(stack).await {
-                Ok(ts) => info!(
-                    "SNTP sync successful: {}.{:06} UTC",
-                    ts.unix_secs, ts.micros
+            // MQTT test publish every 30 seconds
+            Mono::delay(30_000.millis()).await; // 30 seconds = 30,000 milliseconds
+            mqtt_counter += 1;
+
+            info!("MQTT test publish #{} triggered", mqtt_counter);
+
+            // Publish test message
+            // Note: This establishes a new connection per publish (Phase 2.5 testing)
+            // Phase 3 will refactor to use persistent shared connection
+            let client_id = device_id::mqtt_client_id();
+
+            info!(
+                "Publishing test message #{} (client: {})",
+                mqtt_counter, client_id
+            );
+
+            // Establish connection and publish
+            // This reuses the existing MQTT client config
+            let mut test_mqtt_client = network::MqttClient::new(mqtt_config);
+            match test_mqtt_client.connect(stack, &mut rng).await {
+                Ok(()) => info!(
+                    "MQTT test publish #{} - connection established ✓",
+                    mqtt_counter
                 ),
-                Err(e) => warn!("SNTP sync failed: {:?}", e),
+                Err(e) => {
+                    warn!(
+                        "MQTT test publish #{} - connection failed: {:?}",
+                        mqtt_counter, e
+                    );
+                    continue; // Skip to next cycle
+                }
+            }
+
+            // Note: Actual publish not implemented yet - connection drops here
+            // This validates the connection establishment flow
+            info!(
+                "MQTT test publish #{} - completed (connection will drop)",
+                mqtt_counter
+            );
+
+            // SNTP resync every 15 minutes (30 cycles of 30 seconds)
+            sntp_counter += 1;
+            if sntp_counter >= 30 {
+                sntp_counter = 0;
+                info!("SNTP resync triggered");
+                match sntp.run(stack).await {
+                    Ok(ts) => info!(
+                        "SNTP sync successful: {}.{:06} UTC",
+                        ts.unix_secs, ts.micros
+                    ),
+                    Err(e) => warn!("SNTP sync failed: {:?}", e),
+                }
             }
         }
     }
