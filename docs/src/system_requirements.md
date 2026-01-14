@@ -178,7 +178,8 @@ TODO: Decide on timer requirements
 
 **SR-NET-001:** System SHALL establish TLS 1.3 connection to AWS IoT Core on startup (MQTT v5.0)
 **SR-NET-002:** System SHALL authenticate using X.509 client certificates stored in flash  
-**SR-NET-003:** System SHALL maintain MQTT connection with 60s keep-alive and automatic reconnect  
+**SR-NET-003:** System SHALL maintain MQTT connection with keep-alive per AWS IoT recommendations (1200s) and automatic reconnect  
+**SR-NET-003-TEST:** [Phase 2.5] System SHALL publish periodic test messages every 30 seconds to validate MQTT connectivity  
 **SR-NET-004:** System SHALL enter sleep mode between transmissions, waking on EXTI2 or timer  
 **SR-NET-005:** System SHALL process network interrupts within 500 μs  
 **SR-NET-006:** System SHALL synchronize time using SNTP (RFC 5905)  
@@ -188,6 +189,14 @@ TODO: Decide on timer requirements
 **SR-NET-010:** System SHALL place all outgoing MQTT QoS level 1 and 2 messages in the network failure DLQ if the DLQ is not empty  
 **SR-NET-011:** System SHALL retry the oldest message in the network failure DLQ whenever a new message is placed in the queue, and retry all subsequent messages in FIFO order when one message succeeds, stopping if there are any additional failures and waiting for the next new message  
 **SR-NET-012:** System SHALL log an error and stop queuing new MQTT messages to the network failure DLQ when microSD card utilization exceeds 80%
+**SR-NET-013:** [Phase 3+] System SHALL maintain a single MQTT connection per broker, shared across all publishing tasks via RTIC Shared resource
+**SR-NET-014:** [Phase 3+] System SHALL only establish MQTT connection at startup or after network/broker fault
+
+**Phase 2.5 Testing Notes:**
+- SR-NET-003-TEST implements incremental testing with temporary per-publish connections
+- Full persistent connection (SR-NET-013, SR-NET-014) deferred to Phase 3
+- Keep-alive interval updated from 60s to 1200s per AWS IoT best practices
+- Sleep mode (SR-NET-004) requires interrupt-driven networking (EXTI2)
 
 TODO: Decide on failed message DLQ maximum size and what to do about its contents
 
