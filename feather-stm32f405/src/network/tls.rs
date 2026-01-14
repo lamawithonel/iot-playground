@@ -33,7 +33,7 @@ use embedded_tls::{
 
 use crate::tls_buffers;
 
-use super::error::NetworkError;
+use super::error::{NetworkError, TlsError};
 use super::socket::AsyncTcpSocket;
 
 /// Simple crypto provider that wraps an RNG for TLS operations
@@ -227,7 +227,7 @@ impl TlsClient {
 
         tls_connection.open(tls_context).await.map_err(|e| {
             error!("TLS handshake failed: {:?}", Debug2Format(&e));
-            NetworkError::TlsHandshakeFailed
+            TlsError::HandshakeFailed
         })?;
 
         info!("TLS 1.3 handshake completed successfully!");
@@ -235,7 +235,7 @@ impl TlsClient {
         // Step 8: Close the connection
         tls_connection.close().await.map_err(|(_socket, e)| {
             warn!("TLS close returned error: {:?}", Debug2Format(&e));
-            NetworkError::TlsConnectionClosed
+            TlsError::ConnectionClosed
         })?;
 
         info!("TLS connection closed cleanly");
