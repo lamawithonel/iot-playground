@@ -276,6 +276,158 @@ impl MqttClient {
         Ok(())
     }
 
+    /// Connect to the MQTT broker using static buffers (RTIC pattern)
+    ///
+    /// This function uses externally-provided static buffers to maintain
+    /// the connection beyond the function scope. This solves the lifetime
+    /// constraint issue in RTIC applications.
+    ///
+    /// # Arguments
+    ///
+    /// * `stack` - Embassy network stack for DNS and TCP operations
+    /// * `rng` - Hardware random number generator
+    /// * `mqtt_buffer` - Static buffer for MQTT packet assembly (2KB)
+    /// * `tcp_rx_buffer` - Static buffer for TCP receive (4KB)
+    /// * `tcp_tx_buffer` - Static buffer for TCP transmit (4KB)
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if connection succeeds. The connection remains active
+    /// for the lifetime of the provided buffers.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use static_cell::StaticCell;
+    /// static MQTT_BUF: StaticCell<[u8; 2048]> = StaticCell::new();
+    /// static RX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
+    /// static TX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
+    ///
+    /// let mqtt_buf = MQTT_BUF.init([0u8; 2048]);
+    /// let rx_buf = RX_BUF.init([0u8; 4096]);
+    /// let tx_buf = TX_BUF.init([0u8; 4096]);
+    ///
+    /// client.connect_with_buffers(stack, &mut rng, mqtt_buf, rx_buf, tx_buf).await?;
+    /// ```
+    pub async fn connect_with_buffers<RNG>(
+        &mut self,
+        stack: &Stack<'static>,
+        rng: &mut RNG,
+        mqtt_buffer: &'static mut [u8; MQTT_BUFFER_SIZE],
+        tcp_rx_buffer: &'static mut [u8; 4096],
+        tcp_tx_buffer: &'static mut [u8; 4096],
+    ) -> Result<(), NetworkError>
+    where
+        RNG: rand_core::RngCore + rand_core::CryptoRng,
+    {
+        info!(
+            "Connecting to MQTT broker at {}:{} with static buffers",
+            self.config.broker_host, self.config.broker_port
+        );
+
+        // Step 1: DNS resolution
+        let server_ip = stack
+            .dns_query(self.config.broker_host, DnsQueryType::A)
+            .await
+            .map_err(|e| {
+                error!("DNS query failed: {:?}", Debug2Format(&e));
+                NetworkError::DnsError
+            })?
+            .first()
+            .copied()
+            .ok_or_else(|| {
+                error!("DNS returned no results for {}", self.config.broker_host);
+                NetworkError::DnsError
+            })?;
+
+        let endpoint = IpEndpoint::new(server_ip, self.config.broker_port);
+        info!(
+            "Resolved {} to {}",
+            self.config.broker_host,
+            Debug2Format(&endpoint)
+        );
+
+        // Step 2: Create and connect TCP socket using static buffers
+        let mut socket = AsyncTcpSocket::new(*stack, tcp_rx_buffer, tcp_tx_buffer);
+        socket.connect(endpoint).await?;
+        info!("TCP connection established to {}", Debug2Format(&endpoint));
+
+        // Step 3: Get TLS buffers from main SRAM (unsafe - single use only)
+        // SAFETY: These static buffers are only used by one TLS connection at a time.
+        let (read_buf, write_buf) = unsafe { tls_buffers::tls_buffers() };
+
+        debug!(
+            "TLS buffers allocated: read={} bytes, write={} bytes (main SRAM)",
+            read_buf.len(),
+            write_buf.len()
+        );
+
+        // Step 4: Configure TLS with server name for SNI
+        let tls_config = TlsConfig::new().with_server_name(self.config.broker_host);
+
+        // Step 5: Create TLS connection with buffers (using AES-128-GCM-SHA256)
+        let mut tls_connection =
+            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, read_buf, write_buf);
+
+        // Step 6: Perform TLS handshake
+        info!("Initiating TLS 1.3 handshake with hardware RNG...");
+        let provider = SimpleCryptoProvider::new(rng);
+        let tls_context = TlsContext::new(&tls_config, provider);
+
+        tls_connection.open(tls_context).await.map_err(|e| {
+            error!("TLS handshake failed: {:?}", Debug2Format(&e));
+            NetworkError::TlsHandshakeFailed
+        })?;
+
+        info!("TLS 1.3 handshake completed successfully!");
+
+        // Step 7: Establish MQTT connection
+        let client_id = device_id::mqtt_client_id();
+        info!("MQTT client ID: {}", client_id);
+
+        // Create MQTT client with bump allocator using static buffer
+        let mut buffer = BumpBuffer::new(mqtt_buffer);
+        let mut mqtt_client = Client::<'_, _, _, 1, 1, 1, 0>::new(&mut buffer);
+
+        // Connect to MQTT broker
+        let connect_opts = ConnectOptions {
+            session_expiry_interval: SessionExpiryInterval::EndOnDisconnect,
+            clean_start: self.config.clean_start,
+            keep_alive: if self.config.keep_alive_secs == 0 {
+                KeepAlive::Infinite
+            } else {
+                KeepAlive::Seconds(self.config.keep_alive_secs)
+            },
+            will: None,
+            user_name: None,
+            password: None,
+        };
+
+        // Convert client_id to MqttString
+        let mqtt_client_id = MqttString::new(client_id.as_str().into()).map_err(|e| {
+            error!(
+                "Failed to create MQTT client ID string: {:?}",
+                Debug2Format(&e)
+            );
+            NetworkError::MqttProtocolError
+        })?;
+
+        mqtt_client
+            .connect(tls_connection, &connect_opts, Some(mqtt_client_id))
+            .await
+            .map_err(|e| {
+                error!("MQTT connect failed: {:?}", Debug2Format(&e));
+                NetworkError::MqttConnectionFailed
+            })?;
+
+        info!("MQTT connection established successfully with static buffers!");
+        info!("Connection maintained - ready for persistent operations");
+
+        // Connection is now maintained by the static buffers
+        // The TLS connection and MQTT client will live as long as the buffers
+        Ok(())
+    }
+
     /// Publish a message to an MQTT topic
     ///
     /// # Arguments
