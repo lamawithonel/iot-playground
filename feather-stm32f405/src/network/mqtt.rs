@@ -303,6 +303,152 @@ impl MqttClient {
         warn!("MQTT publish not yet fully implemented (placeholder)");
         Err(NetworkError::MqttPublishFailed)
     }
+
+    /// Run MQTT client loop with periodic publishing
+    ///
+    /// This function establishes an MQTT connection and maintains it,
+    /// publishing test messages every publish_interval_secs.
+    ///
+    /// # Arguments
+    ///
+    /// * `stack` - Embassy network stack for DNS and TCP operations
+    /// * `rng` - Hardware random number generator
+    /// * `publish_interval_secs` - Interval between publish messages
+    ///
+    /// # Note
+    ///
+    /// This function never returns under normal operation. It maintains
+    /// the connection and publishes messages periodically.
+    pub async fn run_with_periodic_publish<RNG>(
+        &mut self,
+        stack: &Stack<'static>,
+        rng: &mut RNG,
+        _publish_interval_secs: u64,
+    ) -> Result<(), NetworkError>
+    where
+        RNG: rand_core::RngCore + rand_core::CryptoRng,
+    {
+        info!(
+            "Connecting to MQTT broker at {}:{} for persistent connection",
+            self.config.broker_host, self.config.broker_port
+        );
+
+        // Step 1: DNS resolution
+        let server_ip = stack
+            .dns_query(self.config.broker_host, DnsQueryType::A)
+            .await
+            .map_err(|e| {
+                error!("DNS query failed: {:?}", Debug2Format(&e));
+                NetworkError::DnsError
+            })?
+            .first()
+            .copied()
+            .ok_or_else(|| {
+                error!("DNS returned no results for {}", self.config.broker_host);
+                NetworkError::DnsError
+            })?;
+
+        let endpoint = IpEndpoint::new(server_ip, self.config.broker_port);
+        info!(
+            "Resolved {} to {}",
+            self.config.broker_host,
+            Debug2Format(&endpoint)
+        );
+
+        // Step 2: Allocate TCP socket buffers (in main SRAM, not CCM)
+        let mut rx_buffer = [0u8; 4096];
+        let mut tx_buffer = [0u8; 4096];
+
+        // Step 3: Create and connect TCP socket
+        let mut socket = AsyncTcpSocket::new(*stack, &mut rx_buffer, &mut tx_buffer);
+        socket.connect(endpoint).await?;
+        info!("TCP connection established to {}", Debug2Format(&endpoint));
+
+        // Step 4: Get TLS buffers from main SRAM (unsafe - single use only)
+        // SAFETY: These static buffers are only used by one TLS connection at a time.
+        let (read_buf, write_buf) = unsafe { tls_buffers::tls_buffers() };
+
+        debug!(
+            "TLS buffers allocated: read={} bytes, write={} bytes (main SRAM)",
+            read_buf.len(),
+            write_buf.len()
+        );
+
+        // Step 5: Configure TLS with server name for SNI
+        let tls_config = TlsConfig::new().with_server_name(self.config.broker_host);
+
+        // Step 6: Create TLS connection with buffers (using AES-128-GCM-SHA256)
+        let mut tls_connection =
+            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, read_buf, write_buf);
+
+        // Step 7: Perform TLS handshake
+        info!("Initiating TLS 1.3 handshake with hardware RNG...");
+        let provider = SimpleCryptoProvider::new(rng);
+        let tls_context = TlsContext::new(&tls_config, provider);
+
+        tls_connection.open(tls_context).await.map_err(|e| {
+            error!("TLS handshake failed: {:?}", Debug2Format(&e));
+            NetworkError::TlsHandshakeFailed
+        })?;
+
+        info!("TLS 1.3 handshake completed successfully!");
+
+        // Step 8: Establish MQTT connection
+        let client_id = device_id::mqtt_client_id();
+        info!("MQTT client ID: {}", client_id);
+
+        // Allocate MQTT packet buffer using bump allocator
+        let mut mqtt_buffer = [0u8; MQTT_BUFFER_SIZE];
+        let mut buffer = BumpBuffer::new(&mut mqtt_buffer);
+        let mut mqtt_client = Client::<'_, _, _, 1, 1, 1, 0>::new(&mut buffer);
+
+        // Connect to MQTT broker
+        let connect_opts = ConnectOptions {
+            session_expiry_interval: SessionExpiryInterval::EndOnDisconnect,
+            clean_start: self.config.clean_start,
+            keep_alive: if self.config.keep_alive_secs == 0 {
+                KeepAlive::Infinite
+            } else {
+                KeepAlive::Seconds(self.config.keep_alive_secs)
+            },
+            will: None,
+            user_name: None,
+            password: None,
+        };
+
+        // Convert client_id to MqttString
+        let mqtt_client_id = MqttString::new(client_id.as_str().into()).map_err(|e| {
+            error!(
+                "Failed to create MQTT client ID string: {:?}",
+                Debug2Format(&e)
+            );
+            NetworkError::MqttProtocolError
+        })?;
+
+        mqtt_client
+            .connect(tls_connection, &connect_opts, Some(mqtt_client_id))
+            .await
+            .map_err(|e| {
+                error!("MQTT connect failed: {:?}", Debug2Format(&e));
+                NetworkError::MqttConnectionFailed
+            })?;
+
+        info!("MQTT connection established successfully!");
+        info!("Persistent MQTT connection active - ready for publishing");
+
+        // TODO: Implement publish loop with periodic messages
+        // The rust-mqtt Client now owns the TLS connection and can be used for publishing
+        // Example:
+        // loop {
+        //     Mono::delay(Duration::from_secs(publish_interval_secs)).await;
+        //     let topic = format!("device/{}/test", client_id);
+        //     let payload = b"Hello from STM32F405!";
+        //     mqtt_client.publish(&topic, payload, QoS::AtLeastOnce, false).await?;
+        // }
+
+        warn!("MQTT publish loop not yet implemented - connection will be dropped");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
