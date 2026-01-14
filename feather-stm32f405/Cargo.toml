@@ -17,7 +17,8 @@ defmt = "1.0.1"
 defmt-rtt = "1.1.0"
 embedded-hal = "1.0"
 embedded-hal-async = "1.0"
-embedded-io-async = "0.6"
+embedded-io = "0.7"
+embedded-io-async = "0.7"
 heapless = "0.8"
 static_cell = "2.0"
 
@@ -79,11 +80,10 @@ features = [
 ]
 
 # NOTE: Replace with rustls-wolfcrypt-provider for FIPS 140-3 compliance
-# Using specific commit just after dccd96634679d52a7eac7a0ed216b9c24dbfb122
-# which includes improved cipher suite support
+# Using latest main branch which includes embedded-io-async 0.7 compatibility
 [dependencies.embedded-tls]
 git = "https://github.com/drogue-iot/embedded-tls"
-rev = "dccd96634679d52a7eac7a0ed216b9c24dbfb122"
+rev = "4bc3df1dffccb318a564ef4c258c3a82c2eb13ed"
 default-features = false
 features = ["defmt"]
 
@@ -95,6 +95,13 @@ features = ["print-defmt"]
 [dependencies.rand_core]
 version = "0.6"
 default-features = false
+
+# MQTT v5.0 client for Phase 2 network stack
+[dependencies.rust-mqtt]
+git = "https://github.com/obabec/rust-mqtt.git"
+rev = "d8d470bd4f03ed2b303af83d3dbfb8b3854c8302"
+default-features = false
+features = ["v5", "defmt", "bump"]
 
 [dependencies.rtic]
 git = "https://github.com/rtic-rs/rtic.git"

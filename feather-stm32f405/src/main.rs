@@ -9,6 +9,7 @@ use rtic::app;
 use rtic_monotonics::stm32::prelude::*;
 
 mod ccmram;
+mod device_id;
 mod eth;
 mod network;
 mod time;
