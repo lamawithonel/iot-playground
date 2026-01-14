@@ -98,8 +98,28 @@ Build a reference implementation for embedded Rust IoT firmware on STM32F405RG, 
 - [x] Network stack abstraction
 - [x] SNTP client (`sntpc`)
 - [x] TLS 1.3 handshake
-- [ ] MQTT client with AWS IoT Core
-- [ ] Interrupt-driven packet reception
+- [x] MQTT v5.0 client with TLS 1.3 (basic connectivity)
+- [x] Device identification using STM32 UID
+- [x] Decoupled error architecture
+- [ ] MQTT persistent connection with periodic test publishing (Phase 2.5)
+- [ ] MQTT keep-alive handling (AWS IoT 1200s interval)
+- [ ] Shared MQTT connection resource (RTIC Shared)
+- [ ] WFI/Sleep mode between messages
+- [ ] Interrupt-driven packet reception (EXTI2)
+- [ ] Full AWS IoT Core integration
+
+**Phase 2.5 Testing Goals (Current):**
+- Implement periodic test data task (30s interval)
+- Establish MQTT connection per publish cycle (temporary)
+- Validate end-to-end TLS + MQTT + device ID flow
+- Prepare infrastructure for persistent connection refactoring
+
+**Phase 2.5 → Phase 3 Transition Requirements:**
+- Refactor to maintain single persistent MQTT connection
+- Move connection to RTIC Shared resource for cross-task access
+- Implement proper keep-alive with AWS IoT recommendations (1200s)
+- Add WFI/Sleep mode with interrupt-driven wake (requires EXTI2)
+- Implement message queuing for reliability
 
 ### Phase 3: Sensor Integration ⏳ Not Started
 - [ ] Verify sensor pin assignments with logic analyzer
