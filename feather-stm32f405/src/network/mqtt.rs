@@ -50,13 +50,13 @@ use super::socket::AsyncTcpSocket;
 const MQTT_BUFFER_SIZE: usize = 2048;
 
 /// Simple crypto provider that wraps an RNG for TLS operations
-struct SimpleCryptoProvider<RNG> {
-    rng: RNG,
+struct SimpleCryptoProvider<'a, RNG> {
+    rng: &'a mut RNG,
     verifier: NoVerify,
 }
 
-impl<RNG> SimpleCryptoProvider<RNG> {
-    fn new(rng: RNG) -> Self {
+impl<'a, RNG> SimpleCryptoProvider<'a, RNG> {
+    fn new(rng: &'a mut RNG) -> Self {
         Self {
             rng,
             verifier: NoVerify,
@@ -64,7 +64,7 @@ impl<RNG> SimpleCryptoProvider<RNG> {
     }
 }
 
-impl<RNG> CryptoProvider for SimpleCryptoProvider<RNG>
+impl<'a, RNG> CryptoProvider for SimpleCryptoProvider<'a, RNG>
 where
     RNG: rand_core::CryptoRngCore,
 {
@@ -72,7 +72,7 @@ where
     type Signature = &'static [u8];
 
     fn rng(&mut self) -> impl rand_core::CryptoRngCore {
-        &mut self.rng
+        &mut *self.rng
     }
 
     fn verifier(

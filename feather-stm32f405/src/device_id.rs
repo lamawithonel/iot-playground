@@ -74,8 +74,12 @@ pub fn mqtt_client_id() -> String<CLIENT_ID_MAX_LEN> {
     let mut client_id = String::<CLIENT_ID_MAX_LEN>::new();
 
     // Format: stm32f405-{uid}
-    client_id.push_str("stm32f405-").ok();
-    client_id.push_str(uid).ok();
+    // These push_str calls cannot fail because:
+    // - "stm32f405-" is 10 bytes
+    // - uid is 24 bytes
+    // - Total is 34 bytes, which exactly matches CLIENT_ID_MAX_LEN
+    client_id.push_str("stm32f405-").expect("prefix should fit");
+    client_id.push_str(uid).expect("UID should fit");
 
     client_id
 }
