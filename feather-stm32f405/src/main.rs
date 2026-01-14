@@ -252,9 +252,25 @@ mod app {
             Err(e) => warn!("TLS 1.3 handshake test FAILED: {:?}", e),
         }
 
+        // Phase 2: MQTT Connection
+        info!("Establishing MQTT connection over TLS 1.3...");
+        let mqtt_config = network::MqttConfig {
+            broker_host: "192.168.1.1",
+            broker_port: 8883,
+            keep_alive_secs: 60,
+            clean_start: true,
+        };
+        let mut mqtt_client = network::MqttClient::new(mqtt_config);
+        match mqtt_client.connect(stack, &mut rng).await {
+            Ok(()) => info!("MQTT connection established ✓"),
+            Err(e) => warn!("MQTT connection failed: {:?}", e),
+        }
+
         info!("Network initialization complete - entering periodic sync loop");
 
         // Periodic resync using RTIC monotonic timer
+        // Note: MQTT connection establishment is one-shot in current implementation
+        // Future enhancement: maintain persistent connection with publish loop
         loop {
             Mono::delay(15.minutes()).await;
             info!("SNTP resync triggered");
