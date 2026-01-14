@@ -42,7 +42,7 @@ use rust_mqtt::{
 
 use crate::{device_id, tls_buffers};
 
-use super::error::NetworkError;
+use super::error::{MqttError, NetworkError, TlsError};
 use super::socket::AsyncTcpSocket;
 
 /// MQTT packet buffer size: 2KB for packet assembly
@@ -227,7 +227,7 @@ impl MqttClient {
 
         tls_connection.open(tls_context).await.map_err(|e| {
             error!("TLS handshake failed: {:?}", Debug2Format(&e));
-            NetworkError::TlsHandshakeFailed
+            TlsError::HandshakeFailed
         })?;
 
         info!("TLS 1.3 handshake completed successfully!");
@@ -261,7 +261,7 @@ impl MqttClient {
                 "Failed to create MQTT client ID string: {:?}",
                 Debug2Format(&e)
             );
-            NetworkError::MqttProtocolError
+            MqttError::ProtocolError
         })?;
 
         mqtt_client
@@ -269,7 +269,7 @@ impl MqttClient {
             .await
             .map_err(|e| {
                 error!("MQTT connect failed: {:?}", Debug2Format(&e));
-                NetworkError::MqttConnectionFailed
+                MqttError::ConnectionFailed
             })?;
 
         info!("MQTT connection established successfully!");
@@ -376,7 +376,7 @@ impl MqttClient {
 
         tls_connection.open(tls_context).await.map_err(|e| {
             error!("TLS handshake failed: {:?}", Debug2Format(&e));
-            NetworkError::TlsHandshakeFailed
+            TlsError::HandshakeFailed
         })?;
 
         info!("TLS 1.3 handshake completed successfully!");
@@ -409,7 +409,7 @@ impl MqttClient {
                 "Failed to create MQTT client ID string: {:?}",
                 Debug2Format(&e)
             );
-            NetworkError::MqttProtocolError
+            MqttError::ProtocolError
         })?;
 
         mqtt_client
@@ -417,7 +417,7 @@ impl MqttClient {
             .await
             .map_err(|e| {
                 error!("MQTT connect failed: {:?}", Debug2Format(&e));
-                NetworkError::MqttConnectionFailed
+                MqttError::ConnectionFailed
             })?;
 
         info!("MQTT connection established successfully with static buffers!");
@@ -453,7 +453,7 @@ impl MqttClient {
         _retain: bool,
     ) -> Result<(), NetworkError> {
         warn!("MQTT publish not yet fully implemented (placeholder)");
-        Err(NetworkError::MqttPublishFailed)
+        Err(MqttError::PublishFailed.into())
     }
 
     /// Run MQTT client loop with periodic publishing
@@ -540,7 +540,7 @@ impl MqttClient {
 
         tls_connection.open(tls_context).await.map_err(|e| {
             error!("TLS handshake failed: {:?}", Debug2Format(&e));
-            NetworkError::TlsHandshakeFailed
+            TlsError::HandshakeFailed
         })?;
 
         info!("TLS 1.3 handshake completed successfully!");
@@ -574,7 +574,7 @@ impl MqttClient {
                 "Failed to create MQTT client ID string: {:?}",
                 Debug2Format(&e)
             );
-            NetworkError::MqttProtocolError
+            MqttError::ProtocolError
         })?;
 
         mqtt_client
@@ -582,7 +582,7 @@ impl MqttClient {
             .await
             .map_err(|e| {
                 error!("MQTT connect failed: {:?}", Debug2Format(&e));
-                NetworkError::MqttConnectionFailed
+                MqttError::ConnectionFailed
             })?;
 
         info!("MQTT connection established successfully!");
