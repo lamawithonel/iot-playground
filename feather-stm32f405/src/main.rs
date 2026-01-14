@@ -257,7 +257,16 @@ mod app {
         // Phase 2: MQTT Connection with Persistent Publishing
         info!("Establishing persistent MQTT connection over TLS 1.3...");
 
-        // Allocate MQTT buffers using StaticCell (RTIC pattern)
+        // Allocate MQTT buffers using StaticCell (RTIC 2.x async task pattern)
+        //
+        // RTIC SRP Compliance:
+        // These static buffers are safe within this never-returning async task because:
+        // 1. network_task runs at priority 1 with no resource sharing
+        // 2. Buffers are exclusively owned by this task (no cross-task access)
+        // 3. Pattern matches embassy_net RESOURCES usage above (line 202)
+        // 4. RTIC 2.x async tasks that never return can safely use function-local statics
+        //
+        // This follows the same pattern as the embassy_net StackResources allocation.
         static MQTT_BUFFER: StaticCell<[u8; 2048]> = StaticCell::new();
         static TCP_RX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
         static TCP_TX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
