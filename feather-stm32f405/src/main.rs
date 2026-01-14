@@ -221,6 +221,8 @@ mod app {
         rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
     ) -> ! {
         use embassy_stm32::rng::Rng;
+        use static_cell::StaticCell;
+
         let mut sntp = SntpClient::new();
 
         // Initial SNTP sync
@@ -254,6 +256,16 @@ mod app {
 
         // Phase 2: MQTT Connection with Persistent Publishing
         info!("Establishing persistent MQTT connection over TLS 1.3...");
+
+        // Allocate MQTT buffers using StaticCell (RTIC pattern)
+        static MQTT_BUFFER: StaticCell<[u8; 2048]> = StaticCell::new();
+        static TCP_RX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
+        static TCP_TX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
+
+        let mqtt_buffer = MQTT_BUFFER.init([0u8; 2048]);
+        let tcp_rx_buffer = TCP_RX_BUFFER.init([0u8; 4096]);
+        let tcp_tx_buffer = TCP_TX_BUFFER.init([0u8; 4096]);
+
         let mqtt_config = network::MqttConfig {
             broker_host: "192.168.1.1",
             broker_port: 8883,
@@ -262,10 +274,15 @@ mod app {
         };
         let mut mqtt_client = network::MqttClient::new(mqtt_config);
 
-        // Note: run_with_periodic_publish() would maintain connection for periodic publishing
-        // For now, we test connection establishment only
-        match mqtt_client.connect(stack, &mut rng).await {
-            Ok(()) => info!("MQTT connection test PASSED ✓"),
+        // Establish persistent MQTT connection using static buffers
+        match mqtt_client
+            .connect_with_buffers(stack, &mut rng, mqtt_buffer, tcp_rx_buffer, tcp_tx_buffer)
+            .await
+        {
+            Ok(()) => {
+                info!("MQTT connection test PASSED ✓");
+                info!("Persistent connection maintained with static buffers");
+            }
             Err(e) => warn!("MQTT connection test FAILED: {:?}", e),
         }
 
