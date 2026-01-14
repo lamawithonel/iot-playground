@@ -36,6 +36,7 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod manager;
+pub mod mqtt;
 pub mod sntp;
 pub mod socket;
 pub mod tls;
@@ -48,6 +49,8 @@ pub use config::NetworkConfig;
 pub use config::SntpConfig;
 #[allow(unused_imports)]
 pub use error::NetworkError;
+#[allow(unused_imports)]
+pub use mqtt::{MqttClient, MqttConfig};
 pub use sntp::SntpClient;
 // TLS types are available but not re-exported yet (Phase 1)
 // Will be added when integrated into main.rs
