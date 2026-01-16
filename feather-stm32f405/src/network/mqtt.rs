@@ -30,17 +30,23 @@
 
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_net::{dns::DnsQueryType, IpEndpoint, Stack};
+use embassy_time::{Duration, Timer};
 use embedded_tls::{
     Aes128GcmSha256, CryptoProvider, NoVerify, TlsConfig, TlsConnection, TlsContext, TlsVerifier,
 };
+use heapless::String;
 use rust_mqtt::{
     buffer::BumpBuffer,
-    client::{options::ConnectOptions, Client},
+    client::{
+        options::{ConnectOptions, PublicationOptions, TopicReference},
+        Client,
+    },
     config::{KeepAlive, SessionExpiryInterval},
-    types::MqttString,
+    types::{MqttString, QoS, TopicName},
+    Bytes,
 };
 
-use crate::{device_id, tls_buffers};
+use crate::{device_id, time, tls_buffers};
 
 use super::error::{MqttError, NetworkError, TlsError};
 use super::socket::AsyncTcpSocket;
@@ -48,6 +54,11 @@ use super::socket::AsyncTcpSocket;
 /// MQTT packet buffer size: 2KB for packet assembly
 #[allow(dead_code)]
 const MQTT_BUFFER_SIZE: usize = 2048;
+
+/// Maximum MQTT topic length
+/// Format: "device/{client_id}/telemetry" where client_id is ~34 chars
+/// Total: 7 + 34 + 10 = 51 chars, use 64 for safety
+const MAX_TOPIC_LEN: usize = 64;
 
 /// Simple crypto provider that wraps an RNG for TLS operations
 struct SimpleCryptoProvider<'a, RNG> {
@@ -475,7 +486,7 @@ impl MqttClient {
         &mut self,
         stack: &Stack<'static>,
         rng: &mut RNG,
-        _publish_interval_secs: u64,
+        publish_interval_secs: u64,
     ) -> Result<(), NetworkError>
     where
         RNG: rand_core::RngCore + rand_core::CryptoRng,
@@ -588,19 +599,156 @@ impl MqttClient {
         info!("MQTT connection established successfully!");
         info!("Persistent MQTT connection active - ready for publishing");
 
-        // TODO: Implement publish loop with periodic messages
-        // The rust-mqtt Client now owns the TLS connection and can be used for publishing
-        // Example:
-        // loop {
-        //     Mono::delay(Duration::from_secs(publish_interval_secs)).await;
-        //     let topic = format!("device/{}/test", client_id);
-        //     let payload = b"Hello from STM32F405!";
-        //     mqtt_client.publish(&topic, payload, QoS::AtLeastOnce, false).await?;
-        // }
+        // Publish loop with periodic messages
+        let mut message_counter = 0u32;
 
-        warn!("MQTT publish loop not yet implemented - connection will be dropped");
-        Ok(())
+        loop {
+            // Wait for the specified interval using embassy_time Timer
+            Timer::after(Duration::from_secs(publish_interval_secs)).await;
+
+            message_counter += 1;
+
+            // Get current timestamp from RTC
+            let timestamp = time::get_timestamp();
+
+            // Format topic: device/{client_id}/telemetry
+            let topic_str = match format_mqtt_topic(client_id.as_str(), "telemetry") {
+                Ok(topic) => topic,
+                Err(e) => {
+                    error!("Failed to format MQTT topic: {:?}", e);
+                    return Err(e.into());
+                }
+            };
+
+            // Build payload (simple JSON for now)
+            // Format: {"msg_id":N,"timestamp":UNIX_SECS,"micros":MICROS}
+            let mut payload_buf = [0u8; 128];
+            let payload_len = {
+                use core::fmt::Write;
+                let mut writer = heapless::String::<128>::new();
+                write!(
+                    &mut writer,
+                    "{{\"msg_id\":{},\"timestamp\":{},\"micros\":{}}}",
+                    message_counter, timestamp.unix_secs, timestamp.micros
+                )
+                .map_err(|_| {
+                    error!("Failed to format payload JSON");
+                    MqttError::BufferError
+                })?;
+
+                let bytes = writer.as_bytes();
+                payload_buf[..bytes.len()].copy_from_slice(bytes);
+                bytes.len()
+            };
+            let payload = &payload_buf[..payload_len];
+
+            info!(
+                "Publishing message #{} to topic '{}' (payload: {} bytes)",
+                message_counter,
+                topic_str.as_str(),
+                payload_len
+            );
+
+            // Create TopicName from the formatted topic string
+            // SAFETY: format_mqtt_topic() validates that the topic string:
+            // 1. Does not contain wildcard characters (+, #)
+            // 2. Does not contain null characters
+            // 3. Follows the valid MQTT topic name format: device/{id}/{subtopic}
+            // Therefore, it's safe to use new_unchecked() here.
+            let topic_name = unsafe {
+                TopicName::new_unchecked(MqttString::new(topic_str.as_str().into()).map_err(
+                    |e| {
+                        error!("Failed to create MQTT topic string: {:?}", Debug2Format(&e));
+                        MqttError::ProtocolError
+                    },
+                )?)
+            };
+
+            // Create publication options with QoS 0 (AtMostOnce) for test messages
+            // TODO: Switch to QoS 1 (AtLeastOnce) per SR-SENS-004 when proper event-driven
+            // message handling is implemented. Currently using QoS 0 to avoid manual polling.
+            let pub_options = PublicationOptions {
+                retain: false,
+                message_expiry_interval: None,
+                topic: TopicReference::Name(topic_name),
+                qos: QoS::AtMostOnce,
+            };
+
+            // Publish the message
+            match mqtt_client
+                .publish(&pub_options, Bytes::from(payload))
+                .await
+            {
+                Ok(packet_id) => {
+                    info!(
+                        "Message #{} published successfully (packet_id: {})",
+                        message_counter, packet_id
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to publish message #{}: {:?}",
+                        message_counter,
+                        Debug2Format(&e)
+                    );
+                    // For now, continue to next iteration
+                    // TODO: Implement reconnection logic per SR-NET-003
+                    warn!("Continuing to next publish cycle despite error");
+                }
+            }
+        }
     }
+}
+
+/// Format an MQTT topic for telemetry data
+///
+/// Returns a topic string in the format `device/{id}/telemetry` where
+/// `{id}` is the device's MQTT client ID.
+///
+/// # Arguments
+///
+/// * `client_id` - The device's MQTT client ID
+/// * `subtopic` - The topic suffix (e.g., "telemetry", "status")
+///
+/// # Returns
+///
+/// Returns a heapless String with the formatted topic, or an error if
+/// the topic is too long to fit in the buffer.
+///
+/// # Example
+///
+/// ```no_run
+/// let client_id = device_id::mqtt_client_id();
+/// let topic = format_mqtt_topic(&client_id, "telemetry")?;
+/// // Result: "device/stm32f405-0123456789abcdef01234567/telemetry"
+/// ```
+fn format_mqtt_topic(client_id: &str, subtopic: &str) -> Result<String<MAX_TOPIC_LEN>, MqttError> {
+    // Validate that client_id and subtopic don't contain invalid MQTT topic characters
+    // MQTT spec: Topic names cannot contain wildcards (+, #) or null characters
+    if client_id.contains('+') || client_id.contains('#') || client_id.contains('\0') {
+        error!("Client ID contains invalid MQTT topic characters");
+        return Err(MqttError::ProtocolError);
+    }
+    if subtopic.contains('+') || subtopic.contains('#') || subtopic.contains('\0') {
+        error!("Subtopic contains invalid MQTT topic characters");
+        return Err(MqttError::ProtocolError);
+    }
+
+    let mut topic = String::<MAX_TOPIC_LEN>::new();
+
+    // Build: device/{client_id}/{subtopic}
+    topic
+        .push_str("device/")
+        .map_err(|_| MqttError::BufferError)?;
+    topic
+        .push_str(client_id)
+        .map_err(|_| MqttError::BufferError)?;
+    topic.push('/').map_err(|_| MqttError::BufferError)?;
+    topic
+        .push_str(subtopic)
+        .map_err(|_| MqttError::BufferError)?;
+
+    Ok(topic)
 }
 
 #[cfg(test)]
@@ -614,5 +762,41 @@ mod tests {
         assert_eq!(config.broker_port, 8883);
         assert_eq!(config.keep_alive_secs, 60);
         assert!(config.clean_start);
+    }
+
+    #[test]
+    fn test_format_mqtt_topic() {
+        // Test telemetry topic
+        let topic = format_mqtt_topic("stm32f405-test123", "telemetry").unwrap();
+        assert_eq!(topic.as_str(), "device/stm32f405-test123/telemetry");
+
+        // Test status topic
+        let topic = format_mqtt_topic("stm32f405-test123", "status").unwrap();
+        assert_eq!(topic.as_str(), "device/stm32f405-test123/status");
+
+        // Test that topic length is within bounds
+        assert!(topic.len() < MAX_TOPIC_LEN);
+    }
+
+    #[test]
+    fn test_format_mqtt_topic_buffer_overflow() {
+        // Create a long client ID that should cause buffer overflow
+        // Use a fixed-size stack array instead of heap allocation
+        let long_id = "this_is_a_very_long_client_id_that_exceeds_the_maximum_allowed_topic_length_for_mqtt_messages";
+        let result = format_mqtt_topic(long_id, "telemetry");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_format_mqtt_topic_invalid_characters() {
+        // Test that wildcard characters are rejected
+        let result = format_mqtt_topic("client+wildcard", "telemetry");
+        assert!(result.is_err());
+
+        let result = format_mqtt_topic("client#wildcard", "telemetry");
+        assert!(result.is_err());
+
+        let result = format_mqtt_topic("valid-client", "status+wildcard");
+        assert!(result.is_err());
     }
 }
