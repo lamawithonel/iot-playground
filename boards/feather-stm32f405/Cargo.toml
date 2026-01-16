@@ -123,16 +123,3 @@ features = [
   "rt",
   "stm32f405rg",
 ]
-
-[profile.dev]
-opt-level = 1
-debug = true
-lto = false
-panic = "abort"
-codegen-units = 16
-
-[profile.release]
-opt-level = "s"    # optimize for size
-debug = true       # symbols are nice and they don't increase the size on Flash
-lto = true         # better optimizations
-codegen-units = 1  # better optimizations
