@@ -1,0 +1,69 @@
+[workspace]
+resolver = "2"
+members = [
+    "boards/feather-stm32f405",
+    # Future members will be added as they're created:
+    # "core",
+    # "hal-abstractions",
+    # "apps/mqtt-sensor-node",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lamawithonel/iot-playground"
+
+[workspace.dependencies]
+# Common dependencies shared across workspace members
+defmt = "1.0.1"
+defmt-rtt = "1.1.0"
+embedded-hal = "1.0"
+embedded-hal-async = "1.0"
+embedded-io = "0.7"
+embedded-io-async = "0.7"
+heapless = "0.8"
+static_cell = "2.0"
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+critical-section = "1.1"
+panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+
+# RTIC ecosystem
+[workspace.dependencies.rtic]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+
+[workspace.dependencies.rtic-monotonics]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+
+[workspace.dependencies.rtic-sync]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+
+[workspace.dependencies.rtic-time]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+
+# Embassy ecosystem (HAL only, no executor)
+[workspace.dependencies.embassy-stm32]
+version = "0.4.0"
+default-features = false
+
+[workspace.dependencies.embassy-net]
+version = "0.7.1"
+
+[workspace.dependencies.embassy-net-wiznet]
+version = "0.2"
+
+[workspace.dependencies.embassy-time]
+version = "0.5.0"
+
+[workspace.dependencies.embassy-sync]
+version = "0.7.0"
+
+[workspace.dependencies.embassy-futures]
+version = "0.1"
+
+[workspace.dependencies.embassy-embedded-hal]
+version = "0.5.0"

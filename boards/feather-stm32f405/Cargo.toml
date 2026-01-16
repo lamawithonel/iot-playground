@@ -1,10 +1,8 @@
 [package]
 name = "feather-stm32f405"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 readme = "README.md"
-
-[workspace]
 
 # this lets you use `cargo fix`!
 [[bin]]
@@ -13,33 +11,27 @@ name = "feather-stm32f405"
 test = false
 
 [dependencies]
-defmt = "1.0.1"
-defmt-rtt = "1.1.0"
-embedded-hal = "1.0"
-embedded-hal-async = "1.0"
-embedded-io = "0.7"
-embedded-io-async = "0.7"
-heapless = "0.8"
-static_cell = "2.0"
-
-[dependencies.cortex-m]
-version = "0.7.7"
-features = [
-  "critical-section-single-core",
-]
-
-[dependencies.critical-section]
-version = "1.1"
+defmt.workspace = true
+defmt-rtt.workspace = true
+embedded-hal.workspace = true
+embedded-hal-async.workspace = true
+embedded-io.workspace = true
+embedded-io-async.workspace = true
+heapless.workspace = true
+static_cell.workspace = true
+cortex-m.workspace = true
+critical-section.workspace = true
+panic-probe.workspace = true
 
 [dependencies.embassy-embedded-hal]
-version = "0.5.0"
+workspace = true
 features = ["defmt"]
 
 [dependencies.embassy-futures]
-version = "0.1"  # Latest stable is 0.1.x
+workspace = true
 
 [dependencies.embassy-net]
-version = "0.7.1"
+workspace = true
 features = [
   "defmt",
   "dhcpv4",
@@ -50,12 +42,11 @@ features = [
 ]
 
 [dependencies.embassy-net-wiznet]
-version = "0.2"
+workspace = true
 features = ["defmt"]
 
 [dependencies.embassy-stm32]
-version = "0.4.0"
-default-features = false
+workspace = true
 features = [
   "defmt",
   "exti",
@@ -66,13 +57,13 @@ features = [
 ]
 
 [dependencies.embassy-sync]
-version = "0.7.0"
+workspace = true
 features = ["defmt"]
 # Note: Required by embassy-embedded-hal for SPI bus sharing within network task
 # Uses lightweight CriticalSection-based mutex that doesn't prevent WFI sleep
 
 [dependencies.embassy-time]
-version = "0.5.0"
+workspace = true
 features = [
   "defmt",
   "defmt-timestamp-uptime",
@@ -87,10 +78,6 @@ rev = "4bc3df1dffccb318a564ef4c258c3a82c2eb13ed"
 default-features = false
 features = ["defmt"]
 
-[dependencies.panic-probe]
-version = "1.0.0"
-features = ["print-defmt"]
-
 # RNG for TLS handshake (version must match embedded-tls dependency)
 [dependencies.rand_core]
 version = "0.6"
@@ -104,13 +91,11 @@ default-features = false
 features = ["v5", "defmt", "bump"]
 
 [dependencies.rtic]
-git = "https://github.com/rtic-rs/rtic.git"
-tag = "v2.2.0"
+workspace = true
 features = ["thumbv7-backend"]
 
 [dependencies.rtic-monotonics]
-git = "https://github.com/rtic-rs/rtic.git"
-tag = "v2.2.0"
+workspace = true
 features = [
   "cortex-m-systick",
   "defmt",
@@ -119,13 +104,11 @@ features = [
 ]
 
 [dependencies.rtic-sync]
-git = "https://github.com/rtic-rs/rtic.git"
-tag = "v2.2.0"
+workspace = true
 features = ["defmt-03"]
 
 [dependencies.rtic-time]
-git = "https://github.com/rtic-rs/rtic.git"
-tag = "v2.2.0"
+workspace = true
 
 # SNTP client for time synchronization (SR-NET-006)
 # Version 0.7.0 adds async support
