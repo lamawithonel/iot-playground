@@ -102,6 +102,7 @@ Build a reference implementation for embedded Rust IoT firmware on STM32F405RG, 
 - [x] Device identification using STM32 UID
 - [x] Decoupled error architecture
 - [ ] MQTT persistent connection with periodic test publishing (Phase 2.5)
+- [ ] Event-driven MQTT message handling
 - [ ] MQTT keep-alive handling (AWS IoT 1200s interval)
 - [ ] Shared MQTT connection resource (RTIC Shared)
 - [ ] WFI/Sleep mode between messages
