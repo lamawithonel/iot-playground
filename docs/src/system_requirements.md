@@ -178,8 +178,7 @@ TODO: Decide on timer requirements
 
 **SR-NET-001:** System SHALL establish TLS 1.3 connection to AWS IoT Core on startup (MQTT v5.0)
 **SR-NET-002:** System SHALL authenticate using X.509 client certificates stored in flash  
-**SR-NET-003:** System SHALL maintain MQTT connection with keep-alive per AWS IoT recommendations (1200s) and automatic reconnect  
-**SR-NET-003-TEST:** [Phase 2.5] System SHALL publish periodic test messages every 30 seconds to validate MQTT connectivity  
+**SR-NET-003:** System SHALL maintain MQTT connection with 60s keep-alive and automatic reconnect  
 **SR-NET-004:** System SHALL enter sleep mode between transmissions, waking on EXTI2 or timer  
 **SR-NET-005:** System SHALL process network interrupts within 500 μs  
 **SR-NET-006:** System SHALL synchronize time using SNTP (RFC 5905)  
@@ -188,17 +187,23 @@ TODO: Decide on timer requirements
 **SR-NET-009:** System SHALL retry failed MQTT QoS level 1 and 2 messages up to 5 times with exponential back-off, then log error and place the message in one of two DLQs on the microSD card: one for network failures and one for rejected messages  
 **SR-NET-010:** System SHALL place all outgoing MQTT QoS level 1 and 2 messages in the network failure DLQ if the DLQ is not empty  
 **SR-NET-011:** System SHALL retry the oldest message in the network failure DLQ whenever a new message is placed in the queue, and retry all subsequent messages in FIFO order when one message succeeds, stopping if there are any additional failures and waiting for the next new message  
-**SR-NET-012:** System SHALL log an error and stop queuing new MQTT messages to the network failure DLQ when microSD card utilization exceeds 80%
-**SR-NET-013:** [Phase 3+] System SHALL maintain a single MQTT connection per broker, shared across all publishing tasks via RTIC Shared resource
-**SR-NET-014:** [Phase 3+] System SHALL only establish MQTT connection at startup or after network/broker fault
-
-**Phase 2.5 Testing Notes:**
-- SR-NET-003-TEST implements incremental testing with temporary per-publish connections
-- Full persistent connection (SR-NET-013, SR-NET-014) deferred to Phase 3
-- Keep-alive interval updated from 60s to 1200s per AWS IoT best practices
-- Sleep mode (SR-NET-004) requires interrupt-driven networking (EXTI2)
+**SR-NET-012:** System SHALL log an error and stop queuing new MQTT messages to the network failure DLQ when microSD card utilization exceeds 80%  
+**SR-NET-013:** The MQTT implementation SHALL be fully event-driven, processing incoming messages asynchronously without blocking publish operations  
+**SR-NET-014:** The system MAY test MQTT functionality with lower QoS levels (0 or 1) during development if higher QoS levels are not yet fully implemented  
+**SR-NET-015:** All MQTT QoS levels (0, 1, and 2) SHALL be tested once they are implemented to verify reliable message delivery under various network conditions  
+**SR-NET-016:** [Phase 3+] System SHALL maintain a single MQTT connection per broker, shared across all publishing tasks via RTIC Shared resource  
+**SR-NET-017:** [Phase 3+] System SHALL only establish MQTT connection at startup or after network/broker fault
 
 TODO: Decide on failed message DLQ maximum size and what to do about its contents
+
+**Rationale for SR-NET-013 (Event-Driven MQTT):**  
+Event-driven message handling is essential for real-time IoT systems because it prevents blocking operations from interfering with time-critical tasks. In an RTIC-based system with hard real-time requirements, manually polling for acknowledgments violates the design philosophy of interrupt-driven, non-blocking I/O. An event-driven approach ensures that incoming MQTT messages (PUBACK, PUBREC, PUBLISH from subscriptions) are processed automatically via callbacks or async events, maintaining system responsiveness and preventing session buffer overflows. This aligns with the project's goals of formal verification and predictable timing behavior.
+
+**Rationale for SR-NET-014 (Incremental QoS Testing):**  
+Supporting incremental development with lower QoS levels during testing acknowledges the complexity of implementing full MQTT protocol compliance. QoS 0 (at-most-once) provides fire-and-forget semantics suitable for early testing, while QoS 1 (at-least-once) requires acknowledgment handling. This requirement allows the team to validate basic connectivity and message formatting before implementing the more complex event-driven acknowledgment logic required for QoS 1 and 2. This incremental approach aligns with the project's "Incremental" design philosophy (Section 2.3).
+
+**Rationale for SR-NET-015 (Comprehensive QoS Testing):**  
+Once implemented, all QoS levels must be thoroughly tested because they provide different delivery guarantees critical for IoT reliability. QoS 0 is suitable for high-frequency telemetry where occasional loss is acceptable; QoS 1 ensures sensor data reaches the cloud at least once (required by SR-SENS-004); QoS 2 provides exactly-once delivery for critical commands. Testing all levels under various network conditions (packet loss, latency, connection drops) ensures the system meets its 30-day reliability requirement (Section 8) and validates the retry logic specified in SR-NET-008 and SR-NET-009.
 
 ### 4.2 Sensor Data
 
@@ -303,6 +308,7 @@ TODO: Decide on failed message DLQ maximum size and what to do about its content
 - [x] SNTP client (`sntpc`)
 - [x] TLS 1.3 handshake
 - [ ] MQTT client with AWS IoT Core
+- [ ] Event-driven MQTT message handling
 - [ ] Interrupt-driven packet reception
 
 ### Phase 3: Sensor Integration
@@ -352,6 +358,30 @@ NOTE: Secure OTA updates may require a more capable MCU
 
 ---
 
+## 9. Architecture Decisions
+
+### ADR-001: RTIC vs Embassy Executor
+**Decision:** RTIC for scheduling, Embassy for HAL  
+**Rationale:** Need formal verification (SRP) for real-time guarantees; Embassy executor can't provide hard deadlines  
+**Trade-off:** Steeper learning curve, some driver incompatibilities
+
+### ADR-002: W5500 vs ESP32 WiFi
+**Decision:** W5500 hardwired Ethernet  
+**Rationale:** Hardware TCP/IP offload, deterministic behavior, easier debugging  
+**Trade-off:** Requires cable (no wireless mobility)
+
+### ADR-003: Protocol Buffers vs JSON
+**Decision:** Protocol Buffers for MQTT payloads  
+**Rationale:** Smaller size, faster, type-safe, industry standard  
+**Trade-off:** Less human-readable without decoder
+
+### ADR-004: E-ink vs OLED
+**Decision:** E-ink display  
+**Rationale:** Ultra-low power, sunlight readable, persistent without power  
+**Trade-off:** Slower refresh (~10s), but acceptable for sensor update intervals
+
+---
+
 ## 10. Reference Information
 
 **Development Tools:**
@@ -363,7 +393,7 @@ NOTE: Secure OTA updates may require a more capable MCU
 **Key Dependencies:**
 - `rtic` 2.x - Real-time framework
 - `embassy-stm32` - HAL and drivers
-- `embedded-tls` - TLS stack (chosen library; supports TLS 1.3 without allocator)
+- `embedded-tls` or `rustls` - TLS stack
 - `rumqttc` or `rust-mqtt` - MQTT client
 - `prost` - Protocol Buffers
 - `defmt` + `defmt-rtt` - Logging
@@ -373,6 +403,15 @@ NOTE: Secure OTA updates may require a more capable MCU
 - `embedded-hal-mock` - HAL mocking
 - `defmt-test` - Integration tests on hardware
 - `cargo-tarpaulin` - Coverage analysis
+
+---
+
+## Appendix: Project Status
+
+**Known Risks:**
+- **R1:** Flash size constraints with TLS stack → Investigate `embedded-tls` lightweight implementation
+- **R2:** Embassy-RTIC compatibility gaps → Use PAC fallback for unsupported peripherals
+- **R3:** Limited secure boot on F4 → Plan hardware upgrade path to F7/H7 for production
 
 ---
 
