@@ -79,16 +79,20 @@ This is a Cargo workspace with multiple crates. The main board support packages 
 
 ```bash
 # Development build (optimized for debugging)
-cargo build --manifest-path boards/feather-stm32f405/Cargo.toml
+cargo build --manifest-path boards/feather-stm32f405/Cargo.toml --target thumbv7em-none-eabihf
 
 # Release build (optimized for size)
-cargo build --manifest-path boards/feather-stm32f405/Cargo.toml --release
-
-# Check without building (fast)
-cargo check --manifest-path boards/feather-stm32f405/Cargo.toml
+cargo build --manifest-path boards/feather-stm32f405/Cargo.toml --release --target thumbv7em-none-eabihf
 ```
 
-The target architecture is automatically selected via `.cargo/config.toml` (defaults to `thumbv7em-none-eabihf`).
+**Note:** The `--target thumbv7em-none-eabihf` flag is required when building from the workspace root.
+
+Alternatively, you can `cd` into the board directory:
+
+```bash
+cd boards/feather-stm32f405
+cargo build --release  # --target is auto-selected from .cargo/config.toml
+```
 
 ### Binary Output
 
@@ -100,7 +104,7 @@ target/thumbv7em-none-eabihf/release/feather-stm32f405
 
 Generate a flashable binary:
 ```bash
-cargo objcopy --manifest-path boards/feather-stm32f405/Cargo.toml --release -- -O binary feather-stm32f405.bin
+cargo objcopy --manifest-path boards/feather-stm32f405/Cargo.toml --release --target thumbv7em-none-eabihf -- -O binary feather-stm32f405.bin
 ```
 
 ## Flashing
@@ -116,7 +120,7 @@ The Feather STM32F405 has a built-in DFU bootloader:
    - Release BOOT0 button
 3. Flash:
    ```bash
-   cargo run --manifest-path boards/feather-stm32f405/Cargo.toml --release
+   cargo run --manifest-path boards/feather-stm32f405/Cargo.toml --release --target thumbv7em-none-eabihf
    ```
 
 The `.cargo/config.toml` is configured to use `dfu-util` as the runner.
@@ -171,7 +175,7 @@ export DEFMT_LOG=debug  # or: trace, info, warn, error
 ### Binary size analysis
 
 ```bash
-cargo size --manifest-path boards/feather-stm32f405/Cargo.toml --release -- -A
+cargo size --manifest-path boards/feather-stm32f405/Cargo.toml --release --target thumbv7em-none-eabihf -- -A
 ```
 
 ## Project Structure
@@ -194,19 +198,15 @@ iot-playground/
 ## Development Workflow
 
 1. **Make changes** to the source code in `boards/feather-stm32f405/src/`
-2. **Check compilation**:
+2. **Build and test**:
    ```bash
-   cargo check --manifest-path boards/feather-stm32f405/Cargo.toml
+   cargo build --manifest-path boards/feather-stm32f405/Cargo.toml --release --target thumbv7em-none-eabihf
    ```
-3. **Build and test**:
+3. **Flash to hardware**:
    ```bash
-   cargo build --manifest-path boards/feather-stm32f405/Cargo.toml --release
+   cargo run --manifest-path boards/feather-stm32f405/Cargo.toml --release --target thumbv7em-none-eabihf
    ```
-4. **Flash to hardware**:
-   ```bash
-   cargo run --manifest-path boards/feather-stm32f405/Cargo.toml --release
-   ```
-5. **View logs** via probe-rs or defmt-print
+4. **View logs** via probe-rs or defmt-print
 
 ## Architecture
 
