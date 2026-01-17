@@ -51,20 +51,52 @@ This project provides a multi-device capable embedded firmware framework using:
 
 ### Quick Start (from workspace root)
 
-The easiest way to build and flash is using `cargo embed` from the repository root:
+The easiest way to build and flash is using the provided `embed.sh` script or `cargo embed` directly:
 
 ```bash
-# Build, flash, and attach RTT logging in one command
-cargo embed --release
+# Using the wrapper script (recommended - supports BOARD env var)
+./embed.sh --release                    # Uses default board (feather-stm32f405)
+BOARD=microbit ./embed.sh --release     # Select board via environment variable
+./embed.sh --chip stm32f3 --release     # Select board via command line
+
+# Or use cargo embed directly
+cargo embed --release                   # Uses default board (feather)
+cargo embed --chip feather --release    # Feather STM32F405 (default)
+cargo embed --chip microbit --release   # BBC micro:bit v2
+cargo embed --chip stm32f3 --release    # STM32F3 Discovery
 ```
 
 This will:
-1. Build the firmware for the default board (feather-stm32f405)
+1. Build the firmware for the selected board
 2. Use the board's linker configuration automatically
-3. Flash it to your connected debug probe
+3. Flash it to your connected debug probe (with board-specific settings)
 4. Attach to RTT for live log viewing
 
-**Note:** Cargo automatically uses the board-specific `.cargo/config.toml` from `boards/feather-stm32f405/` when building, so linker flags and target settings are handled correctly.
+**Note:** Cargo automatically uses the board-specific `.cargo/config.toml` when building, so linker flags and target settings are handled correctly.
+
+### Board Selection
+
+You can select boards in three ways (in order of precedence):
+
+1. **Command-line `--chip` flag** (highest precedence):
+   ```bash
+   cargo embed --chip microbit --release
+   # or
+   ./embed.sh --chip microbit --release
+   ```
+
+2. **Environment variable `BOARD`** (only with `embed.sh`):
+   ```bash
+   export BOARD=microbit
+   ./embed.sh --release
+   ```
+
+3. **Default**: If nothing is specified, `feather` (Feather STM32F405) is used
+
+**Available boards:**
+- `feather` - Adafruit Feather STM32F405 (default)
+- `microbit` - BBC micro:bit v2 (nRF52833)
+- `stm32f3` - STM32F3 Discovery (STM32F303VC)
 
 ### Build Only
 
