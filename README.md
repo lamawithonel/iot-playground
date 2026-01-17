@@ -60,18 +60,27 @@ cargo embed --release
 
 This will:
 1. Build the firmware for the default board (feather-stm32f405)
-2. Flash it to your connected debug probe
-3. Attach to RTT for live log viewing
+2. Use the board's linker configuration automatically
+3. Flash it to your connected debug probe
+4. Attach to RTT for live log viewing
+
+**Note:** Cargo automatically uses the board-specific `.cargo/config.toml` from `boards/feather-stm32f405/` when building, so linker flags and target settings are handled correctly.
 
 ### Build Only
 
 ```bash
-# Development build
-cargo build --target thumbv7em-none-eabihf
+# Build from workspace root (uses board's cargo config)
+cargo build --release
 
-# Release build (optimized for size)
-cargo build --release --target thumbv7em-none-eabihf
+# Or build from the board directory
+cd boards/feather-stm32f405
+cargo build --release
 ```
+
+When building from the workspace root, Cargo uses the board's `.cargo/config.toml` which sets:
+- Target: `thumbv7em-none-eabihf`
+- Linker scripts: `link.x` and `defmt.x`
+- Other board-specific flags
 
 ### Flash Only
 
@@ -121,13 +130,13 @@ arm-none-eabi-gdb target/thumbv7em-none-eabihf/release/feather-stm32f405
 
 ```
 iot-playground/
-├── Cargo.toml              # Workspace root with shared dependencies
+├── Cargo.toml              # Workspace root with shared dependencies & default-members
 ├── Embed.toml              # probe-rs configuration (defaults to feather-stm32f405)
 ├── AGENTS.md               # Project architecture and constraints
 ├── boards/                 # Board Support Packages (BSPs)
 │   └── feather-stm32f405/  # Adafruit Feather STM32F405 board
-│       ├── .cargo/         # Board-specific cargo config
-│       ├── Embed.toml      # Board-specific probe-rs config
+│       ├── .cargo/         # Board-specific cargo config (linker, target, etc.)
+│       ├── Embed.toml      # Board-specific probe-rs config (optional overrides)
 │       ├── src/            # Firmware source code
 │       └── memory.x        # Memory layout
 ├── core/                   # Platform-agnostic business logic (skeleton)
@@ -135,6 +144,19 @@ iot-playground/
 ├── apps/                   # Application binaries (future)
 └── docs/                   # Documentation (mdBook)
 ```
+
+### Configuration Files
+
+**Workspace-level:**
+- `Cargo.toml`: Sets `default-members = ["boards/feather-stm32f405"]` for cargo commands
+- `Embed.toml`: Configures probe-rs chip and RTT settings
+
+**Board-level:**
+- `boards/*/. cargo/config.toml`: Board-specific build settings (target, linker flags, runners)
+- `boards/*/Embed.toml`: Optional probe-rs overrides (prefer Embed.local.toml for personal settings)
+- `boards/*/memory.x`: Memory layout for the linker
+
+**Key insight:** Cargo automatically finds and uses the board's `.cargo/config.toml` when building packages from the workspace root, so each board can have its own linker configuration without conflicts.
 
 ## Development Workflow
 
