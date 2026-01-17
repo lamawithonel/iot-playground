@@ -1,0 +1,24 @@
+#
+# Root Embed.toml - defaults to building and flashing feather-stm32f405
+#
+# This allows `cargo embed` from the workspace root to work directly.
+# You can override settings by creating `Embed.local.toml` or `.embed.local.toml`
+# in this directory (not tracked by git).
+#
+
+[default.general]
+chip = "STM32F405RGTx"
+# connect_under_reset = true
+
+[default.probe]
+protocol = "Swd"  # Force SWD (the Feather STM32F405 doesn't support full JTAG)
+# speed = 1000  # (kHz) Uncomment to reduce speed for improved signal stability
+
+[default.rtt]
+enabled = true
+up_channels = [
+  { channel = 0, name = "defmt", format = "Defmt" },
+]
+
+[default.gdb]
+enabled = false

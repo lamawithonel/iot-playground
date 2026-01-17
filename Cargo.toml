@@ -7,6 +7,9 @@ members = [
     # "hal-abstractions",
     # "apps/mqtt-sensor-node",
 ]
+# Default member for cargo embed and other commands from workspace root
+default-members = ["boards/feather-stm32f405"]
+
 
 [workspace.package]
 version = "0.1.0"
