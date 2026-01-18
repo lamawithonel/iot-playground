@@ -1,0 +1,11 @@
+[package]
+name = "hal-abstractions"
+version = "0.1.0"
+edition = "2021"
+description = "Hardware abstraction traits for IoT firmware"
+
+[workspace]
+
+[dependencies]
+embedded-io = "0.7"
+embedded-io-async = "0.7"
