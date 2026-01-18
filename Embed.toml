@@ -1,0 +1,83 @@
+#
+# Root Embed.toml - Multi-board configuration presets
+#
+# Board selection via PROBE_RS_CONFIG_PRESET environment variable:
+#   PROBE_RS_CONFIG_PRESET=feather cargo run --release
+#   PROBE_RS_CONFIG_PRESET=microbit cargo run --release
+#   PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release
+#
+# Or use cargo embed with --chip flag:
+#   cargo embed --chip feather --release
+#   cargo embed --chip microbit --release
+#   cargo embed --chip stm32f3 --release
+#
+# Default configuration (used when no preset specified)
+#
+
+[default.general]
+chip = "STM32F405RGTx"
+
+[default.probe]
+protocol = "Swd"
+
+[default.rtt]
+enabled = true
+up_channels = [
+  { channel = 0, name = "defmt", format = "Defmt" },
+]
+
+[default.gdb]
+enabled = false
+
+# Feather STM32F405 preset
+# Usage: PROBE_RS_CONFIG_PRESET=feather cargo run --release
+[feather.general]
+chip = "STM32F405RGTx"
+
+[feather.probe]
+protocol = "Swd"
+
+[feather.rtt]
+enabled = true
+up_channels = [
+  { channel = 0, name = "defmt", format = "Defmt" },
+]
+
+[feather.gdb]
+enabled = false
+
+# BBC micro:bit v2 preset
+# Usage: PROBE_RS_CONFIG_PRESET=microbit cargo run --release
+[microbit.general]
+chip = "nRF52833_xxAA"
+
+[microbit.probe]
+protocol = "Swd"
+
+[microbit.rtt]
+enabled = true
+up_channels = [
+  { channel = 0, name = "defmt", format = "Defmt" },
+]
+
+[microbit.gdb]
+enabled = false
+
+# STM32F3 Discovery preset
+# Usage: PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release
+[stm32f3.general]
+chip = "STM32F303VCTx"
+
+[stm32f3.probe]
+protocol = "Swd"
+usb_vid = "0483"
+usb_pid = "374b"
+
+[stm32f3.rtt]
+enabled = true
+up_channels = [
+  { channel = 0, name = "defmt", format = "Defmt" },
+]
+
+[stm32f3.gdb]
+enabled = false
