@@ -2,7 +2,7 @@
 ## Embedded Rust IoT Firmware
 
 **Version:** 1.0  
-**Last Updated:** 2026-01-12  
+**Last Updated:** 2026-01-18  
 **Project Phase:** Phase 2 (Network Stack)
 
 ---
@@ -31,11 +31,23 @@ Build a reference implementation for embedded Rust IoT firmware on STM32F405RG, 
 - AWS IoT Core infrastructure setup
 - Hardware PCB design
 - Production manufacturing
-- Multi-board support (initially STM32F405 only)
 
 ---
 
 ## 2. Current Status
+
+### 2.0 Workspace Migration ✅ Complete
+
+**Completed:**
+- [x] Cargo workspace with centralized dependency management
+- [x] Board profile architecture (`boards/` directory)
+- [x] Migrated `feather-stm32f405` to `boards/feather-stm32f405/`
+- [x] Single root `.cargo/config.toml` with probe-rs runner
+- [x] Centralized board configurations in root `Embed.toml`
+- [x] Native probe-rs board selection via `PROBE_RS_CONFIG_PRESET`
+- [x] Skeleton crates: `core/` and `hal-abstractions/`
+- [x] Build system fixes for `memory.x` linker script handling
+- [x] Documentation updates (README, AGENTS.md, ADRs)
 
 ### 2.1 Phase 2: Network Stack (In Progress)
 
@@ -86,6 +98,18 @@ Build a reference implementation for embedded Rust IoT firmware on STM32F405RG, 
 ---
 
 ## 3. Implementation Phases
+
+### Phase 0: Workspace Migration ✅ Complete
+- [x] Create Cargo workspace with resolver = "2"
+- [x] Define workspace.package and workspace.dependencies
+- [x] Move feather-stm32f405 to boards/ directory
+- [x] Create skeleton crates: core/ and hal-abstractions/
+- [x] Single root .cargo/config.toml with common settings
+- [x] Root Embed.toml with board presets (feather, microbit, stm32f3)
+- [x] Board selection via PROBE_RS_CONFIG_PRESET environment variable
+- [x] Build script (build.rs) for memory.x linker script handling
+- [x] Remove legacy microbit/ and stm32f3-discovery/ directories
+- [x] Update documentation (README, AGENTS.md, ADRs, roadmap)
 
 ### Phase 1: Core Platform ✅ Complete
 - [x] GPIO and LED control
@@ -183,6 +207,7 @@ When on-device testing automation becomes valuable (likely Phase 3+), a self-hos
 
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
+| Phase 0: Workspace Migration | 2026-01-18 | ✅ Complete |
 | Phase 1: Core Platform | - | ✅ Complete |
 | Phase 2: Network Stack | TBD | 🔄 In Progress |
 | Phase 3: Sensor Integration | TBD | ⏳ Not Started |
@@ -198,10 +223,11 @@ When on-device testing automation becomes valuable (likely Phase 3+), a self-hos
 Items intentionally deferred:
 
 1. **Alternative TLS Libraries** - Requires hardware with allocator support or C toolchain integration
-2. **Multi-MCU Support** - ATSAM, STM32F7/H7 variants
-3. **Full HIL Test Automation** - Depends on project maturity and test burden
-4. **FIPS 140-3 Certification** - Production requirement, not development priority
-5. **Wireless Connectivity** - WiFi/BLE modules (current design is Ethernet-only)
+2. **Additional Board Profiles** - Future board profiles will be added as `boards/<profile-name>/`
+3. **Multi-MCU Support** - ATSAM, STM32F7/H7, nRF52, ESP32 variants
+4. **Full HIL Test Automation** - Depends on project maturity and test burden
+5. **FIPS 140-3 Certification** - Production requirement, not development priority
+6. **Wireless Connectivity** - WiFi/BLE modules (current primary design is Ethernet)
 
 ---
 
