@@ -1,24 +1,24 @@
 #
-# Root Embed.toml - Multi-board configuration for workspace
+# Root Embed.toml - Multi-board configuration presets
 #
-# Usage:
-#   cargo embed --release                    # Uses default (feather-stm32f405)
-#   cargo embed --chip feather --release     # Explicitly select feather
-#   cargo embed --chip microbit --release    # Select micro:bit
-#   cargo embed --chip stm32f3 --release     # Select STM32F3 Discovery
+# Board selection via PROBE_RS_CONFIG_PRESET environment variable:
+#   PROBE_RS_CONFIG_PRESET=feather cargo run --release
+#   PROBE_RS_CONFIG_PRESET=microbit cargo run --release
+#   PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release
 #
-# You can override settings by creating `Embed.local.toml` or `.embed.local.toml`
-# in this directory (not tracked by git).
+# Or use cargo embed with --chip flag:
+#   cargo embed --chip feather --release
+#   cargo embed --chip microbit --release
+#   cargo embed --chip stm32f3 --release
+#
+# Default configuration (used when no preset specified)
 #
 
-# Default configuration - Feather STM32F405
 [default.general]
 chip = "STM32F405RGTx"
-# connect_under_reset = true
 
 [default.probe]
-protocol = "Swd"  # Force SWD (the Feather STM32F405 doesn't support full JTAG)
-# speed = 1000  # (kHz) Uncomment to reduce speed for improved signal stability
+protocol = "Swd"
 
 [default.rtt]
 enabled = true
@@ -29,14 +29,13 @@ up_channels = [
 [default.gdb]
 enabled = false
 
-# Feather STM32F405 board configuration
+# Feather STM32F405 preset
+# Usage: PROBE_RS_CONFIG_PRESET=feather cargo run --release
 [feather.general]
 chip = "STM32F405RGTx"
-# connect_under_reset = true
 
 [feather.probe]
 protocol = "Swd"
-# speed = 1000
 
 [feather.rtt]
 enabled = true
@@ -47,7 +46,8 @@ up_channels = [
 [feather.gdb]
 enabled = false
 
-# BBC micro:bit v2 (nRF52833) configuration
+# BBC micro:bit v2 preset
+# Usage: PROBE_RS_CONFIG_PRESET=microbit cargo run --release
 [microbit.general]
 chip = "nRF52833_xxAA"
 
@@ -63,7 +63,8 @@ up_channels = [
 [microbit.gdb]
 enabled = false
 
-# STM32F3 Discovery board configuration
+# STM32F3 Discovery preset
+# Usage: PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release
 [stm32f3.general]
 chip = "STM32F303VCTx"
 

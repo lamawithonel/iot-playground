@@ -51,49 +51,52 @@ This project provides a multi-device capable embedded firmware framework using:
 
 ### Quick Start (from workspace root)
 
-The easiest way to build and flash is using the provided `embed.sh` script or `cargo embed` directly:
+Build and flash firmware using `cargo run` or `cargo embed` with board presets:
 
 ```bash
-# Using the wrapper script (recommended - supports BOARD env var)
-./embed.sh --release                    # Uses default board (feather-stm32f405)
-BOARD=microbit ./embed.sh --release     # Select board via environment variable
-./embed.sh --chip stm32f3 --release     # Select board via command line
+# Using cargo run with PROBE_RS_CONFIG_PRESET (recommended)
+cargo run --release                            # Uses default (feather)
+PROBE_RS_CONFIG_PRESET=feather cargo run --release     # Feather STM32F405
+PROBE_RS_CONFIG_PRESET=microbit cargo run --release    # BBC micro:bit v2
+PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release     # STM32F3 Discovery
 
-# Or use cargo embed directly
-cargo embed --release                   # Uses default board (feather)
-cargo embed --chip feather --release    # Feather STM32F405 (default)
-cargo embed --chip microbit --release   # BBC micro:bit v2
-cargo embed --chip stm32f3 --release    # STM32F3 Discovery
+# Or use cargo embed with --chip flag
+cargo embed --release                          # Uses default (feather)
+cargo embed --chip feather --release           # Feather STM32F405
+cargo embed --chip microbit --release          # BBC micro:bit v2
+cargo embed --chip stm32f3 --release           # STM32F3 Discovery
 ```
 
 This will:
 1. Build the firmware for the selected board
-2. Use the board's linker configuration automatically
+2. Use the correct linker configuration automatically
 3. Flash it to your connected debug probe (with board-specific settings)
 4. Attach to RTT for live log viewing
 
-**Note:** Cargo automatically uses the board-specific `.cargo/config.toml` when building, so linker flags and target settings are handled correctly.
+**Note:** The root `.cargo/config.toml` configures `probe-rs run` as the generic runner, and chip selection is handled via `Embed.toml` presets or the `PROBE_RS_CONFIG_PRESET` environment variable.
 
 ### Board Selection
 
-You can select boards in three ways (in order of precedence):
+You can select boards in two ways (in order of precedence):
 
-1. **Command-line `--chip` flag** (highest precedence):
+1. **PROBE_RS_CONFIG_PRESET environment variable** (recommended):
+   ```bash
+   PROBE_RS_CONFIG_PRESET=microbit cargo run --release
+   
+   # Or set it for multiple commands:
+   export PROBE_RS_CONFIG_PRESET=microbit
+   cargo run --release
+   cargo build --release
+   ```
+
+2. **cargo embed --chip flag**:
    ```bash
    cargo embed --chip microbit --release
-   # or
-   ./embed.sh --chip microbit --release
    ```
 
-2. **Environment variable `BOARD`** (only with `embed.sh`):
-   ```bash
-   export BOARD=microbit
-   ./embed.sh --release
-   ```
+3. **Default**: If nothing is specified, `feather` (Feather STM32F405) preset is used
 
-3. **Default**: If nothing is specified, `feather` (Feather STM32F405) is used
-
-**Available boards:**
+**Available board presets:**
 - `feather` - Adafruit Feather STM32F405 (default)
 - `microbit` - BBC micro:bit v2 (nRF52833)
 - `stm32f3` - STM32F3 Discovery (STM32F303VC)
@@ -101,18 +104,22 @@ You can select boards in three ways (in order of precedence):
 ### Build Only
 
 ```bash
-# Build from workspace root (uses board's cargo config)
+# Build from workspace root
 cargo build --release
 
-# Or build from the board directory
+# Build with specific board preset
+PROBE_RS_CONFIG_PRESET=microbit cargo build --release
+
+# Or build from a board directory
 cd boards/feather-stm32f405
 cargo build --release
 ```
 
-When building from the workspace root, Cargo uses the board's `.cargo/config.toml` which sets:
-- Target: `thumbv7em-none-eabihf`
+The root `.cargo/config.toml` provides common settings for all boards:
+- Generic runner: `probe-rs run`
+- Target: `thumbv7em-none-eabihf` (Cortex-M4F/M7F with FPU)
 - Linker scripts: `link.x` and `defmt.x`
-- Other board-specific flags
+- Linker flags: `--nmagic`
 
 ### Flash Only
 
@@ -163,14 +170,14 @@ arm-none-eabi-gdb target/thumbv7em-none-eabihf/release/feather-stm32f405
 ```
 iot-playground/
 ├── Cargo.toml              # Workspace root with shared dependencies & default-members
-├── Embed.toml              # probe-rs configuration (defaults to feather-stm32f405)
+├── Embed.toml              # probe-rs presets for all boards (feather, microbit, stm32f3)
+├── .cargo/config.toml      # Root config with generic probe-rs runner
 ├── AGENTS.md               # Project architecture and constraints
-├── boards/                 # Board Support Packages (BSPs)
-│   └── feather-stm32f405/  # Adafruit Feather STM32F405 board
-│       ├── .cargo/         # Board-specific cargo config (linker, target, etc.)
-│       ├── Embed.toml      # Board-specific probe-rs config (optional overrides)
-│       ├── src/            # Firmware source code
-│       └── memory.x        # Memory layout
+├── boards/                 # Board profiles (specific chip + peripherals + applications)
+│   └── feather-stm32f405/  # Example: Feather STM32F405 board profile
+│       ├── Embed.toml      # Board-specific probe-rs config (optional)
+│       ├── src/            # Board-specific firmware code
+│       └── memory.x        # Memory layout for this board
 ├── core/                   # Platform-agnostic business logic (skeleton)
 ├── hal-abstractions/       # Hardware abstraction traits (skeleton)
 ├── apps/                   # Application binaries (future)
@@ -180,33 +187,56 @@ iot-playground/
 ### Configuration Files
 
 **Workspace-level:**
+- `.cargo/config.toml`: Root configuration with generic `probe-rs run` runner and common linker flags
 - `Cargo.toml`: Sets `default-members = ["boards/feather-stm32f405"]` for cargo commands
-- `Embed.toml`: Configures probe-rs chip and RTT settings
+- `Embed.toml`: Defines board presets (feather, microbit, stm32f3) for probe-rs configuration
 
 **Board-level:**
-- `boards/*/. cargo/config.toml`: Board-specific build settings (target, linker flags, runners)
-- `boards/*/Embed.toml`: Optional probe-rs overrides (prefer Embed.local.toml for personal settings)
-- `boards/*/memory.x`: Memory layout for the linker
+- `boards/*/Embed.toml`: Optional board-specific probe-rs config overrides
+- `boards/*/memory.x`: Memory layout for the specific chip
+- `boards/*/src/`: Board-specific application code and configuration
 
-**Key insight:** Cargo automatically finds and uses the board's `.cargo/config.toml` when building packages from the workspace root, so each board can have its own linker configuration without conflicts.
+### Board Profiles vs. Boards
+
+A **board profile** is a specific configuration combining:
+- A board type (e.g., Feather STM32F405)
+- Peripheral components (e.g., Ethernet chip, sensors)
+- Application purpose (e.g., sensor gateway, PTP server)
+
+Examples of board profiles in `boards/`:
+- `feather-eth-sensor/` - Feather STM32F405 + Ethernet + SEN66 sensor + CAN gateway
+- `feather-ptp-server/` - Feather STM32F405 + Ethernet + GPS clock (IEEE 1588 PTP)
+- `feather-m4-can/` - Feather M4 CAN Express + sensors (CAN-only device)
+
+Each profile shares common code (like network stack) but has unique configuration and glue code.
 
 ## Development Workflow
 
 1. **Make changes** to the source code in `boards/feather-stm32f405/src/`
 2. **Build, flash, and test**:
    ```bash
-   cargo embed --release
+   cargo run --release
+   # or with a specific board preset:
+   PROBE_RS_CONFIG_PRESET=microbit cargo run --release
    ```
 3. **View logs** in real-time via RTT output
 
 ### Working with a Specific Board
 
-If you need to work on a specific board other than the default:
+To work on a specific board profile, you can either:
 
-```bash
-cd boards/feather-stm32f405
-cargo embed --release
-```
+1. **Use environment variable** (recommended):
+   ```bash
+   export PROBE_RS_CONFIG_PRESET=microbit
+   cargo run --release
+   cargo build --release
+   ```
+
+2. **Change to board directory**:
+   ```bash
+   cd boards/feather-stm32f405
+   cargo run --release
+   ```
 
 ## Architecture
 
