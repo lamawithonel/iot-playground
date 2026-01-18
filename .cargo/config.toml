@@ -1,0 +1,24 @@
+# Root workspace cargo configuration
+# Generic configuration for all ARM Cortex-M embedded targets
+
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+# Use probe-rs run as generic runner - chip selection via Embed.toml or PROBE_RS_CHIP
+runner = "probe-rs run"
+
+rustflags = [
+  # This is needed if your flash or ram addresses are not aligned to 0x10000 in memory.x
+  "-C", "link-arg=--nmagic",
+  
+  # LLD (shipped with the Rust toolchain) is used as the default linker
+  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tdefmt.x",
+]
+
+[build]
+# Default target - most boards use Cortex-M4F/M7F with FPU
+# Individual boards can override in their own .cargo/config.toml if needed
+target = "thumbv7em-none-eabihf"
+
+[env]
+# Default log level - can be overridden per board or at runtime
+DEFMT_LOG = "info"
