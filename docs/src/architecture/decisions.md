@@ -148,6 +148,45 @@ Need TLS 1.3 support for secure MQTT connections without heap allocation.
 
 ---
 
+## ADR-006: Cargo Workspace Architecture
+
+**Date:** 2026-01-18  
+**Status:** Accepted
+
+**Context:**
+Need to support multiple board profiles (board type + peripherals + application purpose) in a single repository while sharing common code like network stacks and HAL abstractions.
+
+**Decision:** Use Cargo workspace with board profile architecture.
+
+**Rationale:**
+- Centralized dependency management via workspace.dependencies
+- Shared code in `core/` (platform-agnostic logic) and `hal-abstractions/` (hardware traits)
+- Board profiles in `boards/` directory (e.g., `feather-stm32f405`)
+- Each board profile = specific hardware + peripherals + application
+- Single `.cargo/config.toml` at workspace root with common linker flags
+- Board selection via probe-rs native `PROBE_RS_CONFIG_PRESET` environment variable
+- Board-specific configurations centralized in root `Embed.toml`
+
+**Consequences:**
+- All boards share common Cargo profile settings (panic = "abort")
+- Workspace-level dependency versions ensure consistency
+- Board profiles can share code via workspace crates
+- `memory.x` linker scripts handled per-board via `build.rs`
+- Scalable: easy to add new board profiles without duplication
+- Build from workspace root: `cargo run --release` or `cargo embed --release`
+
+**Alternatives Considered:**
+- Separate repositories per board: Would duplicate network/HAL code
+- Git submodules: Complex dependency management, harder to refactor
+- Monolithic single crate: Doesn't scale to multiple board types
+
+**Board Profile Examples:**
+- `boards/feather-stm32f405/` - STM32F405 + Ethernet + sensors + MQTT gateway
+- Future: `boards/feather-ptp-server/` - STM32F405 + Ethernet + GPS + PTP server
+- Future: `boards/feather-m4-can/` - SAMD51 + CAN + sensors
+
+---
+
 ## Template for New ADRs
 
 ```markdown
