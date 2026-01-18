@@ -4,7 +4,18 @@ Welcome to the documentation for the Embedded Rust IoT Firmware project.
 
 ## Project Overview
 
-This project implements a reference embedded IoT firmware for the **STM32F405RG microcontroller** (Adafruit Feather STM32F405 Express board), written entirely in Rust using a `no_std` environment.
+This project implements a multi-device embedded IoT firmware framework using Rust in a `no_std` environment. The framework uses a **Cargo workspace** architecture with **board profiles** that combine specific hardware, peripherals, and applications.
+
+### Architecture
+
+The project uses a board profile architecture where each profile in `boards/` represents:
+- A specific board type (e.g., Feather STM32F405, Feather M4 CAN)
+- Peripheral components (e.g., Ethernet, sensors, CAN)
+- Application purpose (e.g., MQTT gateway, PTP server)
+
+Shared code lives in workspace crates:
+- `core/` - Platform-agnostic business logic
+- `hal-abstractions/` - Hardware abstraction traits
 
 ### Key Features
 
@@ -47,36 +58,53 @@ This documentation follows **IEEE 29148** (systems and software requirements eng
 
 ### Prerequisites
 
-- Rust 1.75+ with `thumbv7em-none-eabihf` target
-- `probe-rs` or `cargo-embed` for flashing and debugging
-- J-Link debugger for SWD access and RTT logging
+- Rust 1.75+ with `thumbv7em-none-eabihf` target and `rust-src` component
+- probe-rs tools: `cargo install probe-rs-tools cargo-embed cargo-flash`
+- Debug probe compatible with probe-rs (e.g., J-Link, ST-Link)
 
 ### Building the Firmware
 
 ```bash
-cd feather-stm32f405
-cargo build --release --target thumbv7em-none-eabihf
+# From workspace root - builds default board (feather-stm32f405)
+cargo build --release
+
+# Build specific board profile
+cargo build -p feather-stm32f405 --release
 ```
 
 ### Flashing to Hardware
 
 ```bash
+# Default board (feather)
+cargo run --release
 cargo embed --release
+
+# Select different board via environment variable
+PROBE_RS_CONFIG_PRESET=microbit cargo run --release
+PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release
+
+# Or use cargo embed with --chip flag
+cargo embed --chip microbit --release
 ```
 
 ### Running Tests
 
 ```bash
-# Host-side unit tests
+# Host-side unit tests (for core/ and hal-abstractions/)
 cargo test --lib
 
-# On-device integration tests (requires hardware)
-cargo test --target thumbv7em-none-eabihf
+# Board-specific tests
+cargo test -p feather-stm32f405
 ```
 
 ## Project Status
 
 **Current Phase**: Phase 2 - Network Stack (In Progress)
+
+**Recent Completion**: Phase 0 - Workspace Migration ✅
+- Multi-device Cargo workspace with board profile architecture
+- Native probe-rs integration for flexible board selection
+- Skeleton crates for shared code (core/, hal-abstractions/)
 
 See the [Roadmap](./roadmap.md) for detailed status and upcoming milestones.
 
@@ -90,4 +118,4 @@ See the repository root for license information.
 
 ---
 
-*Last updated: 2026-01-12*
+*Last updated: 2026-01-18*
