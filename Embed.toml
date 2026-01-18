@@ -70,6 +70,8 @@ chip = "STM32F303VCTx"
 
 [stm32f3.probe]
 protocol = "Swd"
+usb_vid = "0483"
+usb_pid = "374b"
 
 [stm32f3.rtt]
 enabled = true
