@@ -19,6 +19,27 @@ This project provides a multi-device capable embedded firmware framework using:
 
 ## Prerequisites
 
+### Quick Start with mise (Recommended)
+
+[mise](https://mise.jdx.dev/) manages non-Cargo dev tools and provides
+task runner commands.  Install mise, then:
+
+```bash
+mise trust .
+mise install
+```
+
+This installs pinned versions of mdBook and other tools.  Mise manages
+non-Rust dev tools and tasks; use `cargo` and `probe-rs` directly for
+building, checking, and flashing firmware.
+
+```bash
+mise run docs           # serve documentation locally
+mise run broker:start   # start MQTT test broker (Podman)
+mise run broker:stop    # stop MQTT test broker
+mise run broker:logs    # view broker logs
+```
+
 ### Required Tools
 
 1. **Rust toolchain** (stable):
@@ -38,6 +59,15 @@ This project provides a multi-device capable embedded firmware framework using:
    cargo install probe-rs-tools --locked
    cargo install cargo-embed --locked
    cargo install cargo-flash --locked
+   ```
+
+4. **Podman** (for the MQTT test broker):
+   ```bash
+   # Fedora/RHEL
+   sudo dnf install podman
+
+   # Debian/Ubuntu
+   sudo apt install podman
    ```
 
 ### Optional Tools
@@ -169,6 +199,7 @@ arm-none-eabi-gdb target/thumbv7em-none-eabihf/release/feather-stm32f405
 
 ```
 iot-playground/
+├── .mise.toml              # mise tool versions and task definitions
 ├── Cargo.toml              # Workspace root with shared dependencies & default-members
 ├── Embed.toml              # probe-rs presets for all boards (feather, microbit, stm32f3)
 ├── .cargo/config.toml      # Root config with generic probe-rs runner
@@ -178,8 +209,10 @@ iot-playground/
 │       ├── Embed.toml      # Board-specific probe-rs config (optional)
 │       ├── src/            # Board-specific firmware code
 │       └── memory.x        # Memory layout for this board
-├── core/                   # Platform-agnostic business logic (skeleton)
-├── hal-abstractions/       # Hardware abstraction traits (skeleton)
+├── core/                   # Platform-agnostic business logic (no_std)
+├── hal-abstractions/       # Hardware abstraction traits (no_std)
+├── test/                   # Test infrastructure
+│   └── broker/             # Mosquitto MQTT test broker (Podman)
 ├── apps/                   # Application binaries (future)
 └── docs/                   # Documentation (mdBook)
 ```
@@ -303,6 +336,18 @@ Both profiles use `panic = "abort"` for embedded compatibility.
 
 ## Testing
 
+### MQTT Test Broker
+
+Start the local Mosquitto MQTT broker with TLS support:
+
+```bash
+mise run broker:start    # Build and start via Podman
+mise run broker:stop     # Stop and remove
+mise run broker:logs     # View live logs
+```
+
+See [`test/broker/README.md`](test/broker/README.md) for details.
+
 ### On-Device Testing
 
 ```bash
@@ -313,7 +358,7 @@ cargo test --target thumbv7em-none-eabihf
 ### Unit Tests (for core/ crate)
 
 ```bash
-cargo test --manifest-path core/Cargo.toml
+cargo test -p iot-core
 ```
 
 ## Troubleshooting
@@ -377,6 +422,10 @@ If you don't have a debug probe, the Feather STM32F405 has a built-in DFU bootlo
 Build and view the project documentation:
 
 ```bash
+# Using mise (recommended)
+mise run docs
+
+# Or manually
 cd docs
 mdbook serve --open
 ```
