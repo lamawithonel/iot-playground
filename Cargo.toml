@@ -2,10 +2,8 @@
 resolver = "2"
 members = [
     "boards/feather-stm32f405",
-    # Future members will be added as they're created:
-    # "core",
-    # "hal-abstractions",
-    # "apps/mqtt-sensor-node",
+    "core",
+    "hal-abstractions",
 ]
 # Default member for cargo embed and other commands from workspace root
 default-members = ["boards/feather-stm32f405"]
