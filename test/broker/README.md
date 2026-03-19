@@ -1,50 +1,81 @@
-# Mosquitto MQTT Broker Docker Setup
+# Mosquitto MQTT Broker Test Setup
 
-This directory contains a Docker setup for running a local Mosquitto MQTT broker with TLS support for testing the STM32F405 TLS handshake implementation.
+This directory contains a container setup for running a local Mosquitto
+MQTT broker with TLS support, used for testing the STM32F405 TLS
+handshake and MQTT client implementation.
 
 ## Quick Start
 
 ```bash
-cd docker
-./start-mosquitto.sh
+# From the repository root:
+mise run broker:start
+
+# Or directly:
+test/broker/start-broker.sh
 ```
 
 The script will:
-1. Build a Docker image with Mosquitto and self-signed certificates
+
+1. Build a container image with Mosquitto and self-signed ECDSA
+   certificates
 2. Start the broker on `192.168.1.1:8883` (interface `eno1`)
-3. Display live logs
+
+View logs with `mise run broker:logs` (or `podman logs -f
+mosquitto-tls`).
+
+## Stopping the Broker
+
+```bash
+mise run broker:stop
+
+# Or directly:
+test/broker/stop-broker.sh
+```
 
 ## Configuration
 
 ### Ports
+
 - **1883**: MQTT (non-encrypted)
 - **8883**: MQTTS (TLS encrypted)
 
 ### TLS Settings
-- **ECDSA** self-signed certificate generated at build time (required for embedded-tls compatibility)
-- CN (Common Name) set to `192.168.1.1` to match the STM32 client configuration
-- Supports TLS 1.3
-- Uses ECDSA P-256 (secp256r1) curve for keys
+
+- **ECDSA** self-signed certificate generated at build time (required
+  for embedded-tls compatibility)
+- CN (Common Name) set to `192.168.1.1` to match the STM32 client
+  configuration
+- Supports TLS 1.2 and TLS 1.3
+- Uses ECDSA P-384 (secp384r1) curve for keys
 - Compatible with embedded-tls cipher suite: TLS_AES_128_GCM_SHA256
 
 ### Cipher Suites
+
 The broker supports TLS 1.3 cipher suites including:
+
 - `TLS_AES_128_GCM_SHA256` ✓ **Compatible with embedded-tls**
 - `TLS_AES_256_GCM_SHA384`
 - `TLS_CHACHA20_POLY1305_SHA256`
 
-**Note:** embedded-tls requires ECDSA certificates. The Dockerfile generates ECDSA (not RSA) certificates for compatibility.
+TLS 1.2 fallback ciphers use ECDHE-ECDSA (matching the ECDSA
+certificates).
 
-## Manual Docker Commands
+> **Note:** embedded-tls requires ECDSA certificates.  The
+> Containerfile generates ECDSA (not RSA) certificates for
+> compatibility.
+
+## Manual Podman Commands
 
 ### Build
+
 ```bash
-docker build -t mosquitto-tls:latest .
+podman build -t mosquitto-tls:latest test/broker/
 ```
 
 ### Run
+
 ```bash
-docker run -d \
+podman run -d \
     --name mosquitto-tls \
     -p 192.168.1.1:1883:1883 \
     -p 192.168.1.1:8883:8883 \
@@ -54,32 +85,38 @@ docker run -d \
 ```
 
 ### View Logs
+
 ```bash
-docker logs -f mosquitto-tls
+podman logs -f mosquitto-tls
+
+# Or:
+mise run broker:logs
 ```
 
-### Stop
-```bash
-docker stop mosquitto-tls
-```
+### Stop and Remove
 
-### Remove
 ```bash
-docker rm mosquitto-tls
+podman stop mosquitto-tls
+podman rm mosquitto-tls
+
+# Or:
+mise run broker:stop
 ```
 
 ## Testing the TLS Connection
 
 ### Using mosquitto_sub (MQTT client)
+
 ```bash
 # Extract the CA certificate from the container
-docker cp mosquitto-tls:/mosquitto/certs/ca.crt ./ca.crt
+podman cp mosquitto-tls:/mosquitto/certs/ca.crt ./ca.crt
 
 # Subscribe to a topic over TLS
 mosquitto_sub -h 192.168.1.1 -p 8883 --cafile ca.crt -t test/topic
 ```
 
 ### Using openssl
+
 ```bash
 # Test TLS handshake
 openssl s_client -connect 192.168.1.1:8883 -showcerts
@@ -89,6 +126,7 @@ openssl s_client -connect 192.168.1.1:8883 -tls1_3
 ```
 
 ### Check supported ciphers with nmap
+
 ```bash
 nmap --script ssl-enum-ciphers -p 8883 192.168.1.1
 ```
@@ -96,18 +134,25 @@ nmap --script ssl-enum-ciphers -p 8883 192.168.1.1
 ## Troubleshooting
 
 ### Interface not found
-If interface `eno1` doesn't exist on your system, modify the script:
+
+If interface `eno1` doesn't exist on your system, edit
+`start-broker.sh` and change `_interface`:
+
 ```bash
-INTERFACE="eth0"  # or your actual interface name
+_interface='eth0'  # or your actual interface name
 ```
 
 ### View available interfaces
+
 ```bash
 ip -br addr
 ```
 
 ### Certificate issues
-The certificates are regenerated each time you rebuild the image. If you need persistent certificates, mount a volume:
+
+The certificates are regenerated each time the image is rebuilt.  If
+you need persistent certificates, mount a volume:
+
 ```bash
 -v ./certs:/mosquitto/certs
 ```
