@@ -1,14 +1,12 @@
 [package]
 name = "iot-core"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "Platform-agnostic core logic for IoT firmware"
 
-[workspace]
-
 [dependencies]
-defmt = { version = "1.0.1", optional = true }
-heapless = "0.8"
+defmt = { workspace = true, optional = true }
+heapless.workspace = true
 
 [features]
 default = ["defmt"]
