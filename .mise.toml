@@ -1,0 +1,57 @@
+# mise configuration for iot-playground
+# https://mise.jdx.dev/
+
+[env]
+CARGO_TERM_COLOR = 'always'
+DEFMT_LOG = 'info'
+
+[tools]
+mdbook = '0.4.40'
+
+# ──────────────────────────────────────────────────────
+# Tasks
+# ──────────────────────────────────────────────────────
+# Rust build/check/flash tasks are handled by cargo and
+# probe-rs directly.  Mise tasks are for non-Rust tools
+# only (docs, broker, etc.).
+
+[tasks.docs]
+description = 'Build and serve the mdBook documentation'
+run = '''
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
+
+mdbook serve docs --open
+'''
+
+[tasks."docs:build"]
+description = 'Build the mdBook documentation'
+run = 'mdbook build docs'
+
+[tasks."broker:start"]
+description = 'Start the Mosquitto MQTT test broker via Podman'
+run = '''
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
+
+exec test/broker/start-broker.sh
+'''
+
+[tasks."broker:stop"]
+description = 'Stop the Mosquitto MQTT test broker'
+run = '''
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
+
+exec test/broker/stop-broker.sh
+'''
+
+[tasks."broker:logs"]
+description = 'View Mosquitto MQTT test broker logs'
+run = 'podman logs -f mosquitto-tls 2>/dev/null || echo "Broker is not running."'
