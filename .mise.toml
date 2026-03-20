@@ -13,7 +13,106 @@ mdbook = '0.4.40'
 # ──────────────────────────────────────────────────────
 # Rust build/check/flash tasks are handled by cargo and
 # probe-rs directly.  Mise tasks are for non-Rust tools
-# only (docs, broker, etc.).
+# only (docs, broker, TLS certs, etc.).
+
+# ── TLS Certificate Management ───────────────────────
+# Usage specs below enable tab-completion for mise.
+# If gen-tls-cert.sh arguments change, update the usage
+# specs to match.
+
+[tasks."tls:ca"]
+description = 'Generate root CA certificate'
+sources = ['test/scripts/gen-tls-cert.sh']
+outputs = ['.local/certs/ca/root.crt', '.local/private/ca.key']
+usage = '''
+flag "--curve <curve>" help="Elliptic curve" default="P-256" {
+  choices "P-256" "P-384" "P-521"
+}
+flag "--hash <hash>" help="Hash algorithm" default="SHA256" {
+  choices "SHA256" "SHA384" "SHA512"
+}
+flag "--force" help="Regenerate even if files exist"
+flag "--cn <cn>" help="Common Name" default="192.168.1.1"
+flag "--san <san>" help="Subject Alt Name" default="IP:192.168.1.1"
+flag "--days <days>" help="Validity in days" default="3650"
+'''
+run = '''
+test/scripts/gen-tls-cert.sh ca \
+  --curve "${usage_curve?}" \
+  --hash "${usage_hash?}" \
+  --cn "${usage_cn?}" \
+  --san "${usage_san?}" \
+  --days "${usage_days?}" \
+  ${usage_force:+--force}
+'''
+
+[tasks."tls:server"]
+description = 'Generate a server certificate signed by the CA'
+depends = ['tls:ca']
+usage = '''
+arg "<name>" help="Certificate name (e.g., broker)"
+flag "--curve <curve>" help="Elliptic curve" default="P-256" {
+  choices "P-256" "P-384" "P-521"
+}
+flag "--hash <hash>" help="Hash algorithm" default="SHA256" {
+  choices "SHA256" "SHA384" "SHA512"
+}
+flag "--force" help="Regenerate even if files exist"
+flag "--cn <cn>" help="Common Name" default="192.168.1.1"
+flag "--san <san>" help="Subject Alt Name" default="IP:192.168.1.1"
+flag "--days <days>" help="Validity in days" default="3650"
+'''
+run = '''
+test/scripts/gen-tls-cert.sh server "${usage_name:?}" \
+  --curve "${usage_curve?}" \
+  --hash "${usage_hash?}" \
+  --cn "${usage_cn?}" \
+  --san "${usage_san?}" \
+  --days "${usage_days?}" \
+  ${usage_force:+--force}
+'''
+
+[tasks."tls:client"]
+description = 'Generate a client certificate signed by the CA'
+depends = ['tls:ca']
+usage = '''
+arg "<name>" help="Certificate name (e.g., device)"
+flag "--curve <curve>" help="Elliptic curve" default="P-384" {
+  choices "P-256" "P-384" "P-521"
+}
+flag "--hash <hash>" help="Hash algorithm" default="SHA384" {
+  choices "SHA256" "SHA384" "SHA512"
+}
+flag "--force" help="Regenerate even if files exist"
+flag "--cn <cn>" help="Common Name" default="192.168.1.1"
+flag "--san <san>" help="Subject Alt Name" default="IP:192.168.1.1"
+flag "--days <days>" help="Validity in days" default="3650"
+'''
+run = '''
+test/scripts/gen-tls-cert.sh client "${usage_name:?}" \
+  --curve "${usage_curve?}" \
+  --hash "${usage_hash?}" \
+  --cn "${usage_cn?}" \
+  --san "${usage_san?}" \
+  --days "${usage_days?}" \
+  ${usage_force:+--force}
+'''
+
+[tasks."tls:server:broker"]
+description = 'Generate server certificate for Mosquitto broker'
+depends = ['tls:ca']
+sources = ['test/scripts/gen-tls-cert.sh', '.local/certs/ca/root.crt']
+outputs = ['.local/certs/server/broker.crt', '.local/private/broker.key']
+run = 'test/scripts/gen-tls-cert.sh server broker'
+
+[tasks."tls:client:device"]
+description = 'Generate client certificate for test device'
+depends = ['tls:ca']
+sources = ['test/scripts/gen-tls-cert.sh', '.local/certs/ca/root.crt']
+outputs = ['.local/certs/client/device.crt', '.local/private/device.key']
+run = 'test/scripts/gen-tls-cert.sh client device'
+
+# ── Documentation ────────────────────────────────────
 
 [tasks.docs]
 description = 'Build and serve the mdBook documentation'
