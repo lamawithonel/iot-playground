@@ -129,8 +129,11 @@ mdbook serve docs --open
 description = 'Build the mdBook documentation'
 run = 'mdbook build docs'
 
+# ── Mosquitto MQTT Broker ────────────────────────────
+
 [tasks."broker:start"]
 description = 'Start the Mosquitto MQTT test broker via Podman'
+depends = ['tls:server:broker']
 run = '''
 #!/usr/bin/env bash
 set -o errexit
