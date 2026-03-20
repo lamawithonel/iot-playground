@@ -12,6 +12,9 @@ rustflags = [
   # LLD (shipped with the Rust toolchain) is used as the default linker
   "-C", "link-arg=-Tlink.x",
   "-C", "link-arg=-Tdefmt.x",
+
+  # flip-link: place stack at bottom of RAM for overflow detection
+  "-C", "linker=flip-link",
 ]
 
 [build]

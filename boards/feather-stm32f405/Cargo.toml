@@ -11,6 +11,8 @@ name = "feather-stm32f405"
 test = false
 
 [dependencies]
+cortex-m.workspace = true
+critical-section.workspace = true
 defmt.workspace = true
 defmt-rtt.workspace = true
 embedded-hal.workspace = true
@@ -18,10 +20,8 @@ embedded-hal-async.workspace = true
 embedded-io.workspace = true
 embedded-io-async.workspace = true
 heapless.workspace = true
-static_cell.workspace = true
-cortex-m.workspace = true
-critical-section.workspace = true
 panic-probe.workspace = true
+static_cell.workspace = true
 
 [dependencies.embassy-embedded-hal]
 workspace = true
@@ -50,9 +50,9 @@ workspace = true
 features = [
   "defmt",
   "exti",
-  "rt",                   # Required for NVIC_PRIO_BITS
+  "rt",                # Required for NVIC_PRIO_BITS
   "stm32f405rg",
-  "time-driver-any",      # Provides embassy-time driver for embassy components
+  "time-driver-tim3",
   "unstable-pac",
 ]
 
@@ -83,13 +83,6 @@ features = ["defmt"]
 version = "0.6"
 default-features = false
 
-# MQTT v5.0 client for Phase 2 network stack
-[dependencies.rust-mqtt]
-git = "https://github.com/obabec/rust-mqtt.git"
-rev = "d8d470bd4f03ed2b303af83d3dbfb8b3854c8302"
-default-features = false
-features = ["v5", "defmt", "bump"]
-
 [dependencies.rtic]
 workspace = true
 features = ["thumbv7-backend"]
@@ -109,6 +102,13 @@ features = ["defmt-03"]
 
 [dependencies.rtic-time]
 workspace = true
+
+# MQTT v5.0 client for Phase 2 network stack
+[dependencies.rust-mqtt]
+git = "https://github.com/obabec/rust-mqtt.git"
+rev = "d8d470bd4f03ed2b303af83d3dbfb8b3854c8302"
+default-features = false
+features = ["bump", "defmt", "v5"]
 
 # SNTP client for time synchronization (SR-NET-006)
 # Version 0.7.0 adds async support

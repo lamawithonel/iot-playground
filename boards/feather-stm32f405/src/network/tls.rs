@@ -1,28 +1,23 @@
 #![deny(warnings)]
+#![deny(unsafe_code)]
 //! TLS 1.3 client implementation using embedded-tls
 //!
-//! This module provides TLS 1.3 client functionality for secure MQTT communication.
-//! It uses the `embedded-tls` crate which is designed for no_std environments.
-//!
-//! # Safety Note
-//!
-//! This module uses `unsafe` code to access CCM RAM buffers for TLS operations.
-//! The unsafe code is isolated to buffer access and is carefully reviewed and documented.
-//! All other code follows safe Rust practices.
+//! This module provides TLS 1.3 client functionality for secure MQTT
+//! communication.  It uses the `embedded-tls` crate which is designed
+//! for `no_std` environments.
 //!
 //! # Phase 1 Limitations
 //!
 //! - Certificate verification is disabled (set `verify_server: false`)
 //! - Single connection at a time (due to static CCM RAM buffers)
-//! - Test server: `broker.emqx.io:8883` (public MQTT broker with TLS support)
+//! - Test server: `broker.emqx.io:8883` (public MQTT broker with TLS
+//!   support)
 //!
 //! # Memory Usage
 //!
-//! - TLS read buffer: 18 KB in main SRAM (see `src/tls_buffers.rs`)
-//! - TLS write buffer: 16 KB in main SRAM (see `src/tls_buffers.rs`)
+//! - TLS read buffer: 18 KB in CCM RAM (see `src/ccmram.rs`)
+//! - TLS write buffer: 16 KB in CCM RAM (see `src/ccmram.rs`)
 //! - TCP socket buffers: 8 KB in main SRAM (4 KB RX + 4 KB TX)
-
-#![allow(unsafe_code)] // Required for static TLS buffer access
 
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_net::dns::DnsQueryType;
@@ -35,6 +30,20 @@ use crate::tls_buffers;
 
 use super::error::{NetworkError, TlsError};
 use super::socket::AsyncTcpSocket;
+
+/// Obtain exclusive references to the TLS read/write buffers in
+/// CCM RAM.
+///
+/// # Safety
+///
+/// Only one TLS connection may use these buffers at a time.
+/// Higher-level code is responsible for enforcing this invariant.
+#[allow(unsafe_code)]
+fn get_tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
+    // SAFETY: Only the TLS/network client logic calls this, and
+    // at most one TLS connection exists at a time — no aliasing.
+    unsafe { tls_buffers::tls_buffers() }
+}
 
 /// Simple crypto provider that wraps an RNG for TLS operations
 struct SimpleCryptoProvider<RNG> {
@@ -141,10 +150,11 @@ impl TlsClient {
     ///
     /// `Ok(())` if handshake succeeds, or a `NetworkError` if any step fails.
     ///
-    /// # Safety
+    /// # Note
     ///
-    /// This function uses unsafe code to access static CCM RAM buffers.
-    /// These buffers must only be used by a single TLS connection at a time.
+    /// Internally obtains TLS buffers from CCM RAM via
+    /// `get_tls_buffers()`.  Only one TLS connection may use those
+    /// buffers at a time.
     ///
     /// # Example
     ///
@@ -197,13 +207,11 @@ impl TlsClient {
         socket.connect(endpoint).await?;
         info!("TCP connection established to {}", Debug2Format(&endpoint));
 
-        // Step 4: Get TLS buffers from main SRAM (unsafe - single use only)
-        // SAFETY: These static buffers are only used by one TLS connection at a time.
-        // The buffers are obtained once and used for the duration of this function.
-        let (read_buf, write_buf) = unsafe { tls_buffers::tls_buffers() };
+        // Step 4: Get TLS buffers from CCM RAM
+        let (read_buf, write_buf) = get_tls_buffers();
 
         debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (main SRAM)",
+            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
             read_buf.len(),
             write_buf.len()
         );
