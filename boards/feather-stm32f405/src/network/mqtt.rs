@@ -26,7 +26,7 @@
 //! client.publish("device/test", b"Hello!", QoS::AtLeastOnce, false).await?;
 //! ```
 
-#![allow(unsafe_code)] // Required for TLS buffer access
+#![deny(unsafe_code)]
 
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_net::{dns::DnsQueryType, IpEndpoint, Stack};
@@ -50,6 +50,39 @@ use crate::{device_id, time, tls_buffers};
 
 use super::error::{MqttError, NetworkError, TlsError};
 use super::socket::AsyncTcpSocket;
+
+/// Obtain exclusive references to the TLS read/write buffers in
+/// CCM RAM.
+///
+/// # Safety
+///
+/// Only one TLS connection may use these buffers at a time.
+/// Higher-level code is responsible for enforcing this invariant.
+#[allow(unsafe_code)]
+fn get_tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
+    // SAFETY: Only the TLS/network client logic calls this, and
+    // at most one TLS connection exists at a time — no aliasing.
+    unsafe { tls_buffers::tls_buffers() }
+}
+
+/// Build a validated [`TopicName`] from a topic string.
+///
+/// The caller must ensure the topic string was produced by
+/// [`format_mqtt_topic`], which guarantees no wildcards or nulls.
+#[allow(unsafe_code)]
+fn make_topic_name(topic_str: &str) -> Result<TopicName<'_>, MqttError> {
+    // SAFETY: format_mqtt_topic() validates that the topic string
+    // contains no wildcard characters (+, #) or null characters,
+    // and follows valid MQTT topic format: device/{id}/{subtopic}.
+    unsafe {
+        Ok(TopicName::new_unchecked(
+            MqttString::new(topic_str.into()).map_err(|e| {
+                error!("Failed to create MQTT topic string: {:?}", Debug2Format(&e));
+                MqttError::ProtocolError
+            })?,
+        ))
+    }
+}
 
 /// MQTT packet buffer size: 2KB for packet assembly
 #[allow(dead_code)]
@@ -214,12 +247,11 @@ impl MqttClient {
         socket.connect(endpoint).await?;
         info!("TCP connection established to {}", Debug2Format(&endpoint));
 
-        // Step 4: Get TLS buffers from main SRAM (unsafe - single use only)
-        // SAFETY: These static buffers are only used by one TLS connection at a time.
-        let (read_buf, write_buf) = unsafe { tls_buffers::tls_buffers() };
+        // Get TLS buffers from CCM RAM
+        let (read_buf, write_buf) = get_tls_buffers();
 
         debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (main SRAM)",
+            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
             read_buf.len(),
             write_buf.len()
         );
@@ -363,12 +395,11 @@ impl MqttClient {
         socket.connect(endpoint).await?;
         info!("TCP connection established to {}", Debug2Format(&endpoint));
 
-        // Step 3: Get TLS buffers from main SRAM (unsafe - single use only)
-        // SAFETY: These static buffers are only used by one TLS connection at a time.
-        let (read_buf, write_buf) = unsafe { tls_buffers::tls_buffers() };
+        // Get TLS buffers from CCM RAM
+        let (read_buf, write_buf) = get_tls_buffers();
 
         debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (main SRAM)",
+            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
             read_buf.len(),
             write_buf.len()
         );
@@ -527,12 +558,11 @@ impl MqttClient {
         socket.connect(endpoint).await?;
         info!("TCP connection established to {}", Debug2Format(&endpoint));
 
-        // Step 4: Get TLS buffers from main SRAM (unsafe - single use only)
-        // SAFETY: These static buffers are only used by one TLS connection at a time.
-        let (read_buf, write_buf) = unsafe { tls_buffers::tls_buffers() };
+        // Get TLS buffers from CCM RAM
+        let (read_buf, write_buf) = get_tls_buffers();
 
         debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (main SRAM)",
+            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
             read_buf.len(),
             write_buf.len()
         );
@@ -649,20 +679,7 @@ impl MqttClient {
                 payload_len
             );
 
-            // Create TopicName from the formatted topic string
-            // SAFETY: format_mqtt_topic() validates that the topic string:
-            // 1. Does not contain wildcard characters (+, #)
-            // 2. Does not contain null characters
-            // 3. Follows the valid MQTT topic name format: device/{id}/{subtopic}
-            // Therefore, it's safe to use new_unchecked() here.
-            let topic_name = unsafe {
-                TopicName::new_unchecked(MqttString::new(topic_str.as_str().into()).map_err(
-                    |e| {
-                        error!("Failed to create MQTT topic string: {:?}", Debug2Format(&e));
-                        MqttError::ProtocolError
-                    },
-                )?)
-            };
+            let topic_name = make_topic_name(topic_str.as_str())?;
 
             // Create publication options with QoS 0 (AtMostOnce) for test messages
             // TODO: Switch to QoS 1 (AtLeastOnce) per SR-SENS-004 when proper event-driven

@@ -27,17 +27,28 @@
 //!
 //! ```text
 //! CCM RAM (64KB) - CPU-only, zero wait states:
+//! ├─ TLS buffers:               34KB
+//! │   ├─ TLS_READ_BUF:  18KB (max TLS 1.3 record + overhead)
+//! │   └─ TLS_WRITE_BUF: 16KB (max TLS 1.3 record)
 //! ├─ Critical variables:        <1KB
-//! │   └─ TIME_SYNCED flag: 1 byte (in time.rs)
-//! └─ Reserved for future use:   63KB+
+//! │   ├─ TIME_SYNCED flag:   1 byte
+//! │   ├─ BASE_UNIX_SECS:    4 bytes
+//! │   ├─ BASE_UNIX_MICROS:  4 bytes
+//! │   └─ BASE_MONO_MICROS:  4 bytes
+//! └─ Reserved for future use:   ~30KB
 //!     └─ Potential uses: hot-path variables, timing-critical buffers
 //! ```
 //!
-//! Note: TLS buffers (34KB) are now in main SRAM for better size flexibility.
-//! See `src/tls_buffers.rs` for TLS buffer management.
-//!
 //! # Current Allocations
 //!
+//! - **TLS_READ_BUF**: 18 KB
+//!   - Maximum TLS 1.3 record (16384 bytes) plus record header, AEAD tag,
+//!     and safety margin
+//!   - CPU-only access (no DMA); placed in CCM RAM to free main SRAM for
+//!     stack
+//! - **TLS_WRITE_BUF**: 16 KB
+//!   - Maximum TLS 1.3 record size for outgoing data
+//!   - CPU-only access (no DMA)
 //! - **TIME_SYNCED**: AtomicBool (~1 byte)
 //!   - Tracks whether RTC has been synchronized with NTP
 //!   - Placed in CCM RAM for zero-wait-state access
@@ -185,12 +196,82 @@ pub fn is_wallclock_calibrated() -> bool {
 }
 
 // ============================================================================
-// TLS BUFFERS (32 KB total)
+// TLS BUFFERS (34 KB total)
 // ============================================================================
+//
+// TLS read/write buffers are placed in CCM RAM because:
+// 1. They are CPU-only (no DMA access needed)
+// 2. Placing them here frees ~34 KB of main SRAM for the stack
+// 3. CCM RAM has zero wait states, beneficial for TLS crypto
+//
+// These buffers were originally in main SRAM but moved here to resolve
+// stack overflows during TLS handshake (the embedded-tls handshake
+// state machine uses significant stack for ECDHE and HKDF operations).
+
+/// TLS read buffer size: 18 KB
+///
+/// Sized to handle maximum TLS 1.3 record (16384 bytes) plus all
+/// overhead:
+/// - Record header: 5 bytes
+/// - AEAD tag: 16 bytes
+/// - Padding/safety: 512 bytes
+const TLS_READ_BUF_SIZE: usize = 18 * 1024; // 18432 bytes
+
+/// TLS write buffer size: 16 KB
+///
+/// Maximum TLS 1.3 record size for outgoing data
+const TLS_WRITE_BUF_SIZE: usize = 16 * 1024; // 16384 bytes
+
+/// TLS read buffer in CCM RAM
+///
+/// Used for receiving TLS records from the network.
+///
+/// # Safety
+/// - Must only be accessed once per TLS connection lifetime
+/// - No DMA access (CCM RAM is CPU-only)
+/// - No concurrent access (enforced by Rust borrow rules at call site)
+#[link_section = ".ccmram"]
+static mut TLS_READ_BUF: [u8; TLS_READ_BUF_SIZE] = [0; TLS_READ_BUF_SIZE];
+
+/// TLS write buffer in CCM RAM
+///
+/// Used for sending TLS records to the network.
+///
+/// # Safety
+/// - Must only be accessed once per TLS connection lifetime
+/// - No DMA access (CCM RAM is CPU-only)
+/// - No concurrent access (enforced by Rust borrow rules at call site)
+#[link_section = ".ccmram"]
+static mut TLS_WRITE_BUF: [u8; TLS_WRITE_BUF_SIZE] = [0; TLS_WRITE_BUF_SIZE];
+
+/// Get both TLS buffers (read and write) from CCM RAM
+///
+/// # Safety
+///
+/// The caller must ensure:
+/// - Buffers are used by only one TLS connection at a time
+/// - No concurrent access
+/// - Buffer references don't outlive the TLS connection
+///
+/// # Returns
+///
+/// `(read_buffer, write_buffer)` — Tuple of mutable slices
+pub unsafe fn tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
+    // SAFETY: Returns exclusive `&'static mut` references to
+    // `static mut` buffers in CCM RAM.  Sound because:
+    // - Only the TLS/network client logic obtains these buffers
+    // - Higher-level code ensures at most one TLS connection
+    //   uses them at a time (no concurrent access or aliasing)
+    // - Buffers are `'static` and outlive any TLS connection
+    (
+        &mut *core::ptr::addr_of_mut!(TLS_READ_BUF),
+        &mut *core::ptr::addr_of_mut!(TLS_WRITE_BUF),
+    )
+}
 
 // ============================================================================
 // FUTURE CCM RAM ALLOCATIONS GO BELOW THIS LINE
 // ============================================================================
 //
-// Remaining space: ~64 KB available for timing-critical variables and buffers
-// TLS buffers have been moved to main SRAM (see src/tls_buffers.rs)
+// After TLS buffers, approximately 30 KB of CCM RAM remains available
+// for timing-critical variables and buffers.

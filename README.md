@@ -64,7 +64,12 @@ mise run tls:client device  # generate device client cert
    cargo install cargo-flash --locked
    ```
 
-4. **Podman** (for the MQTT test broker):
+4. **flip-link** (stack overflow protection for bare-metal targets):
+   ```bash
+   cargo install flip-link --locked
+   ```
+
+5. **Podman** (for the MQTT test broker):
    ```bash
    # Fedora/RHEL
    sudo dnf install podman

@@ -199,7 +199,8 @@ mod app {
         let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
         let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
 
-        static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+        // Socket budget: DHCP(1) + DNS(1) + SNTP(1) + MQTT/TLS(1) + margin(1)
+        static RESOURCES: StaticCell<StackResources<5>> = StaticCell::new();
         let (stack, mut net_runner) = embassy_net::new(
             device,
             Config::dhcpv4(Default::default()),
