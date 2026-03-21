@@ -1,34 +1,30 @@
 #![deny(warnings)]
-#![allow(dead_code)] // Phase 2: Will be used when integrated into main.rs
-//! MQTT v5.0 client implementation for Phase 2 network stack
+//! MQTT v5.0 client with persistent connection and reconnection
 //!
-//! This module provides MQTT v5.0 client functionality using the `rust-mqtt` crate
-//! with TLS 1.3 transport. It integrates with the existing TLS infrastructure.
+//! Provides a single-connection MQTT client over TLS 1.3 that:
+//! - Accepts caller-provided static buffers (RTIC `StaticCell` pattern)
+//! - Maintains a persistent connection with periodic publishing
+//! - Reconnects with exponential backoff on broker disconnection
 //!
 //! # Memory Management
 //!
-//! Uses bump allocator pattern from `rust-mqtt` for no_std compatibility:
-//! - MQTT packet buffer: 2KB for packet assembly
-//! - TLS buffers: 34KB total (managed by TLS module)
-//! - TCP buffers: 8KB total (managed by TLS module)
+//! All buffers are caller-provided to keep lifetimes explicit:
+//! - **MQTT packet buffer**: 2 KB for `rust-mqtt` bump allocator
+//! - **TCP RX/TX buffers**: 4 KB each (main SRAM, via `StaticCell`)
+//! - **TLS read/write buffers**: 34 KB total in CCM RAM (via
+//!   `tls_buffers`)
 //!
-//! # Example
+//! # Usage
 //!
 //! ```no_run
-//! let config = MqttConfig {
-//!     broker_host: "192.168.1.1",
-//!     broker_port: 8883,
-//!     keep_alive_secs: 60,
-//!     clean_start: true,
-//! };
-//! let mut client = MqttClient::new(config);
-//! client.connect(stack, &mut rng).await?;
-//! client.publish("device/test", b"Hello!", QoS::AtLeastOnce, false).await?;
+//! let mut client = MqttClient::new(MqttConfig::default());
+//! // Never returns under normal operation
+//! client.run(stack, &mut rng, mqtt_buf, rx_buf, tx_buf, 30).await;
 //! ```
 
 #![deny(unsafe_code)]
 
-use defmt::{debug, error, info, warn, Debug2Format};
+use defmt::{error, info, warn, Debug2Format};
 use embassy_net::{dns::DnsQueryType, IpEndpoint, Stack};
 use embassy_time::{Duration, Timer};
 use embedded_tls::{
@@ -50,50 +46,18 @@ use crate::{device_id, time, tls_buffers};
 
 use super::error::{MqttError, NetworkError, TlsError};
 use super::socket::AsyncTcpSocket;
+use super::tls;
 
-/// Obtain exclusive references to the TLS read/write buffers in
-/// CCM RAM.
-///
-/// # Safety
-///
-/// Only one TLS connection may use these buffers at a time.
-/// Higher-level code is responsible for enforcing this invariant.
-#[allow(unsafe_code)]
-fn get_tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
-    // SAFETY: Only the TLS/network client logic calls this, and
-    // at most one TLS connection exists at a time — no aliasing.
-    unsafe { tls_buffers::tls_buffers() }
-}
-
-/// Build a validated [`TopicName`] from a topic string.
-///
-/// The caller must ensure the topic string was produced by
-/// [`format_mqtt_topic`], which guarantees no wildcards or nulls.
-#[allow(unsafe_code)]
-fn make_topic_name(topic_str: &str) -> Result<TopicName<'_>, MqttError> {
-    // SAFETY: format_mqtt_topic() validates that the topic string
-    // contains no wildcard characters (+, #) or null characters,
-    // and follows valid MQTT topic format: device/{id}/{subtopic}.
-    unsafe {
-        Ok(TopicName::new_unchecked(
-            MqttString::new(topic_str.into()).map_err(|e| {
-                error!("Failed to create MQTT topic string: {:?}", Debug2Format(&e));
-                MqttError::ProtocolError
-            })?,
-        ))
-    }
-}
-
-/// MQTT packet buffer size: 2KB for packet assembly
-#[allow(dead_code)]
+/// MQTT packet buffer size: 2 KB for packet assembly
 const MQTT_BUFFER_SIZE: usize = 2048;
 
 /// Maximum MQTT topic length
-/// Format: "device/{client_id}/telemetry" where client_id is ~34 chars
-/// Total: 7 + 34 + 10 = 51 chars, use 64 for safety
+///
+/// Format: `device/{client_id}/telemetry` where client_id is ~34
+/// chars.  Total: 7 + 34 + 10 = 51 chars; 64 provides safety margin.
 const MAX_TOPIC_LEN: usize = 64;
 
-/// Simple crypto provider that wraps an RNG for TLS operations
+/// Simple crypto provider wrapping an RNG for embedded-tls
 struct SimpleCryptoProvider<'a, RNG> {
     rng: &'a mut RNG,
     verifier: NoVerify,
@@ -129,11 +93,11 @@ where
 /// MQTT client configuration
 #[derive(Clone, Copy)]
 pub struct MqttConfig {
-    /// Broker hostname (for DNS and SNI)
+    /// Broker hostname (for DNS and TLS SNI)
     pub broker_host: &'static str,
     /// Broker port (typically 8883 for MQTTS)
     pub broker_port: u16,
-    /// Keep-alive interval in seconds
+    /// MQTT keep-alive interval in seconds (0 = infinite)
     pub keep_alive_secs: u16,
     /// Clean start flag (true = new session)
     pub clean_start: bool,
@@ -143,391 +107,121 @@ impl Default for MqttConfig {
     fn default() -> Self {
         Self {
             broker_host: "192.168.1.1",
-            broker_port: 8883,
+            broker_port: tls::MQTTS_PORT,
             keep_alive_secs: 60,
             clean_start: true,
         }
     }
 }
 
-/// MQTT v5.0 client
+/// MQTT v5.0 client with persistent connection
 ///
-/// Manages MQTT connections over TLS 1.3. The client handles:
-/// - Connection establishment with automatic TLS handshake
-/// - Publishing messages with QoS 0, 1, or 2
-/// - Keep-alive management
-/// - Clean session handling
+/// Manages the full lifecycle: DNS → TCP → TLS 1.3 → MQTT CONNECT →
+/// publish loop, with automatic reconnection on failure.
 pub struct MqttClient {
     config: MqttConfig,
 }
 
 impl MqttClient {
     /// Create a new MQTT client with the given configuration
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// let config = MqttConfig {
-    ///     broker_host: "192.168.1.1",
-    ///     broker_port: 8883,
-    ///     keep_alive_secs: 60,
-    ///     clean_start: true,
-    /// };
-    /// let client = MqttClient::new(config);
-    /// ```
     pub fn new(config: MqttConfig) -> Self {
         Self { config }
     }
 
-    /// Connect to the MQTT broker over TLS 1.3
+    /// Run the MQTT client forever with periodic publishing
     ///
-    /// This function:
-    /// 1. Resolves the broker hostname via DNS
-    /// 2. Establishes a TCP connection
-    /// 3. Performs TLS 1.3 handshake
-    /// 4. Sends MQTT CONNECT packet
-    /// 5. Waits for CONNACK
+    /// Establishes a TLS+MQTT connection, then publishes telemetry
+    /// at `publish_interval_secs`.  On any failure, reconnects with
+    /// exponential backoff (5 s → 60 s cap).
     ///
     /// # Arguments
     ///
-    /// * `stack` - Embassy network stack for DNS and TCP operations
-    /// * `rng` - Hardware random number generator (STM32F405 RNG peripheral)
+    /// * `stack` — Embassy network stack
+    /// * `rng` — Hardware RNG (STM32F405 RNG peripheral)
+    /// * `mqtt_buffer` — 2 KB buffer for `rust-mqtt` packet assembly
+    /// * `tcp_rx_buffer` — 4 KB TCP receive buffer
+    /// * `tcp_tx_buffer` — 4 KB TCP transmit buffer
+    /// * `publish_interval_secs` — Seconds between telemetry publishes
     ///
-    /// # Returns
+    /// # Safety
     ///
-    /// Returns `Ok(())` if connection succeeds, or a `NetworkError` if any step fails.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// let mut client = MqttClient::new(MqttConfig::default());
-    /// client.connect(stack, &mut rng).await?;
-    /// ```
-    pub async fn connect<RNG>(
+    /// Accesses CCM RAM TLS buffers via `tls_buffers::tls_buffers()`.
+    /// Only one TLS connection may use those buffers at a time.
+    pub async fn run<RNG>(
         &mut self,
         stack: &Stack<'static>,
         rng: &mut RNG,
-    ) -> Result<(), NetworkError>
+        mqtt_buffer: &mut [u8; MQTT_BUFFER_SIZE],
+        tcp_rx_buffer: &mut [u8],
+        tcp_tx_buffer: &mut [u8],
+        publish_interval_secs: u64,
+    ) -> !
     where
         RNG: rand_core::RngCore + rand_core::CryptoRng,
     {
-        info!(
-            "Connecting to MQTT broker at {}:{}",
-            self.config.broker_host, self.config.broker_port
-        );
+        let mut backoff_secs = tls::INITIAL_RECONNECT_BACKOFF_SECS;
 
-        // Step 1: DNS resolution
-        let server_ip = stack
-            .dns_query(self.config.broker_host, DnsQueryType::A)
-            .await
-            .map_err(|e| {
-                error!("DNS query failed: {:?}", Debug2Format(&e));
-                NetworkError::DnsError
-            })?
-            .first()
-            .copied()
-            .ok_or_else(|| {
-                error!("DNS returned no results for {}", self.config.broker_host);
-                NetworkError::DnsError
-            })?;
-
-        let endpoint = IpEndpoint::new(server_ip, self.config.broker_port);
-        info!(
-            "Resolved {} to {}",
-            self.config.broker_host,
-            Debug2Format(&endpoint)
-        );
-
-        // Step 2: Allocate TCP socket buffers (in main SRAM, not CCM)
-        let mut rx_buffer = [0u8; 4096];
-        let mut tx_buffer = [0u8; 4096];
-
-        // Step 3: Create and connect TCP socket
-        let mut socket = AsyncTcpSocket::new(*stack, &mut rx_buffer, &mut tx_buffer);
-        socket.connect(endpoint).await?;
-        info!("TCP connection established to {}", Debug2Format(&endpoint));
-
-        // Get TLS buffers from CCM RAM
-        let (read_buf, write_buf) = get_tls_buffers();
-
-        debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
-            read_buf.len(),
-            write_buf.len()
-        );
-
-        // Step 5: Configure TLS with server name for SNI
-        let tls_config = TlsConfig::new().with_server_name(self.config.broker_host);
-
-        // Step 6: Create TLS connection with buffers (using AES-128-GCM-SHA256)
-        let mut tls_connection =
-            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, read_buf, write_buf);
-
-        // Step 7: Perform TLS handshake
-        info!("Initiating TLS 1.3 handshake with hardware RNG...");
-        let provider = SimpleCryptoProvider::new(rng);
-        let tls_context = TlsContext::new(&tls_config, provider);
-
-        tls_connection.open(tls_context).await.map_err(|e| {
-            error!("TLS handshake failed: {:?}", Debug2Format(&e));
-            TlsError::HandshakeFailed
-        })?;
-
-        info!("TLS 1.3 handshake completed successfully!");
-
-        // Step 8: Establish MQTT connection
-        let client_id = device_id::mqtt_client_id();
-        info!("MQTT client ID: {}", client_id);
-
-        // Allocate MQTT packet buffer using bump allocator
-        let mut mqtt_buffer = [0u8; MQTT_BUFFER_SIZE];
-        let mut buffer = BumpBuffer::new(&mut mqtt_buffer);
-        let mut mqtt_client = Client::<'_, _, _, 1, 1, 1, 0>::new(&mut buffer);
-
-        // Connect to MQTT broker
-        let connect_opts = ConnectOptions {
-            session_expiry_interval: SessionExpiryInterval::EndOnDisconnect,
-            clean_start: self.config.clean_start,
-            keep_alive: if self.config.keep_alive_secs == 0 {
-                KeepAlive::Infinite
-            } else {
-                KeepAlive::Seconds(self.config.keep_alive_secs)
-            },
-            will: None,
-            user_name: None,
-            password: None,
-        };
-
-        // Convert client_id to MqttString
-        let mqtt_client_id = MqttString::new(client_id.as_str().into()).map_err(|e| {
-            error!(
-                "Failed to create MQTT client ID string: {:?}",
-                Debug2Format(&e)
+        loop {
+            info!(
+                "Connecting to MQTT broker at {}:{}...",
+                self.config.broker_host, self.config.broker_port
             );
-            MqttError::ProtocolError
-        })?;
 
-        mqtt_client
-            .connect(tls_connection, &connect_opts, Some(mqtt_client_id))
-            .await
-            .map_err(|e| {
-                error!("MQTT connect failed: {:?}", Debug2Format(&e));
-                MqttError::ConnectionFailed
-            })?;
+            match self
+                .run_session(
+                    stack,
+                    rng,
+                    mqtt_buffer,
+                    tcp_rx_buffer,
+                    tcp_tx_buffer,
+                    publish_interval_secs,
+                )
+                .await
+            {
+                Ok(()) => {
+                    // run_session's inner loop is infinite; this path
+                    // is unreachable in practice but satisfies the
+                    // compiler.
+                    warn!("MQTT session ended unexpectedly");
+                    backoff_secs = tls::INITIAL_RECONNECT_BACKOFF_SECS;
+                }
+                Err(NetworkError::Mqtt(MqttError::Disconnected)) => {
+                    // Was connected, then lost — reset backoff so
+                    // the next reconnect starts quickly.
+                    error!("MQTT session disconnected");
+                    backoff_secs = tls::INITIAL_RECONNECT_BACKOFF_SECS;
+                }
+                Err(e) => {
+                    // Connection never established (DNS, TCP, TLS,
+                    // or CONNECT failure) — escalate backoff.
+                    error!("MQTT session failed: {:?}", e);
+                }
+            }
 
-        info!("MQTT connection established successfully!");
-        Ok(())
+            info!("Reconnecting in {} seconds (backoff)...", backoff_secs);
+            Timer::after(Duration::from_secs(backoff_secs)).await;
+            backoff_secs = (backoff_secs * 2).min(tls::MAX_RECONNECT_BACKOFF_SECS);
+        }
     }
 
-    /// Connect to the MQTT broker using static buffers (RTIC pattern)
+    /// Run a single MQTT session: connect, then publish in a loop
     ///
-    /// This function uses externally-provided static buffers to maintain
-    /// the connection beyond the function scope. This solves the lifetime
-    /// constraint issue in RTIC applications.
-    ///
-    /// # Arguments
-    ///
-    /// * `stack` - Embassy network stack for DNS and TCP operations
-    /// * `rng` - Hardware random number generator
-    /// * `mqtt_buffer` - Static buffer for MQTT packet assembly (2KB)
-    /// * `tcp_rx_buffer` - Static buffer for TCP receive (4KB)
-    /// * `tcp_tx_buffer` - Static buffer for TCP transmit (4KB)
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if connection succeeds. The connection remains active
-    /// for the lifetime of the provided buffers.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use static_cell::StaticCell;
-    /// static MQTT_BUF: StaticCell<[u8; 2048]> = StaticCell::new();
-    /// static RX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
-    /// static TX_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
-    ///
-    /// let mqtt_buf = MQTT_BUF.init([0u8; 2048]);
-    /// let rx_buf = RX_BUF.init([0u8; 4096]);
-    /// let tx_buf = TX_BUF.init([0u8; 4096]);
-    ///
-    /// client.connect_with_buffers(stack, &mut rng, mqtt_buf, rx_buf, tx_buf).await?;
-    /// ```
-    pub async fn connect_with_buffers<RNG>(
-        &mut self,
+    /// Returns `Err` when the connection is lost or any fatal error
+    /// occurs.  The caller (`run`) handles reconnection.
+    #[allow(unsafe_code)] // Calls tls_buffers::tls_buffers() and TopicName::new_unchecked()
+    async fn run_session<RNG>(
+        &self,
         stack: &Stack<'static>,
         rng: &mut RNG,
-        mqtt_buffer: &'static mut [u8; MQTT_BUFFER_SIZE],
-        tcp_rx_buffer: &'static mut [u8; 4096],
-        tcp_tx_buffer: &'static mut [u8; 4096],
-    ) -> Result<(), NetworkError>
-    where
-        RNG: rand_core::RngCore + rand_core::CryptoRng,
-    {
-        info!(
-            "Connecting to MQTT broker at {}:{} with static buffers",
-            self.config.broker_host, self.config.broker_port
-        );
-
-        // Step 1: DNS resolution
-        let server_ip = stack
-            .dns_query(self.config.broker_host, DnsQueryType::A)
-            .await
-            .map_err(|e| {
-                error!("DNS query failed: {:?}", Debug2Format(&e));
-                NetworkError::DnsError
-            })?
-            .first()
-            .copied()
-            .ok_or_else(|| {
-                error!("DNS returned no results for {}", self.config.broker_host);
-                NetworkError::DnsError
-            })?;
-
-        let endpoint = IpEndpoint::new(server_ip, self.config.broker_port);
-        info!(
-            "Resolved {} to {}",
-            self.config.broker_host,
-            Debug2Format(&endpoint)
-        );
-
-        // Step 2: Create and connect TCP socket using static buffers
-        let mut socket = AsyncTcpSocket::new(*stack, tcp_rx_buffer, tcp_tx_buffer);
-        socket.connect(endpoint).await?;
-        info!("TCP connection established to {}", Debug2Format(&endpoint));
-
-        // Get TLS buffers from CCM RAM
-        let (read_buf, write_buf) = get_tls_buffers();
-
-        debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
-            read_buf.len(),
-            write_buf.len()
-        );
-
-        // Step 4: Configure TLS with server name for SNI
-        let tls_config = TlsConfig::new().with_server_name(self.config.broker_host);
-
-        // Step 5: Create TLS connection with buffers (using AES-128-GCM-SHA256)
-        let mut tls_connection =
-            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, read_buf, write_buf);
-
-        // Step 6: Perform TLS handshake
-        info!("Initiating TLS 1.3 handshake with hardware RNG...");
-        let provider = SimpleCryptoProvider::new(rng);
-        let tls_context = TlsContext::new(&tls_config, provider);
-
-        tls_connection.open(tls_context).await.map_err(|e| {
-            error!("TLS handshake failed: {:?}", Debug2Format(&e));
-            TlsError::HandshakeFailed
-        })?;
-
-        info!("TLS 1.3 handshake completed successfully!");
-
-        // Step 7: Establish MQTT connection
-        let client_id = device_id::mqtt_client_id();
-        info!("MQTT client ID: {}", client_id);
-
-        // Create MQTT client with bump allocator using static buffer
-        let mut buffer = BumpBuffer::new(mqtt_buffer);
-        let mut mqtt_client = Client::<'_, _, _, 1, 1, 1, 0>::new(&mut buffer);
-
-        // Connect to MQTT broker
-        let connect_opts = ConnectOptions {
-            session_expiry_interval: SessionExpiryInterval::EndOnDisconnect,
-            clean_start: self.config.clean_start,
-            keep_alive: if self.config.keep_alive_secs == 0 {
-                KeepAlive::Infinite
-            } else {
-                KeepAlive::Seconds(self.config.keep_alive_secs)
-            },
-            will: None,
-            user_name: None,
-            password: None,
-        };
-
-        // Convert client_id to MqttString
-        let mqtt_client_id = MqttString::new(client_id.as_str().into()).map_err(|e| {
-            error!(
-                "Failed to create MQTT client ID string: {:?}",
-                Debug2Format(&e)
-            );
-            MqttError::ProtocolError
-        })?;
-
-        mqtt_client
-            .connect(tls_connection, &connect_opts, Some(mqtt_client_id))
-            .await
-            .map_err(|e| {
-                error!("MQTT connect failed: {:?}", Debug2Format(&e));
-                MqttError::ConnectionFailed
-            })?;
-
-        info!("MQTT connection established successfully with static buffers!");
-        info!("Connection maintained - ready for persistent operations");
-
-        // Connection is now maintained by the static buffers
-        // The TLS connection and MQTT client will live as long as the buffers
-        Ok(())
-    }
-
-    /// Publish a message to an MQTT topic
-    ///
-    /// # Arguments
-    ///
-    /// * `topic` - Topic string (e.g., "device/status")
-    /// * `payload` - Message payload bytes
-    /// * `qos` - Quality of Service level (0, 1, or 2)
-    /// * `retain` - Whether to retain the message on the broker
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if publish succeeds, or a `NetworkError` if it fails.
-    ///
-    /// # Note
-    ///
-    /// This is a placeholder implementation. In the actual implementation,
-    /// we'll need to keep the MQTT client and connection alive across calls.
-    pub async fn publish(
-        &mut self,
-        _topic: &str,
-        _payload: &[u8],
-        _qos: u8,
-        _retain: bool,
-    ) -> Result<(), NetworkError> {
-        warn!("MQTT publish not yet fully implemented (placeholder)");
-        Err(MqttError::PublishFailed.into())
-    }
-
-    /// Run MQTT client loop with periodic publishing
-    ///
-    /// This function establishes an MQTT connection and maintains it,
-    /// publishing test messages every publish_interval_secs.
-    ///
-    /// # Arguments
-    ///
-    /// * `stack` - Embassy network stack for DNS and TCP operations
-    /// * `rng` - Hardware random number generator
-    /// * `publish_interval_secs` - Interval between publish messages
-    ///
-    /// # Note
-    ///
-    /// This function never returns under normal operation. It maintains
-    /// the connection and publishes messages periodically.
-    pub async fn run_with_periodic_publish<RNG>(
-        &mut self,
-        stack: &Stack<'static>,
-        rng: &mut RNG,
+        mqtt_buffer: &mut [u8; MQTT_BUFFER_SIZE],
+        tcp_rx_buffer: &mut [u8],
+        tcp_tx_buffer: &mut [u8],
         publish_interval_secs: u64,
     ) -> Result<(), NetworkError>
     where
         RNG: rand_core::RngCore + rand_core::CryptoRng,
     {
-        info!(
-            "Connecting to MQTT broker at {}:{} for persistent connection",
-            self.config.broker_host, self.config.broker_port
-        );
-
-        // Step 1: DNS resolution
+        // --- DNS resolution ---
         let server_ip = stack
             .dns_query(self.config.broker_host, DnsQueryType::A)
             .await
@@ -549,53 +243,37 @@ impl MqttClient {
             Debug2Format(&endpoint)
         );
 
-        // Step 2: Allocate TCP socket buffers (in main SRAM, not CCM)
-        let mut rx_buffer = [0u8; 4096];
-        let mut tx_buffer = [0u8; 4096];
-
-        // Step 3: Create and connect TCP socket
-        let mut socket = AsyncTcpSocket::new(*stack, &mut rx_buffer, &mut tx_buffer);
+        // --- TCP connection ---
+        let mut socket = AsyncTcpSocket::new(*stack, tcp_rx_buffer, tcp_tx_buffer);
         socket.connect(endpoint).await?;
-        info!("TCP connection established to {}", Debug2Format(&endpoint));
+        info!("TCP connected to {}", Debug2Format(&endpoint));
 
-        // Get TLS buffers from CCM RAM
-        let (read_buf, write_buf) = get_tls_buffers();
+        // --- TLS 1.3 handshake ---
+        // SAFETY: Single TLS connection at a time; buffers are used
+        // exclusively for the duration of this session.
+        let (tls_read, tls_write) = unsafe { tls_buffers::tls_buffers() };
 
-        debug!(
-            "TLS buffers allocated: read={} bytes, write={} bytes (CCM RAM)",
-            read_buf.len(),
-            write_buf.len()
-        );
-
-        // Step 5: Configure TLS with server name for SNI
         let tls_config = TlsConfig::new().with_server_name(self.config.broker_host);
+        let mut tls_conn =
+            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, tls_read, tls_write);
 
-        // Step 6: Create TLS connection with buffers (using AES-128-GCM-SHA256)
-        let mut tls_connection =
-            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, read_buf, write_buf);
-
-        // Step 7: Perform TLS handshake
-        info!("Initiating TLS 1.3 handshake with hardware RNG...");
+        info!("TLS 1.3 handshake...");
         let provider = SimpleCryptoProvider::new(rng);
         let tls_context = TlsContext::new(&tls_config, provider);
 
-        tls_connection.open(tls_context).await.map_err(|e| {
+        tls_conn.open(tls_context).await.map_err(|e| {
             error!("TLS handshake failed: {:?}", Debug2Format(&e));
             TlsError::HandshakeFailed
         })?;
+        info!("TLS 1.3 handshake OK");
 
-        info!("TLS 1.3 handshake completed successfully!");
-
-        // Step 8: Establish MQTT connection
+        // --- MQTT CONNECT ---
         let client_id = device_id::mqtt_client_id();
         info!("MQTT client ID: {}", client_id);
 
-        // Allocate MQTT packet buffer using bump allocator
-        let mut mqtt_buffer = [0u8; MQTT_BUFFER_SIZE];
-        let mut buffer = BumpBuffer::new(&mut mqtt_buffer);
-        let mut mqtt_client = Client::<'_, _, _, 1, 1, 1, 0>::new(&mut buffer);
+        let mut buffer = BumpBuffer::new(mqtt_buffer);
+        let mut mqtt = Client::<'_, _, _, 1, 1, 1, 0>::new(&mut buffer);
 
-        // Connect to MQTT broker
         let connect_opts = ConnectOptions {
             session_expiry_interval: SessionExpiryInterval::EndOnDisconnect,
             clean_start: self.config.clean_start,
@@ -609,139 +287,77 @@ impl MqttClient {
             password: None,
         };
 
-        // Convert client_id to MqttString
         let mqtt_client_id = MqttString::new(client_id.as_str().into()).map_err(|e| {
-            error!(
-                "Failed to create MQTT client ID string: {:?}",
-                Debug2Format(&e)
-            );
+            error!("Invalid MQTT client ID: {:?}", Debug2Format(&e));
             MqttError::ProtocolError
         })?;
 
-        mqtt_client
-            .connect(tls_connection, &connect_opts, Some(mqtt_client_id))
+        mqtt.connect(tls_conn, &connect_opts, Some(mqtt_client_id))
             .await
             .map_err(|e| {
-                error!("MQTT connect failed: {:?}", Debug2Format(&e));
+                error!("MQTT CONNECT failed: {:?}", Debug2Format(&e));
                 MqttError::ConnectionFailed
             })?;
 
-        info!("MQTT connection established successfully!");
-        info!("Persistent MQTT connection active - ready for publishing");
+        info!("MQTT connected — entering publish loop");
 
-        // Publish loop with periodic messages
-        let mut message_counter = 0u32;
+        // --- Publish loop ---
+        let mut msg_count = 0u32;
 
         loop {
-            // Wait for the specified interval using embassy_time Timer
             Timer::after(Duration::from_secs(publish_interval_secs)).await;
+            msg_count += 1;
 
-            message_counter += 1;
-
-            // Get current timestamp from RTC
-            let timestamp = time::get_timestamp();
-
-            // Format topic: device/{client_id}/telemetry
-            let topic_str = match format_mqtt_topic(client_id.as_str(), "telemetry") {
-                Ok(topic) => topic,
-                Err(e) => {
-                    error!("Failed to format MQTT topic: {:?}", e);
-                    return Err(e.into());
-                }
-            };
-
-            // Build payload (simple JSON for now)
-            // Format: {"msg_id":N,"timestamp":UNIX_SECS,"micros":MICROS}
-            let mut payload_buf = [0u8; 128];
-            let payload_len = {
-                use core::fmt::Write;
-                let mut writer = heapless::String::<128>::new();
-                write!(
-                    &mut writer,
-                    "{{\"msg_id\":{},\"timestamp\":{},\"micros\":{}}}",
-                    message_counter, timestamp.unix_secs, timestamp.micros
-                )
-                .map_err(|_| {
-                    error!("Failed to format payload JSON");
-                    MqttError::BufferError
-                })?;
-
-                let bytes = writer.as_bytes();
-                payload_buf[..bytes.len()].copy_from_slice(bytes);
-                bytes.len()
-            };
-            let payload = &payload_buf[..payload_len];
+            let ts = time::get_timestamp();
+            let topic_str = format_mqtt_topic(client_id.as_str(), "telemetry")?;
+            let payload = format_json_payload(msg_count, &ts)?;
 
             info!(
-                "Publishing message #{} to topic '{}' (payload: {} bytes)",
-                message_counter,
+                "Publishing #{} to '{}' ({} bytes)",
+                msg_count,
                 topic_str.as_str(),
-                payload_len
+                payload.len()
             );
 
-            let topic_name = make_topic_name(topic_str.as_str())?;
+            // SAFETY: format_mqtt_topic validates no wildcards or nulls
+            let topic_name = unsafe {
+                TopicName::new_unchecked(MqttString::new(topic_str.as_str().into()).map_err(
+                    |e| {
+                        error!("Topic string error: {:?}", Debug2Format(&e));
+                        MqttError::ProtocolError
+                    },
+                )?)
+            };
 
-            // Create publication options with QoS 0 (AtMostOnce) for test messages
-            // TODO: Switch to QoS 1 (AtLeastOnce) per SR-SENS-004 when proper event-driven
-            // message handling is implemented. Currently using QoS 0 to avoid manual polling.
-            let pub_options = PublicationOptions {
+            let pub_opts = PublicationOptions {
                 retain: false,
                 message_expiry_interval: None,
                 topic: TopicReference::Name(topic_name),
+                // QoS 0 until event-driven handling (SR-SENS-004)
                 qos: QoS::AtMostOnce,
             };
 
-            // Publish the message
-            match mqtt_client
-                .publish(&pub_options, Bytes::from(payload))
+            match mqtt
+                .publish(&pub_opts, Bytes::from(payload.as_bytes()))
                 .await
             {
                 Ok(packet_id) => {
-                    info!(
-                        "Message #{} published successfully (packet_id: {})",
-                        message_counter, packet_id
-                    );
+                    info!("#{} published (packet_id: {})", msg_count, packet_id);
                 }
                 Err(e) => {
-                    error!(
-                        "Failed to publish message #{}: {:?}",
-                        message_counter,
-                        Debug2Format(&e)
-                    );
-                    // For now, continue to next iteration
-                    // TODO: Implement reconnection logic per SR-NET-003
-                    warn!("Continuing to next publish cycle despite error");
+                    error!("Publish #{} failed: {:?}", msg_count, Debug2Format(&e));
+                    return Err(MqttError::Disconnected.into());
                 }
             }
         }
     }
 }
 
-/// Format an MQTT topic for telemetry data
+/// Format an MQTT topic: `device/{client_id}/{subtopic}`
 ///
-/// Returns a topic string in the format `device/{id}/telemetry` where
-/// `{id}` is the device's MQTT client ID.
-///
-/// # Arguments
-///
-/// * `client_id` - The device's MQTT client ID
-/// * `subtopic` - The topic suffix (e.g., "telemetry", "status")
-///
-/// # Returns
-///
-/// Returns a heapless String with the formatted topic, or an error if
-/// the topic is too long to fit in the buffer.
-///
-/// # Example
-///
-/// ```no_run
-/// let client_id = device_id::mqtt_client_id();
-/// let topic = format_mqtt_topic(&client_id, "telemetry")?;
-/// // Result: "device/stm32f405-0123456789abcdef01234567/telemetry"
-/// ```
+/// Validates that neither `client_id` nor `subtopic` contain MQTT
+/// wildcard characters (`+`, `#`) or null bytes.
 fn format_mqtt_topic(client_id: &str, subtopic: &str) -> Result<String<MAX_TOPIC_LEN>, MqttError> {
-    // Validate that client_id and subtopic don't contain invalid MQTT topic characters
-    // MQTT spec: Topic names cannot contain wildcards (+, #) or null characters
     if client_id.contains('+') || client_id.contains('#') || client_id.contains('\0') {
         error!("Client ID contains invalid MQTT topic characters");
         return Err(MqttError::ProtocolError);
@@ -752,8 +368,6 @@ fn format_mqtt_topic(client_id: &str, subtopic: &str) -> Result<String<MAX_TOPIC
     }
 
     let mut topic = String::<MAX_TOPIC_LEN>::new();
-
-    // Build: device/{client_id}/{subtopic}
     topic
         .push_str("device/")
         .map_err(|_| MqttError::BufferError)?;
@@ -766,6 +380,26 @@ fn format_mqtt_topic(client_id: &str, subtopic: &str) -> Result<String<MAX_TOPIC
         .map_err(|_| MqttError::BufferError)?;
 
     Ok(topic)
+}
+
+/// Format a JSON telemetry payload
+///
+/// Produces: `{"msg_id":N,"timestamp":SECS,"micros":MICROS}`
+fn format_json_payload(msg_id: u32, ts: &time::Timestamp) -> Result<String<128>, MqttError> {
+    use core::fmt::Write;
+
+    let mut buf = String::<128>::new();
+    write!(
+        &mut buf,
+        "{{\"msg_id\":{},\"timestamp\":{},\"micros\":{}}}",
+        msg_id, ts.unix_secs, ts.micros
+    )
+    .map_err(|_| {
+        error!("Failed to format payload JSON");
+        MqttError::BufferError
+    })?;
+
+    Ok(buf)
 }
 
 #[cfg(test)]
@@ -783,37 +417,37 @@ mod tests {
 
     #[test]
     fn test_format_mqtt_topic() {
-        // Test telemetry topic
         let topic = format_mqtt_topic("stm32f405-test123", "telemetry").unwrap();
         assert_eq!(topic.as_str(), "device/stm32f405-test123/telemetry");
 
-        // Test status topic
         let topic = format_mqtt_topic("stm32f405-test123", "status").unwrap();
         assert_eq!(topic.as_str(), "device/stm32f405-test123/status");
 
-        // Test that topic length is within bounds
         assert!(topic.len() < MAX_TOPIC_LEN);
     }
 
     #[test]
     fn test_format_mqtt_topic_buffer_overflow() {
-        // Create a long client ID that should cause buffer overflow
-        // Use a fixed-size stack array instead of heap allocation
-        let long_id = "this_is_a_very_long_client_id_that_exceeds_the_maximum_allowed_topic_length_for_mqtt_messages";
+        let long_id = "this_is_a_very_long_client_id_that_exceeds_the\
+            _maximum_allowed_topic_length_for_mqtt_messages";
         let result = format_mqtt_topic(long_id, "telemetry");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_format_mqtt_topic_invalid_characters() {
-        // Test that wildcard characters are rejected
-        let result = format_mqtt_topic("client+wildcard", "telemetry");
-        assert!(result.is_err());
+        assert!(format_mqtt_topic("client+wildcard", "telemetry").is_err());
+        assert!(format_mqtt_topic("client#wildcard", "telemetry").is_err());
+        assert!(format_mqtt_topic("valid-client", "status+wildcard").is_err());
+    }
 
-        let result = format_mqtt_topic("client#wildcard", "telemetry");
-        assert!(result.is_err());
-
-        let result = format_mqtt_topic("valid-client", "status+wildcard");
-        assert!(result.is_err());
+    #[test]
+    fn test_format_json_payload() {
+        let ts = time::Timestamp::new(1_700_000_000, 123_456);
+        let result = format_json_payload(42, &ts).unwrap();
+        assert_eq!(
+            result.as_str(),
+            r#"{"msg_id":42,"timestamp":1700000000,"micros":123456}"#
+        );
     }
 }

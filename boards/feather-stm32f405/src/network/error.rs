@@ -67,6 +67,8 @@ pub enum MqttError {
     ConnectionFailed,
     /// MQTT publish failed
     PublishFailed,
+    /// Broker disconnected (connection was established then lost)
+    Disconnected,
     /// MQTT protocol error
     ProtocolError,
     /// Buffer allocation failed
@@ -136,6 +138,7 @@ impl core::fmt::Display for MqttError {
         match self {
             Self::ConnectionFailed => write!(f, "connection failed"),
             Self::PublishFailed => write!(f, "publish failed"),
+            Self::Disconnected => write!(f, "broker disconnected"),
             Self::ProtocolError => write!(f, "protocol error"),
             Self::BufferError => write!(f, "buffer error"),
         }
