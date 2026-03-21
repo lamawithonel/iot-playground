@@ -10,5 +10,11 @@ RUN mkdir -p /mosquitto/certs
 # Expose ports
 EXPOSE 1883 8883
 
-# Run mosquitto
-CMD ["/usr/sbin/mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+# Bypass the base image's docker-entrypoint.sh which runs
+# `chown -R mosquitto:mosquitto /mosquitto`.  That fails when
+# cert files are bind-mounted read-only (:ro), preventing
+# mosquitto from loading TLS keys.  Running as root is fine
+# for a local test broker.
+USER root
+ENTRYPOINT ["/usr/sbin/mosquitto"]
+CMD ["-c", "/mosquitto/config/mosquitto.conf"]
