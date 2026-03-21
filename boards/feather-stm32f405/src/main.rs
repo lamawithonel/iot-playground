@@ -20,7 +20,7 @@ stm32_tim2_monotonic!(Mono, 1_000_000);
 #[app(device = embassy_stm32, peripherals = true, dispatchers = [USART1, USART2, USART3])]
 mod app {
     use super::*;
-    use defmt::{error, info, warn};
+    use defmt::{info, warn};
     use embassy_futures::join::join3;
     use embassy_stm32::exti::ExtiInput;
     use embassy_stm32::gpio::{Level, Output, Pull, Speed};
@@ -224,9 +224,8 @@ mod app {
         use embassy_stm32::rng::Rng;
         use static_cell::StaticCell;
 
+        // --- SNTP time sync ---
         let mut sntp = SntpClient::new();
-
-        // Initial SNTP sync
         info!("Initializing SNTP time synchronization with RTC (LSE)...");
         match sntp.run(stack).await {
             Ok(ts) => info!(
@@ -236,38 +235,19 @@ mod app {
             Err(e) => warn!("SNTP initialization failed: {:?}", e),
         }
 
-        // TLS 1.3 handshake test (Phase 1)
-        info!("Testing TLS 1.3 handshake with 192.168.1.1:8883...");
-
-        // Initialize hardware RNG just before TLS handshake
+        // --- Hardware RNG ---
         info!("Initializing hardware RNG for TLS...");
         let mut rng = Rng::new(rng_periph, RngIrqs);
         info!("Hardware RNG initialized");
 
-        let tls_config = network::tls::TlsClientConfig {
-            server_name: "192.168.1.1",
-            server_port: 8883,
-            verify_server: false, // Phase 1: skip verification
-        };
-        let tls_client = network::tls::TlsClient::new(tls_config);
-        match tls_client.test_handshake(stack, &mut rng).await {
-            Ok(()) => info!("TLS 1.3 handshake test PASSED ✓"),
-            Err(e) => warn!("TLS 1.3 handshake test FAILED: {:?}", e),
-        }
-
-        // Phase 2: MQTT Connection with Persistent Publishing
-        info!("Establishing persistent MQTT connection over TLS 1.3...");
-
-        // Allocate MQTT buffers using StaticCell (RTIC 2.x async task pattern)
+        // --- Static buffers for MQTT (RTIC StaticCell pattern) ---
         //
-        // RTIC SRP Compliance:
-        // These static buffers are safe within this never-returning async task because:
+        // These never-freed buffers are safe in this never-returning
+        // async task because:
         // 1. network_task runs at priority 1 with no resource sharing
-        // 2. Buffers are exclusively owned by this task (no cross-task access)
-        // 3. Pattern matches embassy_net RESOURCES usage above (line 202)
-        // 4. RTIC 2.x async tasks that never return can safely use function-local statics
-        //
-        // This follows the same pattern as the embassy_net StackResources allocation.
+        // 2. Buffers are exclusively owned by this task
+        // 3. RTIC 2.x async tasks that never return can safely use
+        //    function-local statics
         static MQTT_BUFFER: StaticCell<[u8; 2048]> = StaticCell::new();
         static TCP_RX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
         static TCP_TX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
@@ -276,6 +256,7 @@ mod app {
         let tcp_rx_buffer = TCP_RX_BUFFER.init([0u8; 4096]);
         let tcp_tx_buffer = TCP_TX_BUFFER.init([0u8; 4096]);
 
+        // --- Persistent MQTT connection with auto-reconnect ---
         let mqtt_config = network::MqttConfig {
             broker_host: "192.168.1.1",
             broker_port: 8883,
@@ -284,48 +265,19 @@ mod app {
         };
         let mut mqtt_client = network::MqttClient::new(mqtt_config);
 
-        // Establish persistent MQTT connection using static buffers
-        match mqtt_client
-            .connect_with_buffers(stack, &mut rng, mqtt_buffer, tcp_rx_buffer, tcp_tx_buffer)
+        info!("Starting persistent MQTT connection (30s publish interval)");
+
+        // Never returns — reconnects automatically on failure
+        mqtt_client
+            .run(
+                stack,
+                &mut rng,
+                mqtt_buffer,
+                tcp_rx_buffer,
+                tcp_tx_buffer,
+                30,
+            )
             .await
-        {
-            Ok(()) => {
-                info!("MQTT connection test PASSED ✓");
-                info!("Persistent connection maintained with static buffers");
-            }
-            Err(e) => warn!("MQTT connection test FAILED: {:?}", e),
-        }
-
-        info!("Network initialization complete - entering persistent MQTT mode");
-
-        // Run MQTT persistent publishing with periodic SNTP resync
-        // The MQTT client will publish messages every 30 seconds
-        // SNTP will resync every 15 minutes (900 seconds)
-
-        // Create MQTT client for persistent publishing
-        let mut mqtt_persistent = network::MqttClient::new(mqtt_config);
-
-        // Run persistent MQTT publishing loop (30 second interval)
-        // This function maintains the connection and publishes periodically
-        // Note: This function never returns under normal operation
-        info!("Starting persistent MQTT publishing loop (30s interval)");
-
-        // TODO: Add concurrent SNTP resync task with select! macro
-        // For now, just run MQTT publishing - SNTP resync can be added later
-        match mqtt_persistent
-            .run_with_periodic_publish(stack, &mut rng, 30)
-            .await
-        {
-            Ok(()) => warn!("MQTT publishing loop exited unexpectedly"),
-            Err(e) => error!("MQTT publishing loop failed: {:?}", e),
-        }
-
-        // If we get here, the MQTT loop has exited - enter fallback loop
-        warn!("Entering fallback mode - MQTT connection lost");
-        loop {
-            Mono::delay(60_000.millis()).await;
-            warn!("MQTT connection lost - system in fallback mode");
-        }
     }
 
     /// RTIC idle task - WFI sleep mode when no tasks active

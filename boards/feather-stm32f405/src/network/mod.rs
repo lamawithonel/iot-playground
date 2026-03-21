@@ -52,7 +52,3 @@ pub use error::{MqttError, NetworkError, SntpError, TlsError};
 #[allow(unused_imports)]
 pub use mqtt::{MqttClient, MqttConfig};
 pub use sntp::SntpClient;
-// TLS types are available but not re-exported yet (Phase 1)
-// Will be added when integrated into main.rs
-// pub use socket::AsyncTcpSocket;
-// pub use tls::{TlsClient, TlsClientConfig};
