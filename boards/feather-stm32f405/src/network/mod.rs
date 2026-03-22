@@ -50,5 +50,5 @@ pub use config::SntpConfig;
 #[allow(unused_imports)]
 pub use error::{MqttError, NetworkError, SntpError, TlsError};
 #[allow(unused_imports)]
-pub use mqtt::{MqttClient, MqttConfig};
+pub use mqtt::{MqttBuffers, MqttClient, MqttConfig};
 pub use sntp::SntpClient;
