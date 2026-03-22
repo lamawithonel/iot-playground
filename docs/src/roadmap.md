@@ -228,6 +228,11 @@ Items intentionally deferred:
 4. **Full HIL Test Automation** - Depends on project maturity and test burden
 5. **FIPS 140-3 Certification** - Production requirement, not development priority
 6. **Wireless Connectivity** - WiFi/BLE modules (current primary design is Ethernet)
+7. **Decoupled Sensor/Publish Intervals** - The sensor read and
+   MQTT publish intervals are currently unified
+   (`SAMPLE_INTERVAL_SECS`).  Decoupling them (read fast,
+   publish in bulk) may reduce power consumption but requires
+   measurement equipment for validation.
 
 ---
 
