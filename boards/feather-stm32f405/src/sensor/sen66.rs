@@ -4,15 +4,24 @@
 //! Wraps the `sen6x` async driver for use with embassy-stm32 I2C.
 //! Converts floating-point measurements to fixed-point integers
 //! suitable for JSON serialization without `std` float formatting.
+//!
+//! # Conditioning
+//!
+//! The SEN66 contains multiple sub-sensors (SPS6x, SCD41, SGP41,
+//! SHT4x), each with different warmup periods.  The `read()`
+//! function accepts a [`SensorState`] tracker and returns `None`
+//! for fields that have not yet met their conditioning threshold.
+//! During NOx conditioning, raw ticks are logged for hardware
+//! diagnostics.
 
 #![deny(unsafe_code)]
 
-use defmt::{error, info, warn};
+use defmt::{debug, error, info, warn};
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::i2c::I2c;
 use sen6x::asynchronous::Sen6x;
 
-use super::SensorReading;
+use super::{SensorReading, SensorState};
 
 /// Scale an f32 to deci-units (one decimal place) as i32
 ///
@@ -50,11 +59,13 @@ where
     Ok(sensor)
 }
 
-/// Read the latest sample and convert to `SensorReading`
+/// Read the latest sample with conditioning guards
 ///
 /// Returns `SensorReading::empty()` if the sensor reports data not
-/// ready, rather than treating it as an error.
-pub async fn read<I2C, D>(sensor: &mut Sen6x<I2C, D>) -> SensorReading
+/// ready.  Fields that have not yet met their conditioning threshold
+/// are returned as `None`.  During NOx conditioning, raw sensor ticks
+/// are logged for hardware diagnostics.
+pub async fn read<I2C, D>(sensor: &mut Sen6x<I2C, D>, state: &mut SensorState) -> SensorReading
 where
     I2C: I2c,
     D: DelayNs,
@@ -71,31 +82,117 @@ where
         return SensorReading::empty();
     }
 
+    // Log raw NOx ticks during conditioning for diagnostics
+    if !state.nox_ready() {
+        log_raw_nox(sensor).await;
+    }
+
     match sensor.get_sample().await {
         Ok(sample) => {
-            info!(
-                "SEN66: PM2.5={} CO2={} T={} RH={}",
-                to_deci(sample.pm2_5),
-                sample.co2,
-                to_deci(sample.temperature),
-                to_deci(sample.humidity),
-            );
+            let elapsed = state.record_read();
+            state.log_milestones();
+
+            if !state.nox_ready() {
+                info!(
+                    "SEN66: ~{}s elapsed (conditioning) — PM2.5={} CO2={} T={} RH={} NOx=suppressed",
+                    elapsed,
+                    to_deci(sample.pm2_5),
+                    sample.co2,
+                    to_deci(sample.temperature),
+                    to_deci(sample.humidity),
+                );
+            } else {
+                info!(
+                    "SEN66: PM2.5={} CO2={} T={} RH={} NOx={}",
+                    to_deci(sample.pm2_5),
+                    sample.co2,
+                    to_deci(sample.temperature),
+                    to_deci(sample.humidity),
+                    to_deci(sample.nox),
+                );
+            }
+
+            // Temp/RH: suppress until SHT4x has stabilized (~8 s)
+            let (temp_c, humidity) = if state.temp_rh_ready() {
+                (
+                    Some(to_deci(sample.temperature)),
+                    Some(to_deci(sample.humidity)),
+                )
+            } else {
+                (None, None)
+            };
+
+            // PM: suppress during first ~2 min
+            let (pm1_0, pm2_5, pm4_0, pm10) = if state.pm_ready() {
+                (
+                    Some(to_deci(sample.pm1)),
+                    Some(to_deci(sample.pm2_5)),
+                    Some(to_deci(sample.pm4)),
+                    Some(to_deci(sample.pm10)),
+                )
+            } else {
+                (None, None, None, None)
+            };
+
+            // CO₂: suppress during first ~3 min
+            let co2 = if state.co2_ready() {
+                Some(sample.co2)
+            } else {
+                None
+            };
+
+            // VOC: suppress during first ~60 s
+            let voc = if state.voc_ready() {
+                Some(to_deci(sample.voc))
+            } else {
+                None
+            };
+
+            // NOx: suppress during first ~10 min
+            let nox = if state.nox_ready() {
+                Some(to_deci(sample.nox))
+            } else {
+                None
+            };
 
             SensorReading {
-                pm1_0: Some(to_deci(sample.pm1)),
-                pm2_5: Some(to_deci(sample.pm2_5)),
-                pm4_0: Some(to_deci(sample.pm4)),
-                pm10: Some(to_deci(sample.pm10)),
-                co2: Some(sample.co2),
-                voc: Some(to_deci(sample.voc)),
-                nox: Some(to_deci(sample.nox)),
-                temp_c: Some(to_deci(sample.temperature)),
-                humidity: Some(to_deci(sample.humidity)),
+                pm1_0,
+                pm2_5,
+                pm4_0,
+                pm10,
+                co2,
+                voc,
+                nox,
+                temp_c,
+                humidity,
             }
         }
         Err(e) => {
             error!("SEN66: read failed: {:?}", e);
             SensorReading::empty()
+        }
+    }
+}
+
+/// Log raw NOx ticks for hardware diagnostics
+///
+/// Called during the NOx conditioning period to verify the MOx
+/// element is responding to the environment, even though the
+/// algorithm output is suppressed.
+async fn log_raw_nox<I2C, D>(sensor: &mut Sen6x<I2C, D>)
+where
+    I2C: I2c,
+    D: DelayNs,
+{
+    match sensor.get_raw_sample().await {
+        Ok(raw) => {
+            debug!(
+                "SEN66 raw: NOx={} VOC={} T={} RH={}",
+                raw.raw_nox, raw.raw_voc, raw.raw_temperature, raw.raw_humidity
+            );
+        }
+        Err(e) => {
+            warn!("SEN66: raw sample read failed: {:?}", e);
         }
     }
 }
