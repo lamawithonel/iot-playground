@@ -334,6 +334,18 @@ Defined in root `Cargo.toml`:
 
 Both profiles use `panic = "abort"` for embedded compatibility.
 
+### Build-time Environment Variables
+
+| Variable | Default (debug) | Default (release) | Range | Description |
+|----------|----------------|-------------------|-------|-------------|
+| `SAMPLE_INTERVAL_SECS` | 5 | 60 | 1–3600 | Sensor read and MQTT publish interval |
+
+Override at build time:
+
+```sh
+SAMPLE_INTERVAL_SECS=10 cargo build --target thumbv7em-none-eabihf
+```
+
 ## Testing
 
 ### TLS Certificates
