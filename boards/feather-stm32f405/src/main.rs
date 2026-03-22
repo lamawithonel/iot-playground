@@ -9,6 +9,7 @@ use rtic::app;
 use rtic_monotonics::stm32::prelude::*;
 
 mod ccmram;
+mod config;
 mod device_id;
 mod eth;
 mod network;
@@ -265,7 +266,10 @@ mod app {
         };
         let mut mqtt_client = network::MqttClient::new(mqtt_config);
 
-        info!("Starting persistent MQTT connection (30s publish interval)");
+        info!(
+            "Starting persistent MQTT connection ({}s publish interval)",
+            config::SAMPLE_INTERVAL_SECS,
+        );
 
         // Never returns — reconnects automatically on failure
         mqtt_client
@@ -275,7 +279,7 @@ mod app {
                 mqtt_buffer,
                 tcp_rx_buffer,
                 tcp_tx_buffer,
-                30,
+                config::SAMPLE_INTERVAL_SECS,
             )
             .await
     }
