@@ -21,17 +21,18 @@ This project provides a multi-device capable embedded firmware framework using:
 
 ### Quick Start with mise (Recommended)
 
-[mise](https://mise.jdx.dev/) manages non-Cargo dev tools and provides
-task runner commands.  Install mise, then:
+[mise](https://mise.jdx.dev/) manages dev tools (Rust toolchain, flip-link,
+mdBook) and provides task runner commands.  Install mise, then:
 
 ```bash
 mise trust .
 mise install
 ```
 
-This installs pinned versions of mdBook and other tools.  Mise manages
-non-Rust dev tools and tasks; use `cargo` and `probe-rs` directly for
-building, checking, and flashing firmware.
+This installs pinned versions of Rust (with the
+`thumbv7em-none-eabihf` cross-compilation target, `rustfmt`, and
+`clippy`), flip-link, mdBook, and other tools.  Use `cargo` and
+`probe-rs` directly for building, checking, and flashing firmware.
 
 ```bash
 mise run docs           # serve documentation locally
@@ -45,31 +46,21 @@ mise run tls:client device  # generate device client cert
 
 ### Required Tools
 
-1. **Rust toolchain** (stable):
+1. **mise** (tool manager and task runner):
    ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   curl https://mise.jdx.dev/install.sh | sh
+   mise trust .
+   mise install
    ```
 
-2. **ARM target support**:
-   ```bash
-   rustup target add thumbv7em-none-eabihf  # For Cortex-M4F/M7F (STM32F405)
-   rustup component add rust-src            # Required for building no_std targets
-   rustup component add llvm-tools-preview  # For cargo-binutils
-   ```
-
-3. **probe-rs tools** (for building, flashing, and debugging):
+2. **probe-rs tools** (for building, flashing, and debugging):
    ```bash
    cargo install probe-rs-tools --locked
    cargo install cargo-embed --locked
    cargo install cargo-flash --locked
    ```
 
-4. **flip-link** (stack overflow protection for bare-metal targets):
-   ```bash
-   cargo install flip-link --locked
-   ```
-
-5. **Podman** (for the MQTT test broker):
+3. **Podman** (for the MQTT test broker):
    ```bash
    # Fedora/RHEL
    sudo dnf install podman
@@ -399,7 +390,10 @@ cargo test -p iot-core
 
 **Error: `can't find crate for 'core'`**
 ```bash
-# Install the target and rust-src:
+# If using mise (handles this automatically):
+mise install
+
+# Or manually:
 rustup target add thumbv7em-none-eabihf
 rustup component add rust-src
 ```
