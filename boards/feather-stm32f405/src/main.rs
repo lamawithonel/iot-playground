@@ -13,6 +13,7 @@ mod config;
 mod device_id;
 mod eth;
 mod network;
+mod sensor;
 mod time;
 mod tls_buffers;
 
@@ -25,13 +26,19 @@ mod app {
     use embassy_futures::join::join3;
     use embassy_stm32::exti::ExtiInput;
     use embassy_stm32::gpio::{Level, Output, Pull, Speed};
+    use embassy_stm32::i2c::I2c;
     use embassy_stm32::peripherals;
     use embassy_stm32::rcc::{Hse, HseMode, LsConfig, LseConfig, LseMode};
     use embassy_stm32::rtc::{Rtc, RtcConfig};
     use embassy_stm32::spi::{self, Spi};
     use embassy_stm32::time::Hertz;
+    use rtic_sync::channel::{Receiver, Sender};
 
-    use network::{manager, NetworkClient, SntpClient};
+    use network::{manager, NetworkClient as _, SntpClient};
+    use sensor::SensorReading;
+
+    /// Channel capacity for sensor readings
+    const SENSOR_CHANNEL_CAP: usize = 2;
 
     type SpiPeripheral = embassy_stm32::Peri<'static, peripherals::SPI2>;
     type PinPB13 = embassy_stm32::Peri<'static, peripherals::PB13>;
@@ -60,6 +67,12 @@ mod app {
     // RNG interrupt binding for hardware random number generator
     embassy_stm32::bind_interrupts!(struct RngIrqs {
         RNG => embassy_stm32::rng::InterruptHandler<peripherals::RNG>;
+    });
+
+    // I2C1 interrupt bindings for SEN66 sensor (async DMA mode)
+    embassy_stm32::bind_interrupts!(struct I2c1Irqs {
+        I2C1_EV => embassy_stm32::i2c::EventInterruptHandler<peripherals::I2C1>;
+        I2C1_ER => embassy_stm32::i2c::ErrorInterruptHandler<peripherals::I2C1>;
     });
 
     #[shared]
@@ -140,8 +153,25 @@ mod app {
             dma_rx: p.DMA1_CH3,
         };
 
+        // I2C1 for SEN66 sensor: PB6 (SCL), PB7 (SDA), 400 kHz
+        let mut i2c_config = embassy_stm32::i2c::Config::default();
+        i2c_config.frequency = Hertz(400_000);
+
+        let i2c = I2c::new(
+            p.I2C1, p.PB6, // SCL
+            p.PB7, // SDA
+            I2c1Irqs, p.DMA1_CH6, // TX: DMA1 Stream 6
+            p.DMA1_CH0, // RX: DMA1 Stream 0
+            i2c_config,
+        );
+        info!("I2C1 initialized: 400 kHz, PB6/PB7 (SEN66)");
+
+        // Sensor → network channel
+        let (sensor_tx, sensor_rx) = rtic_sync::make_channel!(SensorReading, SENSOR_CHANNEL_CAP);
+
         heartbeat::spawn().ok();
-        network_task::spawn(net_periph, p.RNG).ok();
+        sensor_task::spawn(i2c, sensor_tx).ok();
+        network_task::spawn(net_periph, p.RNG, sensor_rx).ok();
 
         (Shared {}, Local { led })
     }
@@ -158,6 +188,48 @@ mod app {
         }
     }
 
+    /// Sensor task — reads SEN66 environmental sensor periodically
+    ///
+    /// Initializes I2C sensor driver, then reads all measurements
+    /// at the configured sample interval and sends them to the
+    /// network task via channel.
+    #[task(priority = 1)]
+    async fn sensor_task(
+        _cx: sensor_task::Context,
+        i2c: I2c<'static, embassy_stm32::mode::Async, embassy_stm32::i2c::Master>,
+        mut sender: Sender<'static, SensorReading, SENSOR_CHANNEL_CAP>,
+    ) -> ! {
+        info!("Sensor task started — initializing SEN66");
+
+        let delay = embassy_time::Delay;
+
+        let mut sen66 = match sensor::sen66::init(delay, i2c).await {
+            Ok(s) => {
+                info!("SEN66 initialized, continuous measurement started");
+                s
+            }
+            Err(e) => {
+                defmt::error!("SEN66 init failed: {:?} — sensor task halted", e);
+                loop {
+                    Mono::delay(60_000.millis()).await;
+                }
+            }
+        };
+
+        // Wait for first sample to be ready (~1 s after start)
+        Mono::delay(2_000.millis()).await;
+
+        loop {
+            let reading = sensor::sen66::read(&mut sen66).await;
+
+            if sender.try_send(reading).is_err() {
+                warn!("Sensor channel full — dropping oldest reading");
+            }
+
+            Mono::delay((config::SAMPLE_INTERVAL_SECS * 1_000).millis()).await;
+        }
+    }
+
     /// Network task - orchestrates network stack and protocol clients
     ///
     /// Stack is !Send and must remain within this task.
@@ -166,6 +238,7 @@ mod app {
         _cx: network_task::Context,
         periph: NetworkPeripherals,
         rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
+        sensor_rx: Receiver<'static, SensorReading, SENSOR_CHANNEL_CAP>,
     ) -> ! {
         use embassy_net::{Config, StackResources};
         use static_cell::StaticCell;
@@ -212,7 +285,7 @@ mod app {
 
         let app_logic = async {
             manager::wait_for_config(&stack).await;
-            run_clients(&stack, rng_periph).await;
+            run_clients(&stack, rng_periph, sensor_rx).await;
         };
 
         join3(w5500_runner.run(), net_runner.run(), app_logic).await;
@@ -221,6 +294,7 @@ mod app {
     async fn run_clients(
         stack: &embassy_net::Stack<'static>,
         rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
+        sensor_rx: Receiver<'static, SensorReading, SENSOR_CHANNEL_CAP>,
     ) -> ! {
         use embassy_stm32::rng::Rng;
         use static_cell::StaticCell;
@@ -263,6 +337,7 @@ mod app {
             broker_port: 8883,
             keep_alive_secs: 60,
             clean_start: true,
+            publish_interval_secs: config::SAMPLE_INTERVAL_SECS,
         };
         let mut mqtt_client = network::MqttClient::new(mqtt_config);
 
@@ -271,16 +346,15 @@ mod app {
             config::SAMPLE_INTERVAL_SECS,
         );
 
+        let mut buffers = network::MqttBuffers {
+            mqtt: mqtt_buffer,
+            tcp_rx: tcp_rx_buffer,
+            tcp_tx: tcp_tx_buffer,
+        };
+
         // Never returns — reconnects automatically on failure
         mqtt_client
-            .run(
-                stack,
-                &mut rng,
-                mqtt_buffer,
-                tcp_rx_buffer,
-                tcp_tx_buffer,
-                config::SAMPLE_INTERVAL_SECS,
-            )
+            .run(stack, &mut rng, &mut buffers, sensor_rx)
             .await
     }
 

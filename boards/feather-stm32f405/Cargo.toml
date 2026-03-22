@@ -110,6 +110,12 @@ rev = "d8d470bd4f03ed2b303af83d3dbfb8b3854c8302"
 default-features = false
 features = ["bump", "defmt", "v5"]
 
+# SEN66 environmental sensor (I2C, async)
+[dependencies.sen6x]
+version = "0.1.0"
+default-features = false
+features = ["async", "sen66", "defmt"]
+
 # SNTP client for time synchronization (SR-NET-006)
 # Version 0.7.0 adds async support
 [dependencies.sntpc]
