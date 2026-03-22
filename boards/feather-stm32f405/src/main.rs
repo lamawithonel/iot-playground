@@ -192,7 +192,9 @@ mod app {
     ///
     /// Initializes I2C sensor driver, then reads all measurements
     /// at the configured sample interval and sends them to the
-    /// network task via channel.
+    /// network task via channel.  Sub-sensor readings are suppressed
+    /// during their respective conditioning periods (see
+    /// [`sensor::SensorState`]).
     #[task(priority = 1)]
     async fn sensor_task(
         _cx: sensor_task::Context,
@@ -216,14 +218,16 @@ mod app {
             }
         };
 
-        // Wait for first sample to be ready (~1 s after start)
-        Mono::delay(2_000.millis()).await;
+        // Wait for first sample to be ready
+        Mono::delay((sensor::INITIAL_DELAY_SECS * 1_000).millis()).await;
+
+        let mut state = sensor::SensorState::new();
 
         loop {
-            let reading = sensor::sen66::read(&mut sen66).await;
+            let reading = sensor::sen66::read(&mut sen66, &mut state).await;
 
             if sender.try_send(reading).is_err() {
-                warn!("Sensor channel full — dropping oldest reading");
+                warn!("Sensor channel full — dropping newest reading");
             }
 
             Mono::delay((config::SAMPLE_INTERVAL_SECS * 1_000).millis()).await;
