@@ -6,7 +6,7 @@ CARGO_TERM_COLOR = 'always'
 DEFMT_LOG = 'info'
 
 [tools]
-rust = { version = "stable", targets = "thumbv7em-none-eabihf", components = "rustfmt,clippy", profile = "minimal" }
+rust = { version = "stable", targets = "thumbv7em-none-eabihf", components = "rustfmt,clippy" }
 "cargo:flip-link" = "0.1.12"
 mdbook = '0.4.40'
 
