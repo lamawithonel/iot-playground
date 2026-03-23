@@ -8,10 +8,8 @@
 use heapless::String;
 
 use super::error::MqttError;
-#[cfg(feature = "sen66")]
-use crate::sensor::Sen66Reading;
-#[cfg(feature = "sen66")]
 use crate::time::Timestamp;
+use hal_abstractions::sensor::EnvironmentalReading;
 
 /// Maximum MQTT topic length
 ///
@@ -83,11 +81,10 @@ pub fn format_mqtt_topic(
 /// reading is available, environmental data fields.  Fixed-point
 /// values are formatted as decimal JSON numbers (e.g., `225` →
 /// `22.5`).
-#[cfg(feature = "sen66")]
-pub fn format_json_payload(
+pub fn format_json_payload<R: EnvironmentalReading>(
     msg_id: u32,
     ts: &Timestamp,
-    reading: Option<&Sen66Reading>,
+    reading: Option<&R>,
 ) -> Result<String<256>, MqttError> {
     use core::fmt::Write;
 
@@ -100,15 +97,15 @@ pub fn format_json_payload(
     .map_err(|_| MqttError::BufferError)?;
 
     if let Some(r) = reading {
-        write_deci_field(&mut buf, ",\"pm1_0\":", r.pm1_0)?;
-        write_deci_field(&mut buf, ",\"pm2_5\":", r.pm2_5)?;
-        write_deci_field(&mut buf, ",\"pm4_0\":", r.pm4_0)?;
-        write_deci_field(&mut buf, ",\"pm10\":", r.pm10)?;
-        write_int_field(&mut buf, ",\"co2\":", r.co2)?;
-        write_deci_field(&mut buf, ",\"voc\":", r.voc)?;
-        write_deci_field(&mut buf, ",\"nox\":", r.nox)?;
-        write_deci_field(&mut buf, ",\"temp_c\":", r.temp_c)?;
-        write_deci_field(&mut buf, ",\"humidity\":", r.humidity)?;
+        write_deci_field(&mut buf, ",\"pm1_0\":", r.pm1_0_deci())?;
+        write_deci_field(&mut buf, ",\"pm2_5\":", r.pm2_5_deci())?;
+        write_deci_field(&mut buf, ",\"pm4_0\":", r.pm4_0_deci())?;
+        write_deci_field(&mut buf, ",\"pm10\":", r.pm10_deci())?;
+        write_int_field(&mut buf, ",\"co2\":", r.co2_ppm())?;
+        write_deci_field(&mut buf, ",\"voc\":", r.voc_index_deci())?;
+        write_deci_field(&mut buf, ",\"nox\":", r.nox_index_deci())?;
+        write_deci_field(&mut buf, ",\"temp_c\":", r.temperature_deci())?;
+        write_deci_field(&mut buf, ",\"humidity\":", r.humidity_deci())?;
     }
 
     buf.push('}').map_err(|_| MqttError::BufferError)?;
@@ -190,11 +187,13 @@ mod tests {
         assert!(format_mqtt_topic("valid-client", "status+wildcard").is_err());
     }
 
-    #[cfg(feature = "sen66")]
     #[test]
-    fn test_format_json_payload() {
+    fn test_format_json_payload_metadata_only() {
+        struct NoSensor;
+        impl EnvironmentalReading for NoSensor {}
+
         let ts = Timestamp::new(1_700_000_000, 123_456);
-        let result = format_json_payload(42, &ts, None).unwrap();
+        let result = format_json_payload(42, &ts, None::<&NoSensor>).unwrap();
         assert_eq!(
             result.as_str(),
             r#"{"msg_id":42,"timestamp":1700000000,"micros":123456}"#
@@ -204,6 +203,7 @@ mod tests {
     #[cfg(feature = "sen66")]
     #[test]
     fn test_format_json_payload_with_sensor() {
+        use crate::sensor::Sen66Reading;
         let ts = Timestamp::new(1_700_000_000, 0);
         let reading = Sen66Reading {
             pm1_0: Some(52),
@@ -233,6 +233,8 @@ mod tests {
     #[cfg(feature = "sen66")]
     #[test]
     fn test_format_json_payload_negative_temps() {
+        use crate::sensor::Sen66Reading;
+
         let ts = Timestamp::new(1_700_000_000, 0);
         let reading = Sen66Reading {
             pm1_0: None,

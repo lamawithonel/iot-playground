@@ -9,7 +9,7 @@
 //!
 //! The SEN66 contains multiple sub-sensors (SPS6x, SCD41, SGP41,
 //! SHT4x), each with different warmup periods.  The `read()`
-//! function accepts a [`ConditioningState`] tracker and returns `None`
+//! function accepts a [`Sen66State`] tracker and returns `None`
 //! for fields that have not yet met their conditioning threshold.
 //! During NOx conditioning, raw ticks are logged for hardware
 //! diagnostics.
@@ -21,7 +21,7 @@ use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::i2c::I2c;
 use sen6x::asynchronous::Sen6x;
 
-use super::{to_deci, ConditioningState, Sen66Reading};
+use super::{sen66_config, to_deci, Sen66Reading, Sen66State};
 
 /// Initialize the SEN66 sensor and start continuous measurement
 ///
@@ -47,7 +47,7 @@ where
 /// ready.  Fields that have not yet met their conditioning threshold
 /// are returned as `None`.  During NOx conditioning, raw sensor ticks
 /// are logged for hardware diagnostics.
-pub async fn read<I2C, D>(sensor: &mut Sen6x<I2C, D>, state: &mut ConditioningState) -> Sen66Reading
+pub async fn read<I2C, D>(sensor: &mut Sen6x<I2C, D>, state: &mut Sen66State) -> Sen66Reading
 where
     I2C: I2c,
     D: DelayNs,
@@ -65,7 +65,7 @@ where
     }
 
     // Log raw NOx ticks during conditioning for diagnostics
-    if !state.nox_ready() {
+    if !state.ready(sen66_config::NOX) {
         log_raw_nox(sensor).await;
     }
 
@@ -74,23 +74,23 @@ where
             let elapsed = state.record_read();
             let milestones = state.check_milestones();
 
-            if milestones.temp_rh {
+            if milestones[sen66_config::TEMP_RH] {
                 info!("SEN66: Temp/RH conditioning complete");
             }
-            if milestones.voc {
+            if milestones[sen66_config::VOC] {
                 info!("SEN66: VOC conditioning complete");
             }
-            if milestones.pm {
+            if milestones[sen66_config::PM] {
                 info!("SEN66: PM conditioning complete");
             }
-            if milestones.co2 {
+            if milestones[sen66_config::CO2] {
                 info!("SEN66: CO₂ conditioning complete");
             }
-            if milestones.nox {
+            if milestones[sen66_config::NOX] {
                 info!("SEN66: NOx conditioning complete — all readings now valid");
             }
 
-            if !state.nox_ready() {
+            if !state.ready(sen66_config::NOX) {
                 info!(
                     "SEN66: ~{}s elapsed (conditioning) — PM2.5={} CO2={} T={} RH={} NOx=suppressed",
                     elapsed,
@@ -111,7 +111,7 @@ where
             }
 
             // Temp/RH: suppress until SHT4x has stabilized (~8 s)
-            let (temp_c, humidity) = if state.temp_rh_ready() {
+            let (temp_c, humidity) = if state.ready(sen66_config::TEMP_RH) {
                 (
                     Some(to_deci(sample.temperature)),
                     Some(to_deci(sample.humidity)),
@@ -121,7 +121,7 @@ where
             };
 
             // PM: suppress during first ~2 min
-            let (pm1_0, pm2_5, pm4_0, pm10) = if state.pm_ready() {
+            let (pm1_0, pm2_5, pm4_0, pm10) = if state.ready(sen66_config::PM) {
                 (
                     Some(to_deci(sample.pm1)),
                     Some(to_deci(sample.pm2_5)),
@@ -133,21 +133,21 @@ where
             };
 
             // CO₂: suppress during first ~3 min
-            let co2 = if state.co2_ready() {
+            let co2 = if state.ready(sen66_config::CO2) {
                 Some(sample.co2)
             } else {
                 None
             };
 
             // VOC: suppress during first ~60 s
-            let voc = if state.voc_ready() {
+            let voc = if state.ready(sen66_config::VOC) {
                 Some(to_deci(sample.voc))
             } else {
                 None
             };
 
             // NOx: suppress during first ~10 min
-            let nox = if state.nox_ready() {
+            let nox = if state.ready(sen66_config::NOX) {
                 Some(to_deci(sample.nox))
             } else {
                 None

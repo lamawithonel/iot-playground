@@ -3,14 +3,19 @@
 //! Platform-agnostic sensor data types for IoT firmware.
 //! Hardware driver code remains in the board crate.
 //!
-//! The generic utilities ([`to_deci`], [`conditioning::ConditioningState`])
-//! are always available.  SEN66-specific types ([`Sen66Reading`])
-//! and phase configuration ([`sen66`]) require the `sen66` feature.
+//! The generic utilities ([`to_deci`],
+//! [`conditioning::ConditioningState`]) are always available.
+//! SEN66-specific types ([`sen66::Sen66Reading`]) and phase
+//! configuration ([`sen66`]) require the `sen66` feature.
 
 pub mod conditioning;
 
 #[cfg(feature = "sen66")]
 pub mod sen66;
+
+// Re-export for ergonomics: `iot_core::sensor::Sen66Reading`
+#[cfg(feature = "sen66")]
+pub use sen66::Sen66Reading;
 
 /// Scale an f32 to deci-units (one decimal place) as i32
 ///
@@ -27,57 +32,6 @@ pub fn to_deci(val: f32) -> i32 {
         (scaled + 0.5) as i32
     } else {
         (scaled - 0.5) as i32
-    }
-}
-
-/// Environmental sensor reading for SEN66 (all fields optional)
-///
-/// Values use fixed-point integer scaling to avoid float formatting
-/// in JSON payloads.  Each field is `None` when the sensor has not
-/// yet produced a valid measurement or is still conditioning.
-///
-/// This struct models the SEN66's complete output set (9 sub-sensor
-/// readings).  Future sensor types may define their own reading
-/// structs behind separate feature gates.
-#[cfg(feature = "sen66")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Sen66Reading {
-    /// PM1.0 concentration in deci-µg/m³ (value 52 = 5.2 µg/m³)
-    pub pm1_0: Option<i32>,
-    /// PM2.5 concentration in deci-µg/m³
-    pub pm2_5: Option<i32>,
-    /// PM4.0 concentration in deci-µg/m³
-    pub pm4_0: Option<i32>,
-    /// PM10 concentration in deci-µg/m³
-    pub pm10: Option<i32>,
-    /// CO₂ concentration in ppm (integer, no scaling)
-    pub co2: Option<u16>,
-    /// VOC index in deci-points (value 950 = 95.0)
-    pub voc: Option<i32>,
-    /// NOx index in deci-points
-    pub nox: Option<i32>,
-    /// Temperature in deci-°C (value 225 = 22.5 °C)
-    pub temp_c: Option<i32>,
-    /// Relative humidity in deci-% (value 452 = 45.2 %)
-    pub humidity: Option<i32>,
-}
-
-#[cfg(feature = "sen66")]
-impl Sen66Reading {
-    /// Create an empty reading (all fields `None`)
-    pub const fn empty() -> Self {
-        Self {
-            pm1_0: None,
-            pm2_5: None,
-            pm4_0: None,
-            pm10: None,
-            co2: None,
-            voc: None,
-            nox: None,
-            temp_c: None,
-            humidity: None,
-        }
     }
 }
 
@@ -115,20 +69,5 @@ mod tests {
         assert_eq!(to_deci(f32::NAN), 0);
         assert_eq!(to_deci(f32::INFINITY), 0);
         assert_eq!(to_deci(f32::NEG_INFINITY), 0);
-    }
-
-    #[cfg(feature = "sen66")]
-    #[test]
-    fn test_sensor_reading_empty() {
-        let r = Sen66Reading::empty();
-        assert_eq!(r.pm1_0, None);
-        assert_eq!(r.pm2_5, None);
-        assert_eq!(r.pm4_0, None);
-        assert_eq!(r.pm10, None);
-        assert_eq!(r.co2, None);
-        assert_eq!(r.voc, None);
-        assert_eq!(r.nox, None);
-        assert_eq!(r.temp_c, None);
-        assert_eq!(r.humidity, None);
     }
 }
