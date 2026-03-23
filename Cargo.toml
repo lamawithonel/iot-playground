@@ -23,6 +23,7 @@ embedded-hal = "1.0"
 embedded-hal-async = "1.0"
 embedded-io = "0.7"
 embedded-io-async = "0.7"
+hal-abstractions = { path = "hal-abstractions" }
 heapless = "0.8"
 static_cell = "2.0"
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }

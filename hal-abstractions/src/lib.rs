@@ -7,6 +7,8 @@
 #![deny(unsafe_code)]
 #![deny(warnings)]
 
+pub mod sensor;
+
 // Traits will be added in Batch 7
 // pub mod rtc;
 // pub mod rng;

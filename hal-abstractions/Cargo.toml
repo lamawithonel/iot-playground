@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 description = "Hardware abstraction traits for IoT firmware"
 
+[features]
+default = []
+io = ["dep:embedded-io", "dep:embedded-io-async"]
+
 [dependencies]
-embedded-io.workspace = true
-embedded-io-async.workspace = true
+embedded-io = { workspace = true, optional = true }
+embedded-io-async = { workspace = true, optional = true }
