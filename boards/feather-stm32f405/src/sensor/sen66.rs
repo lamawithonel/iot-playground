@@ -21,25 +21,7 @@ use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::i2c::I2c;
 use sen6x::asynchronous::Sen6x;
 
-use super::{SensorReading, SensorState};
-
-/// Scale an f32 to deci-units (one decimal place) as i32
-///
-/// Rounds half-away-from-zero after scaling.  Non-finite values
-/// (NaN, ±Inf) map to 0 rather than producing a plausible number.
-///
-/// Example: `22.45` → `225`, `-3.14` → `-31`
-fn to_deci(val: f32) -> i32 {
-    if !val.is_finite() {
-        return 0;
-    }
-    let scaled = val * 10.0;
-    if scaled >= 0.0 {
-        (scaled + 0.5) as i32
-    } else {
-        (scaled - 0.5) as i32
-    }
-}
+use super::{to_deci, SensorReading, SensorState};
 
 /// Initialize the SEN66 sensor and start continuous measurement
 ///
@@ -90,7 +72,23 @@ where
     match sensor.get_sample().await {
         Ok(sample) => {
             let elapsed = state.record_read();
-            state.log_milestones();
+            let milestones = state.check_milestones();
+
+            if milestones.temp_rh {
+                info!("SEN66: Temp/RH conditioning complete");
+            }
+            if milestones.voc {
+                info!("SEN66: VOC conditioning complete");
+            }
+            if milestones.pm {
+                info!("SEN66: PM conditioning complete");
+            }
+            if milestones.co2 {
+                info!("SEN66: CO₂ conditioning complete");
+            }
+            if milestones.nox {
+                info!("SEN66: NOx conditioning complete — all readings now valid");
+            }
 
             if !state.nox_ready() {
                 info!(
