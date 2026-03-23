@@ -194,7 +194,7 @@ mod app {
     /// at the configured sample interval and sends them to the
     /// network task via channel.  Sub-sensor readings are suppressed
     /// during their respective conditioning periods (see
-    /// [`sensor::ConditioningState`]).
+    /// [`sensor::Sen66State`]).
     #[task(priority = 1)]
     async fn sensor_task(
         _cx: sensor_task::Context,
@@ -221,7 +221,7 @@ mod app {
         // Wait for first sample to be ready
         Mono::delay((sensor::INITIAL_DELAY_SECS * 1_000).millis()).await;
 
-        let mut state = sensor::new_conditioning_state();
+        let mut state = sensor::new_sen66_state();
 
         loop {
             let reading = sensor::sen66::read(&mut sen66, &mut state).await;

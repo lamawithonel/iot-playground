@@ -11,8 +11,8 @@ pub mod sen66;
 use crate::config::SAMPLE_INTERVAL_SECS;
 
 // Re-export core types for BSP consumers
-pub use iot_core::sensor::conditioning::ConditioningState;
-pub use iot_core::sensor::{to_deci, Sen66Reading};
+pub use iot_core::sensor::sen66::{self as sen66_config, Sen66Reading, Sen66State};
+pub use iot_core::sensor::to_deci;
 
 /// Initial delay before first sensor read, in seconds
 ///
@@ -21,7 +21,11 @@ pub use iot_core::sensor::{to_deci, Sen66Reading};
 /// longer to ensure data is ready.
 pub const INITIAL_DELAY_SECS: u64 = 2;
 
-/// Create a new [`ConditioningState`] with BSP-configured intervals
-pub fn new_conditioning_state() -> ConditioningState {
-    ConditioningState::new(SAMPLE_INTERVAL_SECS, INITIAL_DELAY_SECS)
+/// Create a new [`Sen66State`] with BSP-configured intervals
+pub fn new_sen66_state() -> Sen66State {
+    Sen66State::new(
+        SAMPLE_INTERVAL_SECS,
+        INITIAL_DELAY_SECS,
+        iot_core::sensor::sen66::THRESHOLDS,
+    )
 }

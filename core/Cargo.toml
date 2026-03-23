@@ -7,6 +7,7 @@ description = "Platform-agnostic core logic for IoT firmware"
 [dependencies]
 defmt = { workspace = true, optional = true }
 embedded-io-async = { workspace = true, optional = true }
+hal-abstractions.workspace = true
 heapless.workspace = true
 
 [features]
