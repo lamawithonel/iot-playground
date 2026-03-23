@@ -3,7 +3,7 @@
 //! This crate defines traits that abstract over hardware differences
 //! between boards. BSPs implement these traits.
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![deny(unsafe_code)]
 #![deny(warnings)]
 

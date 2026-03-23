@@ -131,6 +131,20 @@ mdbook serve docs --open
 description = 'Build the mdBook documentation'
 run = 'mdbook build docs'
 
+# ── Testing ───────────────────────────────────────────
+
+[tasks.test]
+description = 'Run host unit tests for platform-agnostic crates'
+run = '''
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_host_target="$(rustc -vV | sed -n 's/^host: //p')"
+exec cargo test --workspace --target "$_host_target" "$@"
+'''
+
 # ── Mosquitto MQTT Broker ────────────────────────────
 
 [tasks."broker:start"]

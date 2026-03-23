@@ -245,14 +245,18 @@ Each profile shares common code (like network stack) but has unique configuratio
 
 ## Development Workflow
 
-1. **Make changes** to the source code in `boards/feather-stm32f405/src/`
-2. **Build, flash, and test**:
+1. **Make changes** to the source code in
+   `boards/feather-stm32f405/src/`
+2. **Build and flash** (requires a probe connected via
+   USB):
    ```bash
    cargo run --release
-   # or with a specific board preset:
-   PROBE_RS_CONFIG_PRESET=microbit cargo run --release
    ```
 3. **View logs** in real-time via RTT output
+4. **Run tests** (see [Testing](#testing) below):
+   ```bash
+   mise run test
+   ```
 
 ### Working with a Specific Board
 
@@ -348,6 +352,42 @@ SAMPLE_INTERVAL_SECS=10 cargo build --target thumbv7em-none-eabihf
 
 ## Testing
 
+### Unit Tests
+
+Platform-agnostic logic lives in the `core/` crate (`iot-core`)
+and is tested on the host.  Because `.cargo/config.toml` sets
+the workspace default target to `thumbv7em-none-eabihf` (bare-metal
+ARM), a plain `cargo test` cannot link the test harness.  Use the
+cargo alias or mise task instead:
+
+```bash
+# Recommended — auto-detects host triple
+mise run test
+
+# Or explicitly (replace target with your host triple)
+cargo test --workspace --target x86_64-unknown-linux-gnu
+```
+
+The mise task auto-detects the host triple via `rustc -vV`, so it
+works on any platform (Linux x86_64/aarch64, macOS Intel/Apple
+Silicon, etc.).  The explicit command is useful when mise is not
+available.
+
+Pass extra arguments after `--`:
+
+```bash
+mise run test -- --nocapture       # Print test stdout
+mise run test -- --test-threads 1  # Single-threaded
+mise run test -- -p iot-core       # Restrict to one crate
+```
+
+### On-Device Testing
+
+```bash
+# Using defmt-test (when available)
+cargo test --target thumbv7em-none-eabihf
+```
+
 ### TLS Certificates
 
 The test infrastructure uses a shared TLS certificate hierarchy.
@@ -382,19 +422,6 @@ mise run broker:logs     # View live logs
 ```
 
 See [`test/broker/README.md`](test/broker/README.md) for details.
-
-### On-Device Testing
-
-```bash
-# Using defmt-test (when available)
-cargo test --target thumbv7em-none-eabihf
-```
-
-### Unit Tests (for core/ crate)
-
-```bash
-cargo test -p iot-core
-```
 
 ## Troubleshooting
 
