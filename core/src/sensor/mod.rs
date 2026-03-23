@@ -5,9 +5,12 @@
 //!
 //! The generic utilities ([`to_deci`], [`conditioning::ConditioningState`])
 //! are always available.  SEN66-specific types ([`Sen66Reading`])
-//! require the `sen66` feature.
+//! and phase configuration ([`sen66`]) require the `sen66` feature.
 
 pub mod conditioning;
+
+#[cfg(feature = "sen66")]
+pub mod sen66;
 
 /// Scale an f32 to deci-units (one decimal place) as i32
 ///
