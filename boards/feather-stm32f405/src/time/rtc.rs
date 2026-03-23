@@ -7,49 +7,16 @@ use crate::ccmram::TIME_SYNCED;
 use core::cell::RefCell;
 use core::sync::atomic::Ordering;
 use critical_section::Mutex;
-use defmt::{info, Format};
+use defmt::info;
 use embassy_stm32::rtc::Rtc;
 
 use super::calendar::{datetime_to_unix, unix_to_datetime};
 
+// Re-export core types (BSP consumers use these via `crate::time::*`)
+pub use iot_core::time::{RtcError, Timestamp};
+
 /// Global internal RTC instance
 static RTC: Mutex<RefCell<Option<Rtc>>> = Mutex::new(RefCell::new(None));
-
-/// Timestamp with microsecond precision
-#[derive(Debug, Clone, Copy, Format)]
-pub struct Timestamp {
-    /// Unix timestamp in seconds since epoch (1970-01-01 00:00:00 UTC)
-    pub unix_secs: u64,
-    /// Microseconds component (0-999,999)
-    pub micros: u32,
-}
-
-impl Timestamp {
-    /// Create a new timestamp
-    pub const fn new(unix_secs: u64, micros: u32) -> Self {
-        Self { unix_secs, micros }
-    }
-
-    /// Convert from NTP timestamp (seconds since 1900-01-01)
-    pub fn from_ntp(ntp_secs: u64, ntp_frac: u32) -> Self {
-        /// NTP epoch offset (1900-01-01 to 1970-01-01 in seconds)
-        const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
-
-        let unix_secs = ntp_secs.saturating_sub(NTP_UNIX_OFFSET);
-        // Convert NTP fractional part to microseconds (2^-32 seconds)
-        let micros = ((ntp_frac as u64 * 1_000_000) >> 32) as u32;
-        Self::new(unix_secs, micros)
-    }
-}
-
-/// RTC operation errors
-#[derive(Debug, Clone, Copy, Format)]
-pub enum RtcError {
-    /// RTC not initialized
-    NotInitialized,
-    /// RTC hardware error
-    HardwareError,
-}
 
 /// Initialize internal RTC
 pub fn initialize_rtc(rtc: Rtc) {
@@ -103,24 +70,4 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
 #[allow(dead_code)]
 pub fn get_timestamp() -> Timestamp {
     read_rtc().unwrap_or(Timestamp::new(0, 0))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ntp_to_unix_conversion() {
-        const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
-        let ts = Timestamp::from_ntp(NTP_UNIX_OFFSET, 0);
-        assert_eq!(ts.unix_secs, 0);
-        assert_eq!(ts.micros, 0);
-    }
-
-    #[test]
-    fn test_timestamp_creation() {
-        let ts = Timestamp::new(1704067200, 500000);
-        assert_eq!(ts.unix_secs, 1704067200);
-        assert_eq!(ts.micros, 500000);
-    }
 }
