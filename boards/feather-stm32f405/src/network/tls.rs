@@ -23,6 +23,7 @@
 //! TCP socket buffers are caller-provided (typically `StaticCell`).
 
 /// Default TLS port for MQTTS
+#[allow(dead_code)]
 pub const MQTTS_PORT: u16 = 8883;
 
 /// Maximum backoff delay in seconds for TLS/MQTT reconnection
