@@ -8,7 +8,9 @@
 use heapless::String;
 
 use super::error::MqttError;
+#[cfg(feature = "sen66")]
 use crate::sensor::Sen66Reading;
+#[cfg(feature = "sen66")]
 use crate::time::Timestamp;
 
 /// Maximum MQTT topic length
@@ -81,6 +83,7 @@ pub fn format_mqtt_topic(
 /// reading is available, environmental data fields.  Fixed-point
 /// values are formatted as decimal JSON numbers (e.g., `225` →
 /// `22.5`).
+#[cfg(feature = "sen66")]
 pub fn format_json_payload(
     msg_id: u32,
     ts: &Timestamp,
@@ -187,6 +190,7 @@ mod tests {
         assert!(format_mqtt_topic("valid-client", "status+wildcard").is_err());
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_format_json_payload() {
         let ts = Timestamp::new(1_700_000_000, 123_456);
@@ -197,6 +201,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_format_json_payload_with_sensor() {
         let ts = Timestamp::new(1_700_000_000, 0);
@@ -225,6 +230,7 @@ mod tests {
         assert!(!s.contains("nox"));
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_format_json_payload_negative_temps() {
         let ts = Timestamp::new(1_700_000_000, 0);

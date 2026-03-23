@@ -10,6 +10,9 @@
 //!   defmt backend)
 //! - `embedded-io` — Enable `embedded_io_async::Error` impls
 //!   on network error types
+//! - `sen66` — Enable SEN66-specific sensor types
+//!   (`Sen66Reading`), warmup constants, conditioning ready
+//!   methods, and JSON payload formatting
 
 #![cfg_attr(not(test), no_std)]
 #![deny(unsafe_code)]

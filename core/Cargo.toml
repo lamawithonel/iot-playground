@@ -13,3 +13,4 @@ heapless.workspace = true
 default = []
 defmt = ["dep:defmt"]
 embedded-io = ["dep:embedded-io-async"]
+sen66 = []

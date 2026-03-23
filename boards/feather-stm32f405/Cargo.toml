@@ -20,7 +20,7 @@ embedded-hal-async.workspace = true
 embedded-io.workspace = true
 embedded-io-async.workspace = true
 heapless.workspace = true
-iot-core = { path = "../../core", features = ["defmt", "embedded-io"] }
+iot-core = { path = "../../core", features = ["defmt", "embedded-io", "sen66"] }
 panic-probe.workspace = true
 static_cell.workspace = true
 
