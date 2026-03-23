@@ -6,8 +6,10 @@ description = "Platform-agnostic core logic for IoT firmware"
 
 [dependencies]
 defmt = { workspace = true, optional = true }
+embedded-io-async = { workspace = true, optional = true }
 heapless.workspace = true
 
 [features]
-default = ["defmt"]
+default = []
 defmt = ["dep:defmt"]
+embedded-io = ["dep:embedded-io-async"]

@@ -1,13 +1,20 @@
 //! Platform-agnostic core logic for IoT firmware
 //!
 //! This crate contains business logic that can be shared across all
-//! supported boards and tiers. It has NO hardware dependencies.
+//! supported boards and tiers.  It has NO hardware dependencies.
+//!
+//! # Features
+//!
+//! - `defmt` — Enable `defmt::Format` derives on public types
+//!   (disabled by default so host-side tests compile without a
+//!   defmt backend)
+//! - `embedded-io` — Enable `embedded_io_async::Error` impls
+//!   on network error types
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![deny(unsafe_code)]
 #![deny(warnings)]
 
-// Modules will be added in Batch 6
-// pub mod network;
-// pub mod time;
-// pub mod sensors;
+pub mod network;
+pub mod sensor;
+pub mod time;
