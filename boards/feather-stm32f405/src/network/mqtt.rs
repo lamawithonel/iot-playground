@@ -30,7 +30,6 @@ use embassy_time::{Duration, Timer};
 use embedded_tls::{
     Aes128GcmSha256, CryptoProvider, NoVerify, TlsConfig, TlsConnection, TlsContext, TlsVerifier,
 };
-use heapless::String;
 use rust_mqtt::{
     buffer::BumpBuffer,
     client::{
@@ -44,18 +43,15 @@ use rust_mqtt::{
 
 use crate::{device_id, sensor::SensorReading, time, tls_buffers};
 
+// Re-export core formatting functions and types
+pub use iot_core::network::mqtt::{format_json_payload, format_mqtt_topic, MqttConfig};
+
 use super::error::{MqttError, NetworkError, TlsError};
 use super::socket::AsyncTcpSocket;
 use super::tls;
 
 /// MQTT packet buffer size: 2 KB for packet assembly
 const MQTT_BUFFER_SIZE: usize = 2048;
-
-/// Maximum MQTT topic length
-///
-/// Format: `device/{client_id}/telemetry` where client_id is ~34
-/// chars.  Total: 7 + 34 + 10 = 51 chars; 64 provides safety margin.
-const MAX_TOPIC_LEN: usize = 64;
 
 /// Simple crypto provider wrapping an RNG for embedded-tls
 struct SimpleCryptoProvider<'a, RNG> {
@@ -87,33 +83,6 @@ where
         &mut self,
     ) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, embedded_tls::TlsError> {
         Ok(&mut self.verifier)
-    }
-}
-
-/// MQTT client configuration
-#[derive(Clone, Copy)]
-pub struct MqttConfig {
-    /// Broker hostname (for DNS and TLS SNI)
-    pub broker_host: &'static str,
-    /// Broker port (typically 8883 for MQTTS)
-    pub broker_port: u16,
-    /// MQTT keep-alive interval in seconds (0 = infinite)
-    pub keep_alive_secs: u16,
-    /// Clean start flag (true = new session)
-    pub clean_start: bool,
-    /// Seconds between telemetry publishes
-    pub publish_interval_secs: u64,
-}
-
-impl Default for MqttConfig {
-    fn default() -> Self {
-        Self {
-            broker_host: "192.168.1.1",
-            broker_port: tls::MQTTS_PORT,
-            keep_alive_secs: 60,
-            clean_start: true,
-            publish_interval_secs: 30,
-        }
     }
 }
 
@@ -349,217 +318,5 @@ impl MqttClient {
                 }
             }
         }
-    }
-}
-
-/// Format an MQTT topic: `device/{client_id}/{subtopic}`
-///
-/// Validates that neither `client_id` nor `subtopic` contain MQTT
-/// wildcard characters (`+`, `#`) or null bytes.
-fn format_mqtt_topic(client_id: &str, subtopic: &str) -> Result<String<MAX_TOPIC_LEN>, MqttError> {
-    if client_id.contains('+') || client_id.contains('#') || client_id.contains('\0') {
-        error!("Client ID contains invalid MQTT topic characters");
-        return Err(MqttError::ProtocolError);
-    }
-    if subtopic.contains('+') || subtopic.contains('#') || subtopic.contains('\0') {
-        error!("Subtopic contains invalid MQTT topic characters");
-        return Err(MqttError::ProtocolError);
-    }
-
-    let mut topic = String::<MAX_TOPIC_LEN>::new();
-    topic
-        .push_str("device/")
-        .map_err(|_| MqttError::BufferError)?;
-    topic
-        .push_str(client_id)
-        .map_err(|_| MqttError::BufferError)?;
-    topic.push('/').map_err(|_| MqttError::BufferError)?;
-    topic
-        .push_str(subtopic)
-        .map_err(|_| MqttError::BufferError)?;
-
-    Ok(topic)
-}
-
-/// Format a JSON telemetry payload with optional sensor readings
-///
-/// Produces a JSON object with message metadata and, when a sensor
-/// reading is available, environmental data fields.  Fixed-point
-/// values are formatted as decimal JSON numbers (e.g., `225` → `22.5`).
-fn format_json_payload(
-    msg_id: u32,
-    ts: &time::Timestamp,
-    reading: Option<&SensorReading>,
-) -> Result<String<256>, MqttError> {
-    use core::fmt::Write;
-
-    let mut buf = String::<256>::new();
-    write!(
-        &mut buf,
-        "{{\"msg_id\":{},\"timestamp\":{},\"micros\":{}",
-        msg_id, ts.unix_secs, ts.micros
-    )
-    .map_err(|_| {
-        error!("Failed to format payload JSON");
-        MqttError::BufferError
-    })?;
-
-    if let Some(r) = reading {
-        write_deci_field(&mut buf, ",\"pm1_0\":", r.pm1_0)?;
-        write_deci_field(&mut buf, ",\"pm2_5\":", r.pm2_5)?;
-        write_deci_field(&mut buf, ",\"pm4_0\":", r.pm4_0)?;
-        write_deci_field(&mut buf, ",\"pm10\":", r.pm10)?;
-        write_int_field(&mut buf, ",\"co2\":", r.co2)?;
-        write_deci_field(&mut buf, ",\"voc\":", r.voc)?;
-        write_deci_field(&mut buf, ",\"nox\":", r.nox)?;
-        write_deci_field(&mut buf, ",\"temp_c\":", r.temp_c)?;
-        write_deci_field(&mut buf, ",\"humidity\":", r.humidity)?;
-    }
-
-    buf.push('}').map_err(|_| MqttError::BufferError)?;
-
-    Ok(buf)
-}
-
-/// Write a deci-scaled field as a decimal number (e.g., 225 → "22.5")
-fn write_deci_field(buf: &mut String<256>, key: &str, val: Option<i32>) -> Result<(), MqttError> {
-    use core::fmt::Write;
-
-    if let Some(v) = val {
-        let sign = if v < 0 { "-" } else { "" };
-        let abs_v = v.unsigned_abs();
-        let whole = abs_v / 10;
-        let frac = abs_v % 10;
-        write!(buf, "{}{}{}.{}", key, sign, whole, frac).map_err(|_| MqttError::BufferError)?;
-    }
-
-    Ok(())
-}
-
-/// Write an integer field (e.g., CO₂ in ppm)
-fn write_int_field<T: core::fmt::Display>(
-    buf: &mut String<256>,
-    key: &str,
-    val: Option<T>,
-) -> Result<(), MqttError> {
-    use core::fmt::Write;
-
-    if let Some(v) = val {
-        write!(buf, "{}{}", key, v).map_err(|_| MqttError::BufferError)?;
-    }
-
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_default_config() {
-        let config = MqttConfig::default();
-        assert_eq!(config.broker_host, "192.168.1.1");
-        assert_eq!(config.broker_port, 8883);
-        assert_eq!(config.keep_alive_secs, 60);
-        assert!(config.clean_start);
-    }
-
-    #[test]
-    fn test_format_mqtt_topic() {
-        let topic = format_mqtt_topic("stm32f405-test123", "telemetry").unwrap();
-        assert_eq!(topic.as_str(), "device/stm32f405-test123/telemetry");
-
-        let topic = format_mqtt_topic("stm32f405-test123", "status").unwrap();
-        assert_eq!(topic.as_str(), "device/stm32f405-test123/status");
-
-        assert!(topic.len() < MAX_TOPIC_LEN);
-    }
-
-    #[test]
-    fn test_format_mqtt_topic_buffer_overflow() {
-        let long_id = "this_is_a_very_long_client_id_that_exceeds_the\
-            _maximum_allowed_topic_length_for_mqtt_messages";
-        let result = format_mqtt_topic(long_id, "telemetry");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_format_mqtt_topic_invalid_characters() {
-        assert!(format_mqtt_topic("client+wildcard", "telemetry").is_err());
-        assert!(format_mqtt_topic("client#wildcard", "telemetry").is_err());
-        assert!(format_mqtt_topic("valid-client", "status+wildcard").is_err());
-    }
-
-    #[test]
-    fn test_format_json_payload() {
-        let ts = time::Timestamp::new(1_700_000_000, 123_456);
-        let result = format_json_payload(42, &ts, None).unwrap();
-        assert_eq!(
-            result.as_str(),
-            r#"{"msg_id":42,"timestamp":1700000000,"micros":123456}"#
-        );
-    }
-
-    #[test]
-    fn test_format_json_payload_with_sensor() {
-        let ts = time::Timestamp::new(1_700_000_000, 0);
-        let reading = SensorReading {
-            pm1_0: Some(52),
-            pm2_5: Some(128),
-            pm4_0: None,
-            pm10: None,
-            co2: Some(412),
-            voc: None,
-            nox: None,
-            temp_c: Some(225),
-            humidity: Some(452),
-        };
-        let result = format_json_payload(1, &ts, Some(&reading)).unwrap();
-        let s = result.as_str();
-        assert!(s.contains("\"pm1_0\":5.2"));
-        assert!(s.contains("\"pm2_5\":12.8"));
-        assert!(s.contains("\"co2\":412"));
-        assert!(s.contains("\"temp_c\":22.5"));
-        assert!(s.contains("\"humidity\":45.2"));
-        // Fields that are None should not appear
-        assert!(!s.contains("pm4_0"));
-        assert!(!s.contains("pm10"));
-        assert!(!s.contains("voc"));
-        assert!(!s.contains("nox"));
-    }
-
-    #[test]
-    fn test_format_json_payload_negative_temps() {
-        let ts = time::Timestamp::new(1_700_000_000, 0);
-        let reading = SensorReading {
-            pm1_0: None,
-            pm2_5: None,
-            pm4_0: None,
-            pm10: None,
-            co2: None,
-            voc: None,
-            nox: None,
-            temp_c: Some(-1),
-            humidity: None,
-        };
-        let result = format_json_payload(1, &ts, Some(&reading)).unwrap();
-        // -1 deci-°C = -0.1 °C
-        assert!(result.as_str().contains("\"temp_c\":-0.1"));
-
-        let reading = SensorReading {
-            temp_c: Some(-9),
-            ..reading
-        };
-        let result = format_json_payload(1, &ts, Some(&reading)).unwrap();
-        // -9 deci-°C = -0.9 °C
-        assert!(result.as_str().contains("\"temp_c\":-0.9"));
-
-        let reading = SensorReading {
-            temp_c: Some(-105),
-            ..reading
-        };
-        let result = format_json_payload(1, &ts, Some(&reading)).unwrap();
-        // -105 deci-°C = -10.5 °C
-        assert!(result.as_str().contains("\"temp_c\":-10.5"));
     }
 }

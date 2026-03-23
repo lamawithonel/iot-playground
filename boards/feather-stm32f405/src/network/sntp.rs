@@ -11,7 +11,7 @@ use rtic_monotonics::fugit::ExtU64;
 use rtic_monotonics::Monotonic;
 
 use crate::ccmram;
-use crate::time::{write_rtc, RtcError, Timestamp};
+use crate::time::{write_rtc, Timestamp};
 use crate::Mono;
 
 use super::client::NetworkClient;
@@ -20,15 +20,6 @@ use super::error::NetworkError;
 
 /// SNTP/NTP port (UDP 123)
 const SNTP_PORT: u16 = 123;
-
-impl From<RtcError> for NetworkError {
-    fn from(e: RtcError) -> Self {
-        match e {
-            RtcError::NotInitialized => NetworkError::RtcNotInitialized,
-            RtcError::HardwareError => NetworkError::RtcHardwareError,
-        }
-    }
-}
 
 /// SNTP client for time synchronization
 pub struct SntpClient {
