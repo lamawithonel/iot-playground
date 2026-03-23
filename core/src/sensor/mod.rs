@@ -2,6 +2,10 @@
 //!
 //! Platform-agnostic sensor data types for IoT firmware.
 //! Hardware driver code remains in the board crate.
+//!
+//! The generic utilities ([`to_deci`], [`conditioning::ConditioningState`])
+//! are always available.  SEN66-specific types ([`Sen66Reading`])
+//! require the `sen66` feature.
 
 pub mod conditioning;
 
@@ -23,11 +27,16 @@ pub fn to_deci(val: f32) -> i32 {
     }
 }
 
-/// Environmental sensor reading (all fields optional)
+/// Environmental sensor reading for SEN66 (all fields optional)
 ///
 /// Values use fixed-point integer scaling to avoid float formatting
 /// in JSON payloads.  Each field is `None` when the sensor has not
 /// yet produced a valid measurement or is still conditioning.
+///
+/// This struct models the SEN66's complete output set (9 sub-sensor
+/// readings).  Future sensor types may define their own reading
+/// structs behind separate feature gates.
+#[cfg(feature = "sen66")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Sen66Reading {
@@ -51,6 +60,7 @@ pub struct Sen66Reading {
     pub humidity: Option<i32>,
 }
 
+#[cfg(feature = "sen66")]
 impl Sen66Reading {
     /// Create an empty reading (all fields `None`)
     pub const fn empty() -> Self {
@@ -104,6 +114,7 @@ mod tests {
         assert_eq!(to_deci(f32::NEG_INFINITY), 0);
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_sensor_reading_empty() {
         let r = Sen66Reading::empty();

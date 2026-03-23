@@ -1,8 +1,11 @@
 //! Sensor conditioning state tracking
 //!
-//! Each SEN66 sub-sensor has a warmup period after power-on before
-//! readings are reliable.  [`ConditioningState`] tracks approximate
-//! elapsed time and exposes readiness predicates for each sensor.
+//! Generic state machine for tracking sensor warmup periods.
+//! [`ConditioningState`] tracks approximate elapsed time and exposes
+//! readiness predicates for each sensor.
+//!
+//! SEN66-specific warmup constants and milestone tracking require
+//! the `sen66` feature:
 //!
 //! | Sensor | Warmup  |
 //! |--------|---------|
@@ -13,18 +16,23 @@
 //! | NOx    | ~10 min |
 
 /// Temp/RH sensor (SHT4x) warmup time in seconds
+#[cfg(feature = "sen66")]
 pub const TEMP_RH_WARMUP_SECS: u64 = 8;
 
 /// PM sensor (SPS6x) warmup time in seconds
+#[cfg(feature = "sen66")]
 pub const PM_WARMUP_SECS: u64 = 120;
 
 /// CO₂ sensor (SCD41) warmup time in seconds
+#[cfg(feature = "sen66")]
 pub const CO2_WARMUP_SECS: u64 = 180;
 
 /// VOC index (SGP41) warmup time in seconds
+#[cfg(feature = "sen66")]
 pub const VOC_WARMUP_SECS: u64 = 60;
 
 /// NOx index (SGP41) warmup time in seconds
+#[cfg(feature = "sen66")]
 pub const NOX_WARMUP_SECS: u64 = 600;
 
 /// Milestone flags returned by [`ConditioningState::check_milestones`]
@@ -32,6 +40,7 @@ pub const NOX_WARMUP_SECS: u64 = 600;
 /// Each flag is `true` exactly once — the first time the sensor
 /// crosses its warmup threshold.  The BSP uses these to drive
 /// `defmt::info!` logging without pulling defmt into core.
+#[cfg(feature = "sen66")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MilestoneFlags {
     /// Temp/RH conditioning just completed
@@ -48,13 +57,10 @@ pub struct MilestoneFlags {
 
 /// Tracks sensor conditioning state across reads
 ///
-/// Created once in the sensor task.  Conditioning thresholds are
-/// based on Sensirion datasheet recommendations for the SEN66's
-/// sub-sensors (SPS6x, SCD41, SGP41, SHT4x).
-///
-/// Elapsed time is tracked approximately: the first read records
-/// `initial_delay_secs` and each subsequent read adds
-/// `interval_secs`.
+/// Created once in the sensor task.  The generic state machine
+/// tracks elapsed time via configurable intervals.  SEN66-specific
+/// warmup thresholds and milestone tracking require the `sen66`
+/// feature.
 pub struct ConditioningState {
     /// Sample interval in seconds (from build config)
     interval_secs: u64,
@@ -63,18 +69,23 @@ pub struct ConditioningState {
     /// Approximate elapsed time since sensor start, in seconds.
     /// Zero indicates no reads have occurred yet.
     elapsed_secs: u64,
-    /// Whether Temp/RH milestone has been reported
-    temp_rh_logged: bool,
-    /// Whether PM milestone has been reported
-    pm_logged: bool,
-    /// Whether CO₂ milestone has been reported
-    co2_logged: bool,
-    /// Whether VOC milestone has been reported
-    voc_logged: bool,
-    /// Whether NOx milestone has been reported
-    nox_logged: bool,
     /// Number of reads recorded (used for first-read detection)
     read_count: u32,
+    /// Whether Temp/RH milestone has been reported
+    #[cfg(feature = "sen66")]
+    temp_rh_logged: bool,
+    /// Whether PM milestone has been reported
+    #[cfg(feature = "sen66")]
+    pm_logged: bool,
+    /// Whether CO₂ milestone has been reported
+    #[cfg(feature = "sen66")]
+    co2_logged: bool,
+    /// Whether VOC milestone has been reported
+    #[cfg(feature = "sen66")]
+    voc_logged: bool,
+    /// Whether NOx milestone has been reported
+    #[cfg(feature = "sen66")]
+    nox_logged: bool,
 }
 
 impl ConditioningState {
@@ -88,12 +99,17 @@ impl ConditioningState {
             interval_secs,
             initial_delay_secs,
             elapsed_secs: 0,
-            temp_rh_logged: false,
-            pm_logged: false,
-            co2_logged: false,
-            voc_logged: false,
-            nox_logged: false,
             read_count: 0,
+            #[cfg(feature = "sen66")]
+            temp_rh_logged: false,
+            #[cfg(feature = "sen66")]
+            pm_logged: false,
+            #[cfg(feature = "sen66")]
+            co2_logged: false,
+            #[cfg(feature = "sen66")]
+            voc_logged: false,
+            #[cfg(feature = "sen66")]
+            nox_logged: false,
         }
     }
 
@@ -117,26 +133,31 @@ impl ConditioningState {
     }
 
     /// Whether Temp/RH readings are reliable
+    #[cfg(feature = "sen66")]
     pub fn temp_rh_ready(&self) -> bool {
         self.elapsed_secs >= TEMP_RH_WARMUP_SECS
     }
 
     /// Whether PM readings are reliable
+    #[cfg(feature = "sen66")]
     pub fn pm_ready(&self) -> bool {
         self.elapsed_secs >= PM_WARMUP_SECS
     }
 
     /// Whether CO₂ readings are reliable
+    #[cfg(feature = "sen66")]
     pub fn co2_ready(&self) -> bool {
         self.elapsed_secs >= CO2_WARMUP_SECS
     }
 
     /// Whether VOC index is reliable
+    #[cfg(feature = "sen66")]
     pub fn voc_ready(&self) -> bool {
         self.elapsed_secs >= VOC_WARMUP_SECS
     }
 
     /// Whether NOx index is reliable
+    #[cfg(feature = "sen66")]
     pub fn nox_ready(&self) -> bool {
         self.elapsed_secs >= NOX_WARMUP_SECS
     }
@@ -145,6 +166,7 @@ impl ConditioningState {
     ///
     /// Returns flags for milestones that just became true.  Each
     /// flag fires exactly once.  Call after [`record_read`].
+    #[cfg(feature = "sen66")]
     pub fn check_milestones(&mut self) -> MilestoneFlags {
         let mut flags = MilestoneFlags::default();
 
@@ -195,6 +217,7 @@ mod tests {
         assert_eq!(state.elapsed_secs(), 12);
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_temp_rh_ready_timing() {
         let mut state = ConditioningState::new(5, 2);
@@ -208,6 +231,7 @@ mod tests {
         assert!(state.temp_rh_ready());
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_voc_ready_timing() {
         let mut state = ConditioningState::new(10, 2);
@@ -221,6 +245,7 @@ mod tests {
         assert!(state.voc_ready());
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_nox_ready_timing() {
         let mut state = ConditioningState::new(60, 2);
@@ -234,6 +259,7 @@ mod tests {
         assert!(state.nox_ready());
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_milestone_fires_once() {
         let mut state = ConditioningState::new(5, 2);
@@ -249,6 +275,7 @@ mod tests {
         assert!(!flags.temp_rh);
     }
 
+    #[cfg(feature = "sen66")]
     #[test]
     fn test_all_milestones_eventually() {
         let mut state = ConditioningState::new(1, 1);
