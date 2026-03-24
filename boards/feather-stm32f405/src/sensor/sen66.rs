@@ -9,7 +9,7 @@
 //!
 //! The SEN66 contains multiple sub-sensors (SPS6x, SCD41, SGP41,
 //! SHT4x), each with different warmup periods.  The `read()`
-//! function accepts a [`SensorState`] tracker and returns `None`
+//! function accepts a [`ConditioningState`] tracker and returns `None`
 //! for fields that have not yet met their conditioning threshold.
 //! During NOx conditioning, raw ticks are logged for hardware
 //! diagnostics.
@@ -21,7 +21,7 @@ use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::i2c::I2c;
 use sen6x::asynchronous::Sen6x;
 
-use super::{to_deci, SensorReading, SensorState};
+use super::{to_deci, ConditioningState, Sen66Reading};
 
 /// Initialize the SEN66 sensor and start continuous measurement
 ///
@@ -43,11 +43,11 @@ where
 
 /// Read the latest sample with conditioning guards
 ///
-/// Returns `SensorReading::empty()` if the sensor reports data not
+/// Returns `Sen66Reading::empty()` if the sensor reports data not
 /// ready.  Fields that have not yet met their conditioning threshold
 /// are returned as `None`.  During NOx conditioning, raw sensor ticks
 /// are logged for hardware diagnostics.
-pub async fn read<I2C, D>(sensor: &mut Sen6x<I2C, D>, state: &mut SensorState) -> SensorReading
+pub async fn read<I2C, D>(sensor: &mut Sen6x<I2C, D>, state: &mut ConditioningState) -> Sen66Reading
 where
     I2C: I2c,
     D: DelayNs,
@@ -56,12 +56,12 @@ where
         Ok(r) => r,
         Err(e) => {
             warn!("SEN66: data ready check failed: {:?}", e);
-            return SensorReading::empty();
+            return Sen66Reading::empty();
         }
     };
 
     if !ready {
-        return SensorReading::empty();
+        return Sen66Reading::empty();
     }
 
     // Log raw NOx ticks during conditioning for diagnostics
@@ -153,7 +153,7 @@ where
                 None
             };
 
-            SensorReading {
+            Sen66Reading {
                 pm1_0,
                 pm2_5,
                 pm4_0,
@@ -167,7 +167,7 @@ where
         }
         Err(e) => {
             error!("SEN66: read failed: {:?}", e);
-            SensorReading::empty()
+            Sen66Reading::empty()
         }
     }
 }

@@ -8,7 +8,7 @@
 use heapless::String;
 
 use super::error::MqttError;
-use crate::sensor::SensorReading;
+use crate::sensor::Sen66Reading;
 use crate::time::Timestamp;
 
 /// Maximum MQTT topic length
@@ -84,7 +84,7 @@ pub fn format_mqtt_topic(
 pub fn format_json_payload(
     msg_id: u32,
     ts: &Timestamp,
-    reading: Option<&SensorReading>,
+    reading: Option<&Sen66Reading>,
 ) -> Result<String<256>, MqttError> {
     use core::fmt::Write;
 
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn test_format_json_payload_with_sensor() {
         let ts = Timestamp::new(1_700_000_000, 0);
-        let reading = SensorReading {
+        let reading = Sen66Reading {
             pm1_0: Some(52),
             pm2_5: Some(128),
             pm4_0: None,
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn test_format_json_payload_negative_temps() {
         let ts = Timestamp::new(1_700_000_000, 0);
-        let reading = SensorReading {
+        let reading = Sen66Reading {
             pm1_0: None,
             pm2_5: None,
             pm4_0: None,
@@ -242,14 +242,14 @@ mod tests {
         let result = format_json_payload(1, &ts, Some(&reading)).unwrap();
         assert!(result.as_str().contains("\"temp_c\":-0.1"));
 
-        let reading = SensorReading {
+        let reading = Sen66Reading {
             temp_c: Some(-9),
             ..reading
         };
         let result = format_json_payload(1, &ts, Some(&reading)).unwrap();
         assert!(result.as_str().contains("\"temp_c\":-0.9"));
 
-        let reading = SensorReading {
+        let reading = Sen66Reading {
             temp_c: Some(-105),
             ..reading
         };

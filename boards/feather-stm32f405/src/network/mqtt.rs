@@ -41,7 +41,7 @@ use rust_mqtt::{
     Bytes,
 };
 
-use crate::{device_id, sensor::SensorReading, time, tls_buffers};
+use crate::{device_id, sensor::Sen66Reading, time, tls_buffers};
 
 // Re-export core formatting functions and types
 pub use iot_core::network::mqtt::{format_json_payload, format_mqtt_topic, MqttConfig};
@@ -128,7 +128,7 @@ impl MqttClient {
         stack: &Stack<'static>,
         rng: &mut RNG,
         buffers: &mut MqttBuffers<'_>,
-        mut sensor_rx: rtic_sync::channel::Receiver<'static, SensorReading, N>,
+        mut sensor_rx: rtic_sync::channel::Receiver<'static, Sen66Reading, N>,
     ) -> !
     where
         RNG: rand_core::RngCore + rand_core::CryptoRng,
@@ -178,7 +178,7 @@ impl MqttClient {
         stack: &Stack<'static>,
         rng: &mut RNG,
         buffers: &mut MqttBuffers<'_>,
-        sensor_rx: &mut rtic_sync::channel::Receiver<'static, SensorReading, N>,
+        sensor_rx: &mut rtic_sync::channel::Receiver<'static, Sen66Reading, N>,
     ) -> Result<(), NetworkError>
     where
         RNG: rand_core::RngCore + rand_core::CryptoRng,
@@ -265,7 +265,7 @@ impl MqttClient {
 
         // --- Publish loop ---
         let mut msg_count = 0u32;
-        let mut latest_reading: Option<SensorReading> = None;
+        let mut latest_reading: Option<Sen66Reading> = None;
 
         loop {
             Timer::after(Duration::from_secs(self.config.publish_interval_secs)).await;

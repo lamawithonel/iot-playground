@@ -35,7 +35,7 @@ mod app {
     use rtic_sync::channel::{Receiver, Sender};
 
     use network::{manager, NetworkClient as _, SntpClient};
-    use sensor::SensorReading;
+    use sensor::Sen66Reading;
 
     /// Channel capacity for sensor readings
     const SENSOR_CHANNEL_CAP: usize = 2;
@@ -167,7 +167,7 @@ mod app {
         info!("I2C1 initialized: 400 kHz, PB6/PB7 (SEN66)");
 
         // Sensor → network channel
-        let (sensor_tx, sensor_rx) = rtic_sync::make_channel!(SensorReading, SENSOR_CHANNEL_CAP);
+        let (sensor_tx, sensor_rx) = rtic_sync::make_channel!(Sen66Reading, SENSOR_CHANNEL_CAP);
 
         heartbeat::spawn().ok();
         sensor_task::spawn(i2c, sensor_tx).ok();
@@ -194,12 +194,12 @@ mod app {
     /// at the configured sample interval and sends them to the
     /// network task via channel.  Sub-sensor readings are suppressed
     /// during their respective conditioning periods (see
-    /// [`sensor::SensorState`]).
+    /// [`sensor::ConditioningState`]).
     #[task(priority = 1)]
     async fn sensor_task(
         _cx: sensor_task::Context,
         i2c: I2c<'static, embassy_stm32::mode::Async, embassy_stm32::i2c::Master>,
-        mut sender: Sender<'static, SensorReading, SENSOR_CHANNEL_CAP>,
+        mut sender: Sender<'static, Sen66Reading, SENSOR_CHANNEL_CAP>,
     ) -> ! {
         info!("Sensor task started — initializing SEN66");
 
@@ -221,7 +221,7 @@ mod app {
         // Wait for first sample to be ready
         Mono::delay((sensor::INITIAL_DELAY_SECS * 1_000).millis()).await;
 
-        let mut state = sensor::new_sensor_state();
+        let mut state = sensor::new_conditioning_state();
 
         loop {
             let reading = sensor::sen66::read(&mut sen66, &mut state).await;
@@ -242,7 +242,7 @@ mod app {
         _cx: network_task::Context,
         periph: NetworkPeripherals,
         rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
-        sensor_rx: Receiver<'static, SensorReading, SENSOR_CHANNEL_CAP>,
+        sensor_rx: Receiver<'static, Sen66Reading, SENSOR_CHANNEL_CAP>,
     ) -> ! {
         use embassy_net::{Config, StackResources};
         use static_cell::StaticCell;
@@ -298,7 +298,7 @@ mod app {
     async fn run_clients(
         stack: &embassy_net::Stack<'static>,
         rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
-        sensor_rx: Receiver<'static, SensorReading, SENSOR_CHANNEL_CAP>,
+        sensor_rx: Receiver<'static, Sen66Reading, SENSOR_CHANNEL_CAP>,
     ) -> ! {
         use embassy_stm32::rng::Rng;
         use static_cell::StaticCell;

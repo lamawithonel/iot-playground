@@ -1,7 +1,7 @@
 //! Sensor conditioning state tracking
 //!
 //! Each SEN66 sub-sensor has a warmup period after power-on before
-//! readings are reliable.  [`SensorState`] tracks approximate
+//! readings are reliable.  [`ConditioningState`] tracks approximate
 //! elapsed time and exposes readiness predicates for each sensor.
 //!
 //! | Sensor | Warmup  |
@@ -27,7 +27,7 @@ pub const VOC_WARMUP_SECS: u64 = 60;
 /// NOx index (SGP41) warmup time in seconds
 pub const NOX_WARMUP_SECS: u64 = 600;
 
-/// Milestone flags returned by [`SensorState::check_milestones`]
+/// Milestone flags returned by [`ConditioningState::check_milestones`]
 ///
 /// Each flag is `true` exactly once — the first time the sensor
 /// crosses its warmup threshold.  The BSP uses these to drive
@@ -55,7 +55,7 @@ pub struct MilestoneFlags {
 /// Elapsed time is tracked approximately: the first read records
 /// `initial_delay_secs` and each subsequent read adds
 /// `interval_secs`.
-pub struct SensorState {
+pub struct ConditioningState {
     /// Sample interval in seconds (from build config)
     interval_secs: u64,
     /// Initial delay before first sample, in seconds
@@ -77,7 +77,7 @@ pub struct SensorState {
     read_count: u32,
 }
 
-impl SensorState {
+impl ConditioningState {
     /// Create a new state tracker
     ///
     /// `interval_secs` is the sample period (e.g., 5 for debug,
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_conditioning_first_read() {
-        let mut state = SensorState::new(5, 2);
+        let mut state = ConditioningState::new(5, 2);
         assert_eq!(state.elapsed_secs(), 0);
 
         let elapsed = state.record_read();
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_conditioning_progression() {
-        let mut state = SensorState::new(5, 2);
+        let mut state = ConditioningState::new(5, 2);
         state.record_read(); // 2s
         state.record_read(); // 7s
         state.record_read(); // 12s
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_temp_rh_ready_timing() {
-        let mut state = SensorState::new(5, 2);
+        let mut state = ConditioningState::new(5, 2);
         state.record_read(); // 2s
         assert!(!state.temp_rh_ready());
 
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_voc_ready_timing() {
-        let mut state = SensorState::new(10, 2);
+        let mut state = ConditioningState::new(10, 2);
         // Advance to just under 60s
         for _ in 0..6 {
             state.record_read(); // 2, 12, 22, 32, 42, 52
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_nox_ready_timing() {
-        let mut state = SensorState::new(60, 2);
+        let mut state = ConditioningState::new(60, 2);
         // 10 reads at 60s interval: 2, 62, 122, ..., 542
         for _ in 0..10 {
             state.record_read();
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_milestone_fires_once() {
-        let mut state = SensorState::new(5, 2);
+        let mut state = ConditioningState::new(5, 2);
         state.record_read(); // 2s
         state.record_read(); // 7s
         state.record_read(); // 12s — temp_rh should fire
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_all_milestones_eventually() {
-        let mut state = SensorState::new(1, 1);
+        let mut state = ConditioningState::new(1, 1);
         let mut got_nox = false;
 
         for _ in 0..650 {
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_zero_initial_delay() {
-        let mut state = SensorState::new(5, 0);
+        let mut state = ConditioningState::new(5, 0);
 
         // First read: elapsed = initial_delay_secs = 0
         let elapsed = state.record_read();
