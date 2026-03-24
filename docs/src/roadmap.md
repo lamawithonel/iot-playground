@@ -2,8 +2,8 @@
 ## Embedded Rust IoT Firmware
 
 **Version:** 1.0  
-**Last Updated:** 2026-01-18  
-**Project Phase:** Phase 2 (Network Stack)
+**Last Updated:** 2026-03-23  
+**Project Phase:** Phase 2 (Network Stack) / Phase 3 Complete
 
 ---
 
@@ -57,14 +57,17 @@ Build a reference implementation for embedded Rust IoT firmware on STM32F405RG, 
 - [x] Network stack abstraction (`network` module)
 - [x] SNTP client with RTC synchronization
 - [x] TLS 1.3 handshake (using `embedded-tls`)
-- [x] Local MQTT broker test environment (Docker)
+- [x] Local MQTT broker test environment (Podman)
+- [x] MQTT v5.0 persistent connection with reconnection
+- [x] MQTT keep-alive handling
+- [x] Device identification using STM32 UID
+- [x] Decoupled error architecture
+- [x] Platform-agnostic `core/` crate with host-side unit tests
 
 **In Progress:**
-- [ ] MQTT client with AWS IoT Core
 - [ ] Interrupt-driven packet reception (EXTI2)
-
-**Blocked:**
-- None currently
+- [ ] WFI/Sleep mode between messages
+- [ ] Full AWS IoT Core integration
 
 ### 2.2 TLS Library Decision
 
@@ -125,34 +128,26 @@ Build a reference implementation for embedded Rust IoT firmware on STM32F405RG, 
 - [x] MQTT v5.0 client with TLS 1.3 (basic connectivity)
 - [x] Device identification using STM32 UID
 - [x] Decoupled error architecture
-- [ ] MQTT persistent connection with periodic test publishing (Phase 2.5)
+- [x] MQTT persistent connection with exponential-backoff reconnection
+- [x] MQTT keep-alive handling (configurable interval)
 - [ ] Event-driven MQTT message handling
-- [ ] MQTT keep-alive handling (AWS IoT 1200s interval)
 - [ ] Shared MQTT connection resource (RTIC Shared)
 - [ ] WFI/Sleep mode between messages
 - [ ] Interrupt-driven packet reception (EXTI2)
 - [ ] Full AWS IoT Core integration
 
-**Phase 2.5 Testing Goals (Current):**
-- Implement periodic test data task (30s interval)
-- Establish MQTT connection per publish cycle (temporary)
-- Validate end-to-end TLS + MQTT + device ID flow
-- Prepare infrastructure for persistent connection refactoring
+**Phase 2 Remaining Work:**
+- Wire EXTI2 interrupt for W5500 packet reception
+- Implement proper interrupt-driven wake from WFI
+- Event-driven MQTT message handling
+- AWS IoT Core endpoint configuration and TLS cert verification
 
-**Phase 2.5 → Phase 3 Transition Requirements:**
-- Refactor to maintain single persistent MQTT connection
-- Move connection to RTIC Shared resource for cross-task access
-- Implement proper keep-alive with AWS IoT recommendations (1200s)
-- Add WFI/Sleep mode with interrupt-driven wake (requires EXTI2)
-- Implement message queuing for reliability
-
-### Phase 3: Sensor Integration ⏳ Not Started
-- [ ] Verify sensor pin assignments with logic analyzer
-- [ ] I2C abstraction
-- [ ] I2C bus initialization
-- [ ] SEN66 driver with CRC validation
-- [ ] Periodic sensor readings (60s timer)
-- [ ] Publish sensor data via MQTT
+### Phase 3: Sensor Integration ✅ Complete
+- [x] SEN66 I2C driver (via `sen6x` crate with CRC validation)
+- [x] Periodic sensor readings (configurable interval, default 60s)
+- [x] Sensor conditioning guards (SEN66 sub-sensor warmup tracking)
+- [x] Publish sensor data via MQTT (JSON, planned migration to protobuf)
+- [x] Platform-agnostic sensor types and conditioning in `core/`
 
 ### Phase 4: Display ⏳ Not Started
 - [ ] Verify E-ink breakout board pin assignments with logic analyzer
@@ -210,7 +205,7 @@ When on-device testing automation becomes valuable (likely Phase 3+), a self-hos
 | Phase 0: Workspace Migration | 2026-01-18 | ✅ Complete |
 | Phase 1: Core Platform | - | ✅ Complete |
 | Phase 2: Network Stack | TBD | 🔄 In Progress |
-| Phase 3: Sensor Integration | TBD | ⏳ Not Started |
+| Phase 3: Sensor Integration | TBD | ✅ Complete |
 | Phase 4: Display | TBD | ⏳ Not Started |
 | Phase 5: CAN Gateway | TBD | ⏳ Not Started |
 | Phase 6: Secure OTA | TBD | ⏳ Not Started |
