@@ -30,7 +30,7 @@ pub fn to_deci(val: f32) -> i32 {
 /// yet produced a valid measurement or is still conditioning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct SensorReading {
+pub struct Sen66Reading {
     /// PM1.0 concentration in deci-µg/m³ (value 52 = 5.2 µg/m³)
     pub pm1_0: Option<i32>,
     /// PM2.5 concentration in deci-µg/m³
@@ -51,7 +51,7 @@ pub struct SensorReading {
     pub humidity: Option<i32>,
 }
 
-impl SensorReading {
+impl Sen66Reading {
     /// Create an empty reading (all fields `None`)
     pub const fn empty() -> Self {
         Self {
@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_sensor_reading_empty() {
-        let r = SensorReading::empty();
+        let r = Sen66Reading::empty();
         assert_eq!(r.pm1_0, None);
         assert_eq!(r.pm2_5, None);
         assert_eq!(r.pm4_0, None);
