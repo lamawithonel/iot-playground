@@ -59,14 +59,14 @@ cargo test --manifest-path feather-stm32f405/Cargo.toml --lib
 
 **Status:** 🔄 Partially implemented - calendar tests exist, CI integration pending
 
-### 2.3 Docker Image Validation (Automated)
+### 2.3 Container Image Validation (Automated)
 
 **Environment:** GitHub Actions public runners
 
 **Purpose:** Catch regressions in test infrastructure (Mosquitto MQTT broker)
 
 **Tests:**
-- Docker image builds successfully
+- Container image builds successfully
 - Mosquitto starts and listens on expected ports
 - TLS certificates generated correctly
 
@@ -77,7 +77,7 @@ cargo test --manifest-path feather-stm32f405/Cargo.toml --lib
 **Environment:** Self-hosted GitHub Actions runner
 
 **Prerequisites:**
-- Linux workstation with Docker
+- Linux workstation with container runtime (Podman or Docker)
 - J-Link or compatible SWD debugger
 - STM32F405 Feather connected via USB
 - Local network access (for Mosquitto container)
@@ -85,7 +85,7 @@ cargo test --manifest-path feather-stm32f405/Cargo.toml --lib
 **Architecture:**
 ```
 ┌────────────────────────────────────────────────────┐
-│  Self-Hosted Runner (Docker container)             │
+│  Self-Hosted Runner (container)                     │
 │  ├─ probe-rs / cargo-embed                         │
 │  ├─ USB passthrough to J-Link                      │
 │  └─ Network access to Mosquitto container          │
@@ -160,7 +160,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - Build Mosquitto Docker image
+      - Build Mosquitto container image
       - Validate image starts correctly
 
   on-device:
@@ -180,14 +180,14 @@ jobs:
 ### 4.1 Requirements
 
 - Linux host (Ubuntu 22.04+ recommended)
-- Docker installed
+- Container runtime (Podman or Docker)
 - USB access for J-Link debugger
 - Network connectivity
 
-### 4.2 Installation (Docker Method)
+### 4.2 Installation (Container Method)
 
 ```bash
-# Create runner container
+# Create runner container (using Docker as example)
 docker run -d \
   --name github-runner \
   --restart unless-stopped \
@@ -216,7 +216,7 @@ sudo udevadm trigger
 
 The runner container needs access to:
 - Internet (for GitHub API)
-- Local Mosquitto container (e.g., via Docker bridge network)
+- Local Mosquitto container (e.g., via container bridge network)
 
 ```bash
 # Create shared network
@@ -227,8 +227,7 @@ docker run -d \
   --name mosquitto-test \
   --network iot-test-net \
   -p 8883:8883 \
-  -v $(pwd)/feather-stm32f405/docker/mosquitto:/mosquitto \
-  eclipse-mosquitto:latest
+  docker.io/library/eclipse-mosquitto:latest
 
 # Connect runner to shared network
 docker network connect iot-test-net github-runner
@@ -257,7 +256,7 @@ docker network connect iot-test-net github-runner
 **Objective:** Verify TLS handshake with local Mosquitto broker
 
 **Procedure:**
-1. Start Mosquitto with TLS enabled: `cd feather-stm32f405/docker && docker-compose up`
+1. Start Mosquitto with TLS enabled: `mise run broker:start`
 2. Flash firmware: `cargo embed --release`
 3. Monitor RTT logs: Look for "TLS handshake successful"
 4. Capture packets: `sudo tcpdump -i any -w capture.pcap port 8883`

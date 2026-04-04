@@ -36,7 +36,7 @@ This installs pinned versions of Rust (with the
 
 ```bash
 mise run docs           # serve documentation locally
-mise run broker:start   # start MQTT test broker (Podman)
+mise run broker:start   # start MQTT test broker
 mise run broker:stop    # stop MQTT test broker
 mise run broker:logs    # view broker logs
 mise run tls:ca         # generate root CA certificate
@@ -53,20 +53,23 @@ mise run tls:client device  # generate device client cert
    mise install
    ```
 
-2. **probe-rs tools** (for building, flashing, and debugging):
-   ```bash
-   cargo install probe-rs-tools --locked
-   cargo install cargo-embed --locked
-   cargo install cargo-flash --locked
-   ```
+   This installs Rust (with the ARM target), flip-link,
+   probe-rs-tools (includes `probe-rs`, `cargo-embed`, and
+   `cargo-flash`), and mdbook.
 
-3. **Podman** (for the MQTT test broker):
+2. **Container runtime** (for the MQTT test broker) — one of:
+   - [Podman](https://podman.io/getting-started/installation)
+     (preferred)
+   - [Docker](https://docs.docker.com/get-docker/)
+
    ```bash
-   # Fedora/RHEL
+   # Fedora/RHEL (Podman)
    sudo dnf install podman
 
-   # Debian/Ubuntu
+   # Debian/Ubuntu (Podman)
    sudo apt install podman
+
+   # Or install Docker: https://docs.docker.com/get-docker/
    ```
 
 ### Optional Tools
@@ -211,7 +214,7 @@ iot-playground/
 ├── core/                   # Platform-agnostic business logic (no_std)
 ├── hal-abstractions/       # Hardware abstraction traits (no_std)
 ├── test/                   # Test infrastructure
-│   ├── broker/             # Mosquitto MQTT test broker (Podman)
+│   ├── broker/             # Mosquitto MQTT test broker (containerized)
 │   └── scripts/            # Shared test scripts (TLS cert generation)
 ├── apps/                   # Application binaries (future)
 └── docs/                   # Documentation (mdBook)
@@ -416,7 +419,7 @@ Certs are NOOP if they already exist — safe to run repeatedly.
 Start the local Mosquitto MQTT broker with TLS support:
 
 ```bash
-mise run broker:start    # Build and start via Podman
+mise run broker:start    # Build and start container
 mise run broker:stop     # Stop and remove
 mise run broker:logs     # View live logs
 ```
