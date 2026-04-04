@@ -14,9 +14,13 @@
 #   --curve <curve>   Override the elliptic curve (e.g., P-256, P-384)
 #   --hash <hash>     Override the hash algorithm (e.g., SHA256, SHA384)
 #   --force           Regenerate even if files already exist
-#   --cn <cn>         Override the Common Name (default: 192.168.1.1)
-#   --san <san>       Override the Subject Alt Name (default: IP:192.168.1.1)
+#   --cn <cn>         Override the Common Name (default: platform-dependent)
+#   --san <san>       Override the Subject Alt Name (default: platform-dependent)
 #   --days <days>     Certificate validity in days (default: 3650)
+#
+# Default CN/SAN is determined by:
+#   1. BROKER_HOST_IP environment variable (if set)
+#   2. Platform detection: 127.0.0.1 on macOS, 192.168.1.1 on Linux
 #
 # Output is YAML-formatted for easy parsing by other scripts.
 #
@@ -34,8 +38,6 @@ _KEY_DIR='.local/private'
 _CSR_DIR='.cache/signing_requests'
 
 _DEFAULT_CA_CN='IoT Playground Root CA'
-_DEFAULT_CN='192.168.1.1'
-_DEFAULT_SAN='IP:192.168.1.1'
 _DEFAULT_DAYS='3650'
 
 # Reject names that could traverse paths or contain shell metacharacters.
@@ -45,6 +47,54 @@ _validate_name() {
 		exit 1
 	fi
 }
+
+# Reject CN values that could inject X.509 subject fields.
+# OpenSSL interprets '/' in -subj as a field separator.
+# Control characters could inject arbitrary extensions via extfile.
+_validate_cn() {
+	if [ -z "$1" ]; then
+		echo 'ERROR: CN must not be empty' >&2
+		exit 1
+	fi
+	if [[ "$1" == */* ]]; then
+		echo "ERROR: invalid CN '${1}' — must not contain '/'" >&2
+		exit 1
+	fi
+	if [[ "$1" =~ [^[:print:]] ]]; then
+		echo "ERROR: invalid CN — contains control characters" >&2
+		exit 1
+	fi
+}
+
+# Reject SAN values containing control characters.  Newlines in
+# SAN flow into OpenSSL extfile via printf, where they would
+# inject arbitrary X.509 extensions.
+_validate_san() {
+	if [ -z "$1" ]; then
+		echo 'ERROR: SAN must not be empty' >&2
+		exit 1
+	fi
+	if [[ "$1" =~ [^[:print:]] ]]; then
+		echo "ERROR: invalid SAN — contains control characters" >&2
+		exit 1
+	fi
+}
+
+# Platform-aware CN/SAN defaults: env var → uname → fallback.
+# Defaults are validated through the canonical _validate_cn /
+# _validate_san functions to maintain a single validation path.
+if [ -n "${BROKER_HOST_IP:-}" ]; then
+	_DEFAULT_CN="$BROKER_HOST_IP"
+	_DEFAULT_SAN="IP:${BROKER_HOST_IP}"
+elif [ "$(uname -s)" = 'Darwin' ]; then
+	_DEFAULT_CN='127.0.0.1'
+	_DEFAULT_SAN='IP:127.0.0.1'
+else
+	_DEFAULT_CN='192.168.1.1'
+	_DEFAULT_SAN='IP:192.168.1.1'
+fi
+_validate_cn "$_DEFAULT_CN"
+_validate_san "$_DEFAULT_SAN"
 
 # Curve names: OpenSSL uses the name form, not the P-xxx form.
 # Map user-friendly names to OpenSSL names.
@@ -80,8 +130,10 @@ _usage() {
 	echo '  --hash <hash>     Hash algorithm (default: SHA256 for'
 	echo '                    CA/server, SHA384 for client)'
 	echo '  --force           Regenerate even if files exist'
-	echo '  --cn <cn>         Common Name (default: 192.168.1.1)'
-	echo '  --san <san>       Subject Alt Name (default: IP:192.168.1.1)'
+	echo '  --cn <cn>         Common Name (default: platform-dependent;'
+	echo '                    see BROKER_HOST_IP env var)'
+	echo '  --san <san>       Subject Alt Name (default: platform-dependent;'
+	echo '                    see BROKER_HOST_IP env var)'
 	echo '  --days <days>     Validity in days (default: 3650)'
 	exit 1
 }
@@ -89,6 +141,7 @@ _usage() {
 _parse_opts() {
 	_force='false'
 	_cn="$_DEFAULT_CN"
+	_cn_explicit='false'
 	_san="$_DEFAULT_SAN"
 	_days="$_DEFAULT_DAYS"
 	_curve=''
@@ -113,12 +166,14 @@ _parse_opts() {
 				if [ $# -lt 2 ]; then
 					echo 'ERROR: --cn requires a value' >&2; _usage
 				fi
-				_cn="$2"; shift 2
+				_validate_cn "$2"
+				_cn="$2"; _cn_explicit='true'; shift 2
 				;;
 			--san)
 				if [ $# -lt 2 ]; then
 					echo 'ERROR: --san requires a value' >&2; _usage
 				fi
+				_validate_san "$2"
 				_san="$2"; shift 2
 				;;
 			--days)
@@ -181,8 +236,13 @@ csr: $(_yaml_quote "${_CSR_DIR}/${_name}.csr")"
 _gen_ca() {
 	_parse_opts "$@"
 
-	# Apply CA defaults (CA uses a descriptive CN, not an IP)
-	if [ "$_cn" = "$_DEFAULT_CN" ]; then _cn="$_DEFAULT_CA_CN"; fi
+	# Apply CA defaults (CA uses a descriptive CN, not an IP).
+	# Only substitute the CA name when --cn was not explicitly
+	# provided — respect user intent.
+	if [ "$_cn_explicit" = 'false' ] \
+			&& echo "$_cn" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+		_cn="$_DEFAULT_CA_CN"
+	fi
 	if [ -z "$_curve" ]; then _curve='P-256'; fi
 	if [ -z "$_hash" ]; then _hash='SHA256'; fi
 
