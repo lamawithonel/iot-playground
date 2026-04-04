@@ -4,10 +4,12 @@
 [env]
 CARGO_TERM_COLOR = 'always'
 DEFMT_LOG = 'info'
+_.source = 'test/scripts/env-defaults.sh'
 
 [tools]
 rust = { version = "stable", targets = "thumbv7em-none-eabihf", components = "rustfmt,clippy" }
 "cargo:flip-link" = "0.1.12"
+"cargo:probe-rs-tools" = "0.25.0"
 mdbook = '0.4.40'
 
 # ──────────────────────────────────────────────────────
@@ -24,8 +26,6 @@ mdbook = '0.4.40'
 
 [tasks."tls:ca"]
 description = 'Generate root CA certificate'
-sources = ['test/scripts/gen-tls-cert.sh']
-outputs = ['.local/certs/ca/root.crt', '.local/private/ca.key']
 usage = '''
 flag "--curve <curve>" help="Elliptic curve" default="P-256" {
   choices "P-256" "P-384" "P-521"
@@ -34,16 +34,16 @@ flag "--hash <hash>" help="Hash algorithm" default="SHA256" {
   choices "SHA256" "SHA384" "SHA512"
 }
 flag "--force" help="Regenerate even if files exist"
-flag "--cn <cn>" help="Common Name" default="192.168.1.1"
-flag "--san <san>" help="Subject Alt Name" default="IP:192.168.1.1"
+flag "--cn <cn>" help="Common Name (default: platform-detected IP)"
+flag "--san <san>" help="Subject Alt Name (default: IP:<detected>)"
 flag "--days <days>" help="Validity in days" default="3650"
 '''
 run = '''
 test/scripts/gen-tls-cert.sh ca \
   --curve "${usage_curve?}" \
   --hash "${usage_hash?}" \
-  --cn "${usage_cn?}" \
-  --san "${usage_san?}" \
+  ${usage_cn:+--cn "$usage_cn"} \
+  ${usage_san:+--san "$usage_san"} \
   --days "${usage_days?}" \
   ${usage_force:+--force}
 '''
@@ -60,16 +60,16 @@ flag "--hash <hash>" help="Hash algorithm" default="SHA256" {
   choices "SHA256" "SHA384" "SHA512"
 }
 flag "--force" help="Regenerate even if files exist"
-flag "--cn <cn>" help="Common Name" default="192.168.1.1"
-flag "--san <san>" help="Subject Alt Name" default="IP:192.168.1.1"
+flag "--cn <cn>" help="Common Name (default: platform-detected IP)"
+flag "--san <san>" help="Subject Alt Name (default: IP:<detected>)"
 flag "--days <days>" help="Validity in days" default="3650"
 '''
 run = '''
 test/scripts/gen-tls-cert.sh server "${usage_name:?}" \
   --curve "${usage_curve?}" \
   --hash "${usage_hash?}" \
-  --cn "${usage_cn?}" \
-  --san "${usage_san?}" \
+  ${usage_cn:+--cn "$usage_cn"} \
+  ${usage_san:+--san "$usage_san"} \
   --days "${usage_days?}" \
   ${usage_force:+--force}
 '''
@@ -86,16 +86,16 @@ flag "--hash <hash>" help="Hash algorithm" default="SHA384" {
   choices "SHA256" "SHA384" "SHA512"
 }
 flag "--force" help="Regenerate even if files exist"
-flag "--cn <cn>" help="Common Name" default="192.168.1.1"
-flag "--san <san>" help="Subject Alt Name" default="IP:192.168.1.1"
+flag "--cn <cn>" help="Common Name (default: platform-detected IP)"
+flag "--san <san>" help="Subject Alt Name (default: IP:<detected>)"
 flag "--days <days>" help="Validity in days" default="3650"
 '''
 run = '''
 test/scripts/gen-tls-cert.sh client "${usage_name:?}" \
   --curve "${usage_curve?}" \
   --hash "${usage_hash?}" \
-  --cn "${usage_cn?}" \
-  --san "${usage_san?}" \
+  ${usage_cn:+--cn "$usage_cn"} \
+  ${usage_san:+--san "$usage_san"} \
   --days "${usage_days?}" \
   ${usage_force:+--force}
 '''
@@ -103,16 +103,25 @@ test/scripts/gen-tls-cert.sh client "${usage_name:?}" \
 [tasks."tls:server:broker"]
 description = 'Generate server certificate for Mosquitto broker'
 depends = ['tls:ca']
-sources = ['test/scripts/gen-tls-cert.sh', '.local/certs/ca/root.crt']
-outputs = ['.local/certs/server/broker.crt', '.local/private/broker.key']
-run = 'test/scripts/gen-tls-cert.sh server broker'
+run = '''
+#!/usr/bin/env bash
+set -o errexit
+
+extra_args=()
+if [ -n "${BROKER_HOST_IP:-}" ]; then
+  extra_args+=(--cn "$BROKER_HOST_IP" --san "IP:${BROKER_HOST_IP}")
+else
+  echo "warning: BROKER_HOST_IP is not set; using gen-tls-cert.sh defaults." >&2
+  echo "         Set BROKER_HOST_IP or BROKER_INTERFACE to control the cert CN/SAN." >&2
+fi
+
+test/scripts/gen-tls-cert.sh server broker "${extra_args[@]}" "$@"
+'''
 
 [tasks."tls:client:device"]
 description = 'Generate client certificate for test device'
 depends = ['tls:ca']
-sources = ['test/scripts/gen-tls-cert.sh', '.local/certs/ca/root.crt']
-outputs = ['.local/certs/client/device.crt', '.local/private/device.key']
-run = 'test/scripts/gen-tls-cert.sh client device'
+run = 'test/scripts/gen-tls-cert.sh client device "$@"'
 
 # ── Documentation ────────────────────────────────────
 
@@ -148,7 +157,7 @@ exec cargo test --workspace --target "$_host_target" "$@"
 # ── Mosquitto MQTT Broker ────────────────────────────
 
 [tasks."broker:start"]
-description = 'Start the Mosquitto MQTT test broker via Podman'
+description = 'Start the Mosquitto MQTT test broker'
 depends = ['tls:server:broker']
 run = '''
 #!/usr/bin/env bash
@@ -172,4 +181,46 @@ exec test/broker/stop-broker.sh
 
 [tasks."broker:logs"]
 description = 'View Mosquitto MQTT test broker logs'
-run = 'podman logs -f mosquitto-tls 2>/dev/null || echo "Broker is not running."'
+run = '''
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_container='mosquitto-tls'
+
+# Find which runtime owns the container.
+if [ -n "${CONTAINER_RUNTIME:-}" ]; then
+  case "$CONTAINER_RUNTIME" in
+    podman|docker) ;;
+    *)
+      printf 'ERROR: CONTAINER_RUNTIME=%s is not supported.\n' \
+        "$CONTAINER_RUNTIME" >&2
+      echo 'Set CONTAINER_RUNTIME to "podman" or "docker".' >&2
+      exit 1
+      ;;
+  esac
+  if ! command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1; then
+    printf 'ERROR: CONTAINER_RUNTIME=%s but %s is not installed.\n' \
+      "$CONTAINER_RUNTIME" "$CONTAINER_RUNTIME" >&2
+    exit 1
+  fi
+  _rt="$CONTAINER_RUNTIME"
+else
+  _rt=''
+  for _c in podman docker; do
+    if command -v "$_c" >/dev/null 2>&1 \
+        && "$_c" ps -a --format '{{.Names}}' 2>/dev/null \
+        | grep -q "^${_container}$"; then
+      _rt="$_c"
+      break
+    fi
+  done
+  if [ -z "$_rt" ]; then
+    echo 'Broker is not running.'
+    exit 0
+  fi
+fi
+
+exec "$_rt" logs -f "$_container"
+'''
