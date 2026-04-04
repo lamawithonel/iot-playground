@@ -29,6 +29,8 @@ jobs:
 
       - name: Install tools via mise
         uses: jdx/mise-action@v4
+        with:
+          install_args: 'rust cargo:flip-link mdbook'
 
       - name: Install Rust cross-compilation target
         run: |
