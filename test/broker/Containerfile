@@ -1,5 +1,5 @@
 # Containerfile for Mosquitto MQTT Broker with TLS support
-FROM eclipse-mosquitto:2.0
+FROM docker.io/library/eclipse-mosquitto:2.0@sha256:10b94cc46bad579465e423e6979709f9cee9a778fca9ee0ee12c8590711eec6b
 
 # Copy mosquitto configuration
 COPY mosquitto.conf /mosquitto/config/mosquitto.conf
