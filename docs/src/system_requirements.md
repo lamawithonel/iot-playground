@@ -319,26 +319,36 @@ Once implemented, all QoS levels must be thoroughly tested because they provide 
 - [ ] Periodic sensor readings (60s timer)
 - [ ] Publish sensor data via MQTT
 
-### Phase 4: Display
-- [ ] Verify E-ink breakout board pin assignments with logic analyzer
+### Phase 4: Security Foundation
+- [ ] Feature-gate `NoVerify` TLS
+- [ ] Software-only certificate verification
+- [ ] Threat model document
+- [ ] Flash partitioning design for dual-image OTA
+
+### Phase 5: Protobuf Telemetry
+- [ ] Protocol Buffer schema infrastructure
+- [ ] micropb code generation and encoding migration
+- [ ] AsyncAPI contract for MQTT API
+- [ ] AWS IoT descriptor generation
+
+### Phase 6: Display
 - [ ] SSD1681 SPI communication
-- [ ] Test patterns and text rendering
-- [ ] Status dashboard with sensor data
-- [ ] Partial refresh optimization
+- [ ] Status dashboard with sensor data and device state
+- [ ] LED blink patterns for device state
 
-### Phase 5: CAN Gateway
-- [ ] Verify CAN pin assignments with logic analyzer
-- [ ] CAN bus configuration at 1 Mbps
-- [ ] CAN → MQTT forwarding
-- [ ] MQTT → CAN transmission
-
-### Phase 6: Secure OTA
-- [ ] Bootloader integration (`embassy-boot-stm32`)
+### Phase 7: Secure Boot & OTA
+- [ ] `embassy-boot-stm32` integration
 - [ ] Firmware signature verification
-- [ ] MQTT-based firmware delivery
+- [ ] MQTT-based firmware delivery (AWS IoT Jobs)
 - [ ] Watchdog rollback protection
 
-NOTE: Secure OTA updates may require a more capable MCU
+### Phase 8: Fleet Operations
+- [ ] AWS IoT Fleet Provisioning
+- [ ] Device Shadow integration
+- [ ] IoT Jobs for command dispatch
+
+See [Roadmap](./roadmap.md) for full phase details and
+compliance gates.
 
 ---
 
@@ -385,7 +395,8 @@ NOTE: Secure OTA updates may require a more capable MCU
 ## 10. Reference Information
 
 **Development Tools:**
-- Rust 1.75+ with `thumbv7em-none-eabihf` target
+- Rust stable (≥1.88.0 for micropb) with
+  `thumbv7em-none-eabihf` target
 - `cargo-embed` or `probe-rs` for flashing/debugging
 - J-Link tools for RTT logging
 - Logic analyzer and oscilloscope for hardware validation
