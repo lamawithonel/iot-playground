@@ -61,29 +61,43 @@ Need network connectivity for MQTT communication with AWS IoT Core.
 
 ## ADR-003: Protocol Buffers vs JSON
 
-**Date:** 2026-01-03  
-**Status:** Accepted
+**Date:** 2026-01-03
+**Updated:** 2026-04-05
+**Status:** Accepted (updated with implementation details)
 
 **Context:**
 Need to choose serialization format for MQTT payloads.
 
-**Decision:** Use Protocol Buffers (protobuf) for all MQTT message payloads.
+**Decision:** Use Protocol Buffers (protobuf) for telemetry
+payloads via `micropb` 0.6.  Use JSON via `serde-json-core`
+for AWS Device Shadows and IoT Jobs (required by AWS reserved
+topics).
 
 **Rationale:**
-- Smaller message size (critical for constrained networks)
-- Faster serialization/deserialization
+
+- 82% smaller telemetry payloads (32 B vs 220 B JSON)
+- Deterministic encoding (~7–11 µs on Cortex-M4 at 168 MHz)
+- Native AWS IoT Rules Engine `decode()` support
 - Type-safe with compile-time schema validation
-- Wide adoption in IoT and cloud ecosystems (AWS IoT Core supports protobuf)
+- Wide adoption in IoT and cloud ecosystems (AWS IoT
+  Core supports Protobuf natively)
+- `micropb` is purpose-built for no_std/no_alloc environments
 
 **Consequences:**
-- Less human-readable without protobuf decoder
-- Requires `.proto` schema files and code generation
-- Need `prost` or similar no_std-compatible library
+
+- Requires `.proto` schema files in `proto/` and
+  `micropb-gen` code generation in `core/build.rs`
+- Requires MSRV 1.88.0 (micropb requirement)
+- AWS Device Shadows still need JSON — dual format approach
+- Less human-readable; `buf` tooling for schema management
+- AWS Rules Engine needs `.desc` descriptor files in S3
 
 **Alternatives Considered:**
-- JSON: Human-readable but larger, slower parsing
-- MessagePack: Good compromise but less tooling support
-- CBOR: Similar to MessagePack, less common
+
+- JSON: Human-readable but 82% larger, slower parsing
+- CBOR: 42 B (vs 32 B Protobuf), no native AWS `decode()`
+- MessagePack: Less tooling, no AWS Rules Engine support
+- `prost`: Requires `alloc` — incompatible with no_std
 
 ---
 
@@ -187,12 +201,107 @@ Need to support multiple board profiles (board type + peripherals + application 
 
 ---
 
+## ADR-007: CloudEvents `binary_data` Over `proto_data`
+
+**Date:** 2026-04-05
+**Status:** Accepted
+
+**Context:**
+The CloudEvents Protobuf Event Format v1.0.3-wip defines three
+data variants: `binary_data` (bytes), `text_data` (string), and
+`proto_data` (`google.protobuf.Any`).  The spec states that
+`proto_data` MUST be used "where the data is a protobuf message."
+However, `google.protobuf.Any` requires runtime type URLs and
+dynamic dispatch, which are fundamentally incompatible with
+no_std/no_alloc embedded systems.  Furthermore, `micropb` — the
+only viable Protobuf crate for our constraints — does not
+support `google.protobuf.Any`.
+
+**Decision:** Use the `binary_data` (bytes) field to carry
+Protobuf-encoded sensor telemetry inside the CloudEvents
+envelope.  Identify the inner schema via the CloudEvents `type`
+field (e.g., `iot.sen66.v1`).
+
+**Rationale:**
+
+- micropb 0.6 does not support `google.protobuf.Any`
+- `binary_data` saves 12–20 bytes per message (no type URL
+  overhead), reducing CloudEvents PB from ~96 B to ~80 B
+- Encoding is simpler: two-pass (inner message → bytes →
+  envelope) with no `Any::pack()` complexity
+- Cloud-side routing uses the CloudEvents `type` field, not
+  type URLs — functionally equivalent
+- AWS IoT Rules Engine double-decode works with both variants
+- Widely practiced in production IoT systems
+
+**Consequences:**
+
+- Technically non-compliant with CloudEvents Protobuf spec
+  §3.2 ("data MUST be stored in `proto_data`" for protobuf)
+- Cloud consumers must know the inner schema out-of-band
+  (via `type` field) rather than via `type_url`
+- The `datacontenttype` attribute should be set to
+  `application/protobuf` to signal the binary encoding
+
+**Alternatives Considered:**
+
+- `proto_data` with manual `Any` encoding: Possible but adds
+  complexity, 12–20 B overhead, and requires string formatting
+  for type URLs on the MCU
+- Custom envelope (skip CloudEvents): Loses interoperability
+  with EventBridge and cross-system consumers
+- CloudEvents JSON: 3.5× larger than CloudEvents PB; negates
+  the benefit of Protobuf telemetry
+
+---
+
+## ADR-008: micropb for Protobuf Encoding
+
+**Date:** 2026-04-05
+**Status:** Accepted
+
+**Context:**
+Need a Protobuf library that works in `no_std` without an
+allocator on Cortex-M4 (STM32F405, 192 KB SRAM, 1 MB flash).
+
+**Decision:** Use `micropb` 0.6 with `micropb-gen` for
+build-time code generation from `.proto` files.
+
+**Rationale:**
+
+- Purpose-built for no_std/no_alloc embedded systems
+- Uses `heapless` containers for bounded collections
+- TOML configuration files for per-field capacity budgets
+- ~8–12 KB flash, <1 KB RAM for typical sensor schemas
+- Deterministic encoding: ~1,200–1,800 cycles per message
+- Proto3 support with full encode/decode
+- Actively maintained and widely used in the Rust ecosystem
+
+**Consequences:**
+
+- MSRV 1.88.0 — must track recent stable Rust
+- No `google.protobuf.Any` support (see ADR-007)
+- No Protobuf Editions — proto3 only
+- No defmt integration — requires manual `Format` impls
+- Every `string`/`bytes`/`repeated`/`map` field needs explicit
+  `max_len()` configuration in build.rs or TOML config
+- `micropb-gen` requires `protoc` on the build host
+
+**Alternatives Considered:**
+
+- `prost`: Mature, widely used — requires `alloc` (disqualified)
+- `femtopb`: Smallest footprint, zero-panic — borrow-based API
+  complicates ownership across RTIC tasks, API still evolving
+- `nanopb` (C via FFI): Proven but adds C toolchain dependency
+
+---
+
 ## Template for New ADRs
 
 ```markdown
 ## ADR-XXX: [Title]
 
-**Date:** YYYY-MM-DD  
+**Date:** YYYY-MM-DD
 **Status:** [Proposed | Accepted | Deprecated | Superseded]
 
 **Context:**
@@ -212,4 +321,5 @@ Need to support multiple board profiles (board type + peripherals + application 
 
 ---
 
-*Update this document when significant architectural decisions are made.*
+*Update this document when significant architectural decisions
+are made.*
