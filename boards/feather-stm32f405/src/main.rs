@@ -236,8 +236,10 @@ mod app {
 
     /// Network task - orchestrates network stack and protocol clients
     ///
-    /// Stack is !Send and must remain within this task.
-    #[task(priority = 1)]
+    /// Stack is !Send and must remain within this task.  Runs at
+    /// priority 2 to guarantee <500 µs EXTI2 interrupt latency
+    /// (SR-PERF-001, SR-NET-005).
+    #[task(priority = 2)]
     async fn network_task(
         _cx: network_task::Context,
         periph: NetworkPeripherals,
@@ -323,7 +325,7 @@ mod app {
         //
         // These never-freed buffers are safe in this never-returning
         // async task because:
-        // 1. network_task runs at priority 1 with no resource sharing
+        // 1. network_task runs at priority 2 with no resource sharing
         // 2. Buffers are exclusively owned by this task
         // 3. RTIC 2.x async tasks that never return can safely use
         //    function-local statics
