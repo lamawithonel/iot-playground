@@ -33,6 +33,7 @@ use embedded_tls::{
 use rust_mqtt::{
     buffer::BumpBuffer,
     client::{
+        event::Event,
         options::{ConnectOptions, PublicationOptions, TopicReference},
         Client,
     },
@@ -281,6 +282,9 @@ impl MqttClient {
             };
             msg_count += 1;
 
+            let wakes = crate::IDLE_WAKES.swap(0, core::sync::atomic::Ordering::Relaxed);
+            info!("wfi_wakes: {}", wakes);
+
             let ts = time::get_timestamp();
             let topic_str = format_mqtt_topic(client_id.as_str(), "telemetry")?;
             let payload = format_json_payload(msg_count, &ts, Some(&reading))?;
@@ -306,19 +310,106 @@ impl MqttClient {
                 retain: false,
                 message_expiry_interval: None,
                 topic: TopicReference::Name(topic_name),
-                // QoS 0 — upgrade to QoS 1 in next commit
-                qos: QoS::AtMostOnce,
+                qos: QoS::AtLeastOnce,
             };
 
-            match mqtt
+            let packet_id = match mqtt
                 .publish(&pub_opts, Bytes::from(payload.as_bytes()))
                 .await
             {
-                Ok(packet_id) => {
-                    info!("#{} published (packet_id: {})", msg_count, packet_id);
+                Ok(pid) => {
+                    info!("#{} sent (packet_id: {})", msg_count, pid);
+                    pid
                 }
                 Err(e) => {
                     error!("Publish #{} failed: {:?}", msg_count, Debug2Format(&e));
+                    return Err(MqttError::Disconnected.into());
+                }
+            };
+
+            // QoS 1: poll for PUBACK to confirm delivery and free
+            // the in-flight slot (SEND_MAXIMUM=1).
+            if packet_id > 0 {
+                self.await_puback(&mut mqtt, msg_count, packet_id).await?;
+            }
+        }
+    }
+
+    /// Poll the MQTT client until a PUBACK for `packet_id` arrives.
+    ///
+    /// Handles other events (incoming publishes, pings) that may
+    /// arrive before the expected PUBACK.  Returns an error on
+    /// rejection, timeout, or network failure.
+    ///
+    /// The deadline is 2× `keep_alive_secs`.  If the broker has
+    /// not responded by then, the TCP connection is likely dead
+    /// and the caller should reconnect.
+    async fn await_puback<
+        'c,
+        N,
+        B,
+        const MS: usize,
+        const RM: usize,
+        const SM: usize,
+        const MSI: usize,
+    >(
+        &self,
+        mqtt: &mut Client<'c, N, B, MS, RM, SM, MSI>,
+        msg_count: u32,
+        packet_id: u16,
+    ) -> Result<(), NetworkError>
+    where
+        N: embedded_io_async::Read + embedded_io_async::Write,
+        B: rust_mqtt::buffer::BufferProvider<'c>,
+    {
+        // 2× keep-alive gives the broker ample time to respond.
+        // When keep-alive is 0 (infinite), fall back to 30 s so
+        // a silent broker doesn't block the publish loop forever.
+        let deadline_secs = match self.config.keep_alive_secs {
+            0 => 30,
+            ka => u64::from(ka) * 2,
+        };
+        let deadline = Timer::after(Duration::from_secs(deadline_secs));
+        let mut deadline = core::pin::pin!(deadline);
+
+        loop {
+            use embassy_futures::select::{select, Either};
+            match select(&mut deadline, mqtt.poll()).await {
+                Either::First(_) => {
+                    warn!(
+                        "#{} PUBACK timeout ({}s) for packet {}",
+                        msg_count, deadline_secs, packet_id,
+                    );
+                    return Err(NetworkError::Timeout);
+                }
+                Either::Second(Ok(Event::PublishAcknowledged(puback)))
+                    if puback.packet_identifier == packet_id =>
+                {
+                    info!("#{} acknowledged (PUBACK for {})", msg_count, packet_id);
+                    return Ok(());
+                }
+                Either::Second(Ok(Event::PublishRejected(pubrej))) => {
+                    warn!(
+                        "#{} rejected by broker (packet {}): {:?}",
+                        msg_count,
+                        pubrej.packet_identifier,
+                        Debug2Format(&pubrej.reason_code)
+                    );
+                    return Err(NetworkError::Mqtt(MqttError::PublishFailed));
+                }
+                Either::Second(Ok(Event::Publish(msg))) => {
+                    info!(
+                        "Incoming PUBLISH on '{}' ({} bytes) — no subscriptions active, ignoring",
+                        Debug2Format(&msg.topic),
+                        msg.message.len()
+                    );
+                }
+                Either::Second(Ok(Event::Pingresp)) => {
+                    info!("PINGRESP received");
+                }
+                Either::Second(Ok(_)) => {}
+                Either::Second(Err(e)) => {
+                    error!("MQTT poll failed awaiting PUBACK: {:?}", Debug2Format(&e));
                     return Err(MqttError::Disconnected.into());
                 }
             }
