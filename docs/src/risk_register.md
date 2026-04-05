@@ -1,7 +1,7 @@
 # Risk Register
 ## Embedded Rust IoT Firmware
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-04-05
 
 ---
 
@@ -14,6 +14,10 @@
 | R3 | Limited secure boot on STM32F4 | Medium | High | Plan hardware upgrade path to F7/H7 for production | 📋 Accepted |
 | R4 | `embedded-tls` lacks RSA support | Low | N/A | Use ECDSA certificates; document server requirements | ✅ Mitigated |
 | R5 | Self-hosted runner availability | Low | Medium | Manual testing fallback; runner on primary workstation | 📋 Accepted |
+| R6 | micropb MSRV 1.88.0 toolchain requirement | Low | Low | Workspace already tracks recent stable Rust | 🔄 Monitoring |
+| R7 | CloudEvents Protobuf spec compliance | Low | Medium | Using `binary_data` — technically non-compliant for PB payloads | 📋 Accepted |
+| R8 | `embedded-tls` `NoVerify` in production | High | Medium | Custom `CertVerifier` required before staging deployment | ⚠️ Active |
+| R9 | AWS IoT double-decode limit | Medium | Low | Rules Engine allows max 2 decode() calls; sufficient for CE + payload | 🔄 Monitoring |
 
 ---
 
@@ -81,16 +85,107 @@
 
 ### R5: Self-Hosted Runner Availability
 
-**Description:** On-device testing requires a self-hosted GitHub Actions runner on local workstation, which may have availability issues.
+**Description:** On-device testing requires a self-hosted
+GitHub Actions runner on local workstation, which may have
+availability issues.
 
-**Impact:** Low - Affects CI automation, not development capability.
+**Impact:** Low — Affects CI automation, not development
+capability.
 
 **Mitigation:**
 - Manual testing always available as fallback
 - Runner is simple Docker container (no Kubernetes)
 - Public runners handle all non-hardware tests
 
-**Status:** 📋 Accepted - Will implement when test burden justifies
+**Status:** 📋 Accepted — Will implement when test burden
+justifies
+
+---
+
+### R6: micropb MSRV 1.88.0
+
+**Description:** micropb 0.6 requires Rust 1.88.0.  The
+crate recently bumped its MSRV (was 1.80) and may do so
+again as it adopts new language features.
+
+**Impact:** Low — Workspace already tracks recent stable
+Rust via mise.
+
+**Mitigation:**
+- Pin exact micropb version in Cargo.toml
+- Monitor upstream releases for MSRV bumps
+- mise manages Rust toolchain centrally
+
+**Status:** 🔄 Monitoring — Current toolchain satisfies
+requirement
+
+---
+
+### R7: CloudEvents Protobuf Spec Non-Compliance
+
+**Description:** ADR-007 chose `binary_data` over
+`proto_data` for carrying Protobuf payloads inside
+CloudEvents envelopes.  The CloudEvents Protobuf Event
+Format §3.2 states that `proto_data` MUST be used for
+Protobuf data.  Our approach is technically non-compliant.
+
+**Impact:** Low — No known conformance test suites or
+enforcement mechanisms.  Cloud consumers route by `type`
+field, not `type_url`.
+
+**Mitigation:**
+- Document the deviation in ADR-007
+- Set `datacontenttype` to `application/protobuf` for
+  clarity
+- Cloud-side routing uses `type` attribute (unaffected)
+- If spec finalizes with hard requirement, migration
+  path exists (swap `binary_data` → `proto_data` with
+  manual `Any` packing)
+
+**Status:** 📋 Accepted — Defensible trade-off for
+no_std/no_alloc constraints
+
+---
+
+### R8: `embedded-tls` NoVerify in Production
+
+**Description:** The current TLS configuration uses
+`embedded_tls::CertVerifier::None` (NoVerify), which skips
+server certificate validation.  This is acceptable for
+development but is a compliance blocker for staging and
+production deployments.
+
+**Impact:** High — Certificates are not verified; a
+man-in-the-middle attack could impersonate the MQTT broker.
+
+**Mitigation:**
+- Software-only verification using `webpki`-compatible
+  roots (no hardware dependency)
+- Schedule fix for Security Foundation phase
+
+**Status:** ⚠️ Active — Must resolve before any non-lab
+deployment
+
+---
+
+### R9: AWS IoT Rules Engine Double-Decode Limit
+
+**Description:** Extracting fields from CloudEvents
+Protobuf payloads requires two `decode()` calls: one for
+the CloudEvents envelope and one for the inner sensor
+payload (base64-encoded in `binary_data`).  The AWS IoT
+Rules Engine allows only 2 `decode()` invocations per SQL
+expression.
+
+**Impact:** Medium — If future schemas require nested
+Protobuf messages, a third `decode()` would fail.
+
+**Mitigation:**
+- Current schema design uses flat messages (no nesting)
+- Complex processing offloaded to Lambda functions
+- Monitor AWS for `decode()` limit changes
+
+**Status:** 🔄 Monitoring — Current design is within limits
 
 ---
 
