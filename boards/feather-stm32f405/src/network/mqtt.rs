@@ -3,7 +3,7 @@
 //!
 //! Provides a single-connection MQTT client over TLS 1.3 that:
 //! - Accepts caller-provided static buffers (RTIC `StaticCell` pattern)
-//! - Maintains a persistent connection with periodic publishing
+//! - Publishes telemetry as sensor readings arrive on the channel
 //! - Reconnects with exponential backoff on broker disconnection
 //!
 //! # Memory Management
@@ -113,11 +113,12 @@ impl MqttClient {
         Self { config }
     }
 
-    /// Run the MQTT client forever with periodic publishing
+    /// Run the MQTT client forever with channel-driven publishing
     ///
     /// Establishes a TLS+MQTT connection, then publishes telemetry
-    /// at the configured interval.  On any failure, reconnects with
-    /// exponential backoff (5 s → 60 s cap).
+    /// as sensor readings arrive on the channel — no timer polling.
+    /// On any failure, reconnects with exponential backoff
+    /// (5 s → 60 s cap).
     ///
     /// # Safety
     ///
@@ -263,22 +264,26 @@ impl MqttClient {
 
         info!("MQTT connected — entering publish loop");
 
-        // --- Publish loop ---
+        // --- Publish loop (channel-driven, SR-NET-004/013) ---
+        //
+        // Block on the sensor channel instead of polling a timer.
+        // Between readings the executor yields to RTIC, which enters
+        // WFI — no spurious timer wakeups.
         let mut msg_count = 0u32;
-        let mut latest_reading: Option<Sen66Reading> = None;
 
         loop {
-            Timer::after(Duration::from_secs(self.config.publish_interval_secs)).await;
+            let reading = match sensor_rx.recv().await {
+                Ok(r) => r,
+                Err(_) => {
+                    error!("Sensor channel closed — halting publish loop");
+                    return Err(MqttError::Disconnected.into());
+                }
+            };
             msg_count += 1;
-
-            // Drain channel to get the most recent reading
-            while let Ok(reading) = sensor_rx.try_recv() {
-                latest_reading = Some(reading);
-            }
 
             let ts = time::get_timestamp();
             let topic_str = format_mqtt_topic(client_id.as_str(), "telemetry")?;
-            let payload = format_json_payload(msg_count, &ts, latest_reading.as_ref())?;
+            let payload = format_json_payload(msg_count, &ts, Some(&reading))?;
 
             info!(
                 "Publishing #{} to '{}' ({} bytes)",
@@ -301,7 +306,7 @@ impl MqttClient {
                 retain: false,
                 message_expiry_interval: None,
                 topic: TopicReference::Name(topic_name),
-                // QoS 0 until event-driven handling (SR-SENS-004)
+                // QoS 0 — upgrade to QoS 1 in next commit
                 qos: QoS::AtMostOnce,
             };
 

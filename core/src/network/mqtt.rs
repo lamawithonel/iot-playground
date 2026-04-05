@@ -29,8 +29,6 @@ pub struct MqttConfig {
     pub keep_alive_secs: u16,
     /// Clean start flag (true = new session)
     pub clean_start: bool,
-    /// Seconds between telemetry publishes
-    pub publish_interval_secs: u64,
 }
 
 impl Default for MqttConfig {
@@ -40,7 +38,6 @@ impl Default for MqttConfig {
             broker_port: 8883,
             keep_alive_secs: 60,
             clean_start: true,
-            publish_interval_secs: 30,
         }
     }
 }

@@ -341,14 +341,10 @@ mod app {
             broker_port: 8883,
             keep_alive_secs: 60,
             clean_start: true,
-            publish_interval_secs: config::SAMPLE_INTERVAL_SECS,
         };
         let mut mqtt_client = network::MqttClient::new(mqtt_config);
 
-        info!(
-            "Starting persistent MQTT connection ({}s publish interval)",
-            config::SAMPLE_INTERVAL_SECS,
-        );
+        info!("Starting persistent MQTT connection (channel-driven publish)");
 
         let mut buffers = network::MqttBuffers {
             mqtt: mqtt_buffer,
