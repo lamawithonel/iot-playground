@@ -73,7 +73,7 @@ Need to choose serialization format for MQTT payloads.
 - Smaller message size (critical for constrained networks)
 - Faster serialization/deserialization
 - Type-safe with compile-time schema validation
-- Industry standard in IoT and financial services
+- Wide adoption in IoT and cloud ecosystems (AWS IoT Core supports protobuf)
 
 **Consequences:**
 - Less human-readable without protobuf decoder

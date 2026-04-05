@@ -3,8 +3,7 @@
 ## Project Overview
 
 This is an embedded Rust IoT framework for STM32 and Microchip ATSAM MCUs.
-It is designed for financial services applications requiring real-time
-guarantees and security.
+It is designed for applications requiring real-time guarantees and security.
 
 ## Critical Constraints
 
