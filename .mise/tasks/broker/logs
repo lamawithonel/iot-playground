@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#MISE description="View Mosquitto MQTT test broker logs"
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/../_lib.sh"
+
+if ! detect_runtime; then
+	echo 'Broker is not running.'
+	exit 0
+fi
+
+# If CONTAINER_RUNTIME was not set, search for the container
+# by name across available runtimes.
+if [ -z "${CONTAINER_RUNTIME:-}" ]; then
+	if ! "$RUNTIME" ps -a --format '{{.Names}}' 2>/dev/null \
+			| grep -q "^${CONTAINER_NAME}$"; then
+		echo 'Broker is not running.'
+		exit 0
+	fi
+fi
+
+exec "$RUNTIME" logs -f "$CONTAINER_NAME"

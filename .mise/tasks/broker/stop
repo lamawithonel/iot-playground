@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#MISE description="Stop the Mosquitto MQTT test broker"
+# Stop and remove the Mosquitto MQTT test broker container.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/../_lib.sh"
+
+# Find which runtime owns the container.  If CONTAINER_RUNTIME
+# is set, use it directly.  Otherwise, search both runtimes
+# for the container to handle the case where it was started
+# with a different default.
+_find_container_runtime() {
+	if detect_runtime; then
+		return 0
+	fi
+
+	local _candidate
+	for _candidate in podman docker; do
+		if command -v "$_candidate" >/dev/null 2>&1 \
+				&& "$_candidate" ps -a \
+					--format '{{.Names}}' 2>/dev/null \
+				| grep -q "^${CONTAINER_NAME}$"; then
+			RUNTIME="$_candidate"
+			return 0
+		fi
+	done
+
+	# Container not found in either — pick the first available
+	# runtime so the "not running" message still works.
+	if command -v podman >/dev/null 2>&1; then
+		RUNTIME='podman'
+	elif command -v docker >/dev/null 2>&1; then
+		RUNTIME='docker'
+	else
+		echo 'ERROR: No container runtime found.'
+		exit 1
+	fi
+}
+
+_main() {
+	_find_container_runtime
+
+	if "$RUNTIME" ps -a --format '{{.Names}}' \
+			| grep -q "^${CONTAINER_NAME}$"; then
+		echo 'Stopping Mosquitto MQTT broker...'
+		"$RUNTIME" stop "$CONTAINER_NAME" 2>/dev/null || true
+		"$RUNTIME" rm "$CONTAINER_NAME" 2>/dev/null || true
+		echo 'Broker stopped and removed.'
+	else
+		echo 'Broker is not running.'
+	fi
+}
+
+_main

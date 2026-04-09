@@ -8,7 +8,7 @@ COPY mosquitto.conf /mosquitto/config/mosquitto.conf
 RUN mkdir -p /mosquitto/certs
 
 # Expose ports
-EXPOSE 1883 8883
+EXPOSE 8883
 
 # Bypass the base image's docker-entrypoint.sh which runs
 # `chown -R mosquitto:mosquitto /mosquitto`.  That fails when

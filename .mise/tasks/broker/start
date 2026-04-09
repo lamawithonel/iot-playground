@@ -1,0 +1,246 @@
+#!/usr/bin/env bash
+#MISE description="Start the Mosquitto MQTT test broker"
+#MISE depends=["tls:server:broker"]
+# Launch Mosquitto MQTT broker with TLS support.
+#
+# Supports Podman and Docker.  On Linux, binds to a host
+# interface for device testing.  On macOS, binds to 127.0.0.1.
+#
+# Environment variables:
+#   CONTAINER_RUNTIME  Container runtime: podman or docker
+#                      (auto-detected if unset)
+#   BROKER_HOST_IP     Override the bind IP (e.g., 10.0.0.1)
+#   BROKER_INTERFACE   Override the Linux interface
+#                      (default: auto-detected from route)
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/../_lib.sh"
+
+_ca_cert='.local/certs/ca/root.crt'
+_server_cert='.local/certs/server/broker.crt'
+_server_key='.local/private/broker.key'
+_build_context='test/broker'
+
+# Set _image_name based on runtime.  Podman prefixes local
+# images with localhost/; Docker does not.
+_set_image_name() {
+	case "$RUNTIME" in
+		podman) _image_name='localhost/mosquitto-tls:latest' ;;
+		*)      _image_name='mosquitto-tls:latest' ;;
+	esac
+}
+
+# Detect SELinux.  Only apply :Z bind-mount suffix when
+# SELinux is active (Fedora, RHEL).  Debian, Ubuntu, Arch,
+# and macOS do not need it.
+_detect_selinux() {
+	_selinux_suffix=''
+	if command -v getenforce >/dev/null 2>&1; then
+		case "$(getenforce 2>/dev/null)" in
+			Enforcing|Permissive) _selinux_suffix=',Z' ;;
+		esac
+	fi
+}
+
+_main() {
+	if ! detect_runtime; then
+		# Give an actionable error.
+		if command -v podman >/dev/null 2>&1; then
+			echo 'ERROR: podman is installed but not reachable.'
+			echo 'Start a VM: podman machine start'
+		elif command -v docker >/dev/null 2>&1; then
+			echo 'ERROR: docker is installed but not reachable.'
+			echo 'Start Docker Desktop or Colima.'
+		else
+			echo 'ERROR: No container runtime found.'
+			echo 'Install one of:'
+			echo '  Podman: https://podman.io/getting-started/installation'
+			echo '  Docker: https://docs.docker.com/get-docker/'
+		fi
+		exit 1
+	fi
+
+	_set_image_name
+	_detect_selinux
+
+	_platform="$(uname -s)"
+	_interface="$(detect_broker_interface)"
+
+	_host_ip="$(detect_broker_ip)" || true
+	if [ -z "$_host_ip" ]; then
+		printf 'ERROR: No IPv4 address found on interface %s\n' \
+			"$_interface" >&2
+		echo 'Set BROKER_HOST_IP or BROKER_INTERFACE to override.' >&2
+		exit 1
+	fi
+
+	echo '=== Mosquitto MQTT Broker with TLS ==='
+	printf 'Runtime: %s\n' "$RUNTIME"
+	if [ "$_platform" = 'Darwin' ]; then
+		printf 'Binding to: %s (macOS)\n\n' "$_host_ip"
+	else
+		printf 'Binding to interface: %s (%s)\n\n' \
+			"$_interface" "$_host_ip"
+	fi
+
+	_check_runtime_connection
+	_check_certs
+	_verify_cert_san
+	_cleanup_existing
+	_build_image
+	_create_volumes
+	_start_container
+	_verify_running
+	_show_status
+}
+
+# Verify the runtime daemon/service is reachable.  Only
+# needed when CONTAINER_RUNTIME was explicitly set
+# (auto-detection already probes reachability).
+_check_runtime_connection() {
+	if [ -z "${CONTAINER_RUNTIME:-}" ]; then
+		return 0
+	fi
+
+	if ! "$RUNTIME" info >/dev/null 2>&1; then
+		printf 'ERROR: %s cannot connect to a container runtime.\n' \
+			"$RUNTIME"
+		if [ "$_platform" = 'Darwin' ]; then
+			case "$RUNTIME" in
+				podman)
+					echo 'On macOS, start a VM with one of:'
+					echo '  podman machine start'
+					echo '  limactl start podman'
+					;;
+				docker)
+					echo 'On macOS, start a VM with one of:'
+					echo '  open -a Docker  (Docker Desktop)'
+					echo '  colima start'
+					;;
+			esac
+		fi
+		exit 1
+	fi
+}
+
+_check_certs() {
+	local _missing=0
+	for _f in "$_ca_cert" "$_server_cert" "$_server_key"; do
+		if [ ! -f "$_f" ]; then
+			printf 'ERROR: Required file not found: %s\n' "$_f"
+			_missing=1
+		fi
+	done
+	if [ "$_missing" -eq 1 ]; then
+		echo 'Run "mise run tls:server:broker" to generate certs.'
+		exit 1
+	fi
+}
+
+# Verify the broker cert SAN matches the bind IP.  A
+# mismatch causes TLS hostname verification failures on
+# the device.
+_verify_cert_san() {
+	local _cert_san
+	_cert_san=$(
+		openssl x509 -in "$_server_cert" -noout -text \
+			2>/dev/null \
+			| awk '/Subject Alternative Name/{getline; print}' \
+			| awk -F'IP Address:' '{
+				for (i = 2; i <= NF; i++) {
+					gsub(/^[ \t]+/, "", $i)
+					gsub(/[, \t\n]+.*/, "", $i)
+					if ($i != "") print $i
+				}
+			}'
+	) || true
+
+	if [ -z "$_cert_san" ]; then
+		echo 'WARNING: Could not extract SAN IP from broker cert.'
+		echo 'TLS hostname verification may fail.'
+		return 0
+	fi
+
+	if ! echo "$_cert_san" | grep -qxF "$_host_ip"; then
+		echo ''
+		printf 'ERROR: Broker cert SAN (%s) does not match' \
+			"$_cert_san"
+		printf ' bind IP (%s).\n' "$_host_ip"
+		echo 'TLS clients will reject the connection.'
+		echo ''
+		echo 'To fix, regenerate the broker cert:'
+		echo '  mise run tls:server:broker -- --force'
+		echo ''
+		echo 'If that does not resolve it, delete all certs'
+		echo 'and retry:'
+		echo '  rm -rf .local/certs .local/private'
+		echo '         .cache/signing_requests'
+		echo '  mise run tls:server:broker'
+		exit 1
+	fi
+}
+
+_cleanup_existing() {
+	echo ''
+	echo 'Cleaning up existing container...'
+	"$RUNTIME" stop "$CONTAINER_NAME" 2>/dev/null || true
+	"$RUNTIME" rm "$CONTAINER_NAME" 2>/dev/null || true
+}
+
+_build_image() {
+	echo ''
+	echo 'Building container image...'
+	"$RUNTIME" build -t "$_image_name" "$_build_context"
+}
+
+_create_volumes() {
+	echo ''
+	echo 'Creating volumes...'
+	"$RUNTIME" volume create mosquitto-data 2>/dev/null || true
+	"$RUNTIME" volume create mosquitto-log 2>/dev/null || true
+}
+
+_start_container() {
+	echo ''
+	echo 'Starting Mosquitto MQTT broker...'
+	"$RUNTIME" run -d \
+		--name "$CONTAINER_NAME" \
+		--restart unless-stopped \
+		-p "${_host_ip}:8883:8883" \
+		-v mosquitto-data:/mosquitto/data \
+		-v mosquitto-log:/mosquitto/log \
+		-v "$(pwd)/${_ca_cert}:/mosquitto/certs/root.crt:ro${_selinux_suffix}" \
+		-v "$(pwd)/${_server_cert}:/mosquitto/certs/broker.crt:ro${_selinux_suffix}" \
+		-v "$(pwd)/${_server_key}:/mosquitto/certs/broker.key:ro${_selinux_suffix}" \
+		"$_image_name"
+}
+
+_verify_running() {
+	sleep 2
+	if ! "$RUNTIME" ps --format '{{.Names}}' \
+			| grep -qx "$CONTAINER_NAME"; then
+		echo ''
+		echo 'ERROR: Container failed to start!'
+		echo 'Container logs:'
+		"$RUNTIME" logs "$CONTAINER_NAME"
+		exit 1
+	fi
+}
+
+_show_status() {
+	echo ''
+	echo '=== Mosquitto MQTT Broker Started Successfully ==='
+	echo ''
+	printf 'MQTTS (TLS 1.2+): %s:8883\n' "$_host_ip"
+	echo ''
+	printf 'To view logs:    mise run broker:logs\n'
+	printf 'To stop:         mise run broker:stop\n'
+}
+
+_main
