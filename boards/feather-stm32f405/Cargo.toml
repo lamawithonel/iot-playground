@@ -130,3 +130,28 @@ features = [
   "rt",
   "stm32f405rg",
 ]
+
+# ── On-Device Tests ──────────────────────────────────
+# Uses embedded-test (probe-rs native) instead of deprecated
+# defmt-test.  Each test resets the MCU for full isolation.
+# Run with: cargo test -p feather-stm32f405
+
+[[test]]
+name = "bringup"
+harness = false
+
+[dev-dependencies.embedded-test]
+version = "0.7"
+default-features = false
+features = ["semihosting", "defmt"]
+
+# cortex-m-rt is needed in test binaries for the vector table
+# and DefaultHandler symbol that link.x requires.
+[dev-dependencies.cortex-m-rt]
+version = "0.7"
+
+# stm32-metapac provides the device-specific interrupt vector
+# table (DefaultHandler_) that cortex-m-rt's link.x expects.
+[dev-dependencies.stm32-metapac]
+version = "18.0.0"
+features = ["rt", "stm32f405rg"]
