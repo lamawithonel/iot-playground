@@ -81,7 +81,7 @@ This document specifies requirements for embedded Rust firmware implementing rea
 - RTIC 2.x required for real-time guarantees
 - Embassy HAL where compatible with RTIC
 
-**Regulatory:**
+**Security:**
 - TLS 1.3 minimum
 - FIPS 140-3 algorithms where possible
 

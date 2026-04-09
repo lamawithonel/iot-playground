@@ -296,6 +296,223 @@ build-time code generation from `.proto` files.
 
 ---
 
+## ADR-009: Test Strategy and the Embedded Test Pyramid
+
+**Date:** 2026-04-06
+**Status:** Accepted
+
+**Context:**
+
+The project has 29 host unit tests covering `core/` logic on
+x86_64, three on-device tests via `embedded-test`, and a 45-second
+RTT-based smoke test.  A review of the on-device tests revealed a
+structural problem: all three tests (`sanity_check`,
+`core_conditioning_on_device`, `heapless_string_on_device`) exercise
+pure logic that already passes on the host.  `embedded-test` 0.7.x
+replaces the RTIC dispatcher entirely — it cannot run async tasks,
+`rtic_sync` channels, monotonic timers, or real peripheral
+interactions.  The on-device tests prove the test harness works,
+not the hardware.
+
+Meanwhile, the only mechanism that validates actual hardware
+integration — PLL configuration, I2C bus timing, SPI
+initialization, interrupt routing, and the full sensor-to-MQTT data
+path — is the smoke test, which amounts to "flash and hope the RTT
+output looks right for 45 seconds."
+
+For an IoT device with real-time constraints, this gap is
+unacceptable.  The test strategy must be restructured
+to spend hardware test cycles on things that *only hardware can
+answer*, while expanding host-side coverage to catch logic and data
+integrity bugs cheaply.
+
+**Decision:** Adopt a five-layer embedded test pyramid with strict
+layer ownership and an A+B hybrid on-device strategy.  Layer 2
+uses `embedded-test` for peripheral bring-up validation (clock
+tree, I2C, SPI, RNG, timer tick) — not pure logic.  Layer 3
+uses custom `#[app]` test binaries for RTIC integration, deferred
+until explicit trigger criteria are met.  Expand host-side
+property and adversarial tests.  Formalize `defmt` milestones as
+a machine-parseable test contract.  Invest in type-driven design
+to eliminate classes of runtime tests.  Defer QEMU/Renode
+emulation.
+
+**Test Pyramid:**
+
+| Layer | What It Tests | Where It Runs | Gate |
+|-------|--------------|---------------|------|
+| 1. Host unit tests | Pure logic: state machines, formatting, time math | CI (x86_64) | Required, every PR |
+| 2. On-device peripheral smoke | Hardware init: clock tree, I2C probe, SPI/W5500, RNG, TIM2 tick | MCU via probe-rs | Required with hardware |
+| 3. RTIC integration | Inter-task channels, monotonic timers, vertical data slices | Custom `#[app]` test binaries | Deferred (trigger-based) |
+| 4. System smoke test | Full firmware boot, milestone ordering, error detection | MCU via probe-rs + RTT | Required with hardware |
+| 5. End-to-end | Device → TLS → MQTT broker → subscriber validation | MCU + Mosquitto container | Future (Phase 3+) |
+
+**Layer 1 — Host Unit Tests (expand):**
+
+Add adversarial and property-based tests that exercise data
+integrity across transformation boundaries:
+
+- **Channel backpressure property test:** Mock `Sender`/`Receiver`
+  pair, simulate 200 sensor reads with randomized MQTT stalls
+  (0–300 s).  Assert no panic, receiver gets the most recent
+  reading after drain, and dropped-reading count matches
+  channel-full events.
+- **Payload size budget:** Construct `Sen66Reading` with all 9
+  fields at `i32::MAX` worst-case values.  Assert the formatted
+  JSON fits in the `String<256>` buffer.
+- **End-to-end data chain:** Trace a simulated sensor value from
+  `to_deci()` through `Sen66Reading` through
+  `format_json_payload()` and assert the final JSON field is
+  correct.
+- **NaN/Inf handling:** Assert that `to_deci(NaN)` and
+  `to_deci(f32::INFINITY)` propagate as `None` through the
+  pipeline (not as the plausible value `0.0`).
+- **Schema contract test:** Define expected JSON field names,
+  types, and optionality as a fixture.  Any change to
+  `format_json_payload()` that alters the schema breaks this test.
+
+**Layer 2 — On-Device Peripheral Tests (`bringup.rs`):**
+
+Five `embedded-test` tests in `bringup.rs` validate peripheral
+bring-up in `#[init]` context:
+
+- **Clock tree validation:** Read back `SYSCLK` via `RCC->CFGR`,
+  assert 84 MHz.  Read `PLLQ`, assert 48 MHz.  Catches PLL
+  divider regressions that break RNG and TLS.
+- **I2C bus probe:** Initialize I2C1 at 400 kHz, send SEN66
+  `GetSerialNumber` (0xD033), assert valid 48-bit response.
+  Proves bus electrical functionality and pull-up configuration.
+- **SPI/W5500 version register:** Read W5500 register `0x0039`,
+  assert `0x04`.  Proves SPI bus, chip select, and W5500 are
+  alive.
+- **RNG entropy check:** Read 32 bytes from hardware RNG, assert
+  non-zero and not all-identical.  TLS depends on a functioning
+  RNG — a stuck RNG is security-critical.
+- **TIM2 monotonic tick sanity:** Start TIM2, read counter, spin
+  with `cortex_m::asm::delay`, read again, assert delta within
+  ±5%.  Catches prescaler misconfigurations.
+
+**Layer 3 — RTIC Integration Tests (deferred):**
+
+Custom `#[app]` test binaries are deferred until the firmware
+topology grows beyond what the smoke test can cover.  Build
+Layer 3 when any of the following trigger criteria are met:
+
+- `Shared` gains real members (currently an empty struct — no
+  shared resources means no priority inversions to test).
+- A second board enters the workspace (cross-board regressions
+  require isolated integration tests).
+- Phase 4 adds TLS certificate verification (cert-chain
+  validation interacts with RNG, timers, and network stack).
+- Channel or priority topology changes (additional channels,
+  split priority levels, or new inter-task dependencies).
+
+**Layer 4 — Smoke Test (harden):**
+
+- Define expected `defmt` milestones and assert their order
+  (e.g., `"System initialized"` → `"TIM2 monotonic"` →
+  `"I2C1 initialized"` → `"SEN66 initialized"` → `"Network
+  stack initialized"` → `"SNTP sync successful"`).
+- Add per-milestone timeouts, not just a single wall-clock
+  timeout.
+- Add a `TELEMETRY_JSON:` structured log prefix to the firmware
+  that emits the exact JSON string passed to `mqtt.publish()`.
+  Host scripts can parse RTT output and run schema validation.
+
+**Type-Driven Testing (reduce test surface):**
+
+Invest in newtypes and typestates to push runtime invariants
+into the type system, eliminating entire classes of tests:
+
+- `DeciCelsius(i32)`, `Ppm(u16)`, etc. — prevent field mixups
+  at compile time.
+- `Reading::Ready(T)` vs `Reading::Conditioning` — distinguish
+  temporal absence from structural absence, replacing `Option<T>`
+  ambiguity.
+- `Phase` enum for conditioning stages — prevent out-of-bounds
+  phase indices.
+- `BoundedMicros(u32)` — enforce `< 1_000_000` at construction.
+- `ValidatedTopic`/`ClientId` newtypes — validate once, carry
+  proof in the type.
+
+These are not part of the test infrastructure itself but they
+reduce the test burden by making wrong states unrepresentable.
+
+**CI/CD Strategy:**
+
+- Host unit tests (`test:host`) are a required merge gate today.
+- On-device and smoke tests require hardware; skip gracefully
+  when no probe is detected.
+- `Tested-on:` git trailer and `hw-verified` label provide
+  human attestation for hardware-dependent changes.
+- Self-hosted runner (Pi + J-Link, ~$200): start as nightly
+  non-blocking, promote to required after 30-day reliability bake.
+- Skip QEMU/Renode emulation — negative ROI at one board.
+  Revisit at 3+ target boards.
+
+**Rationale:**
+
+- A 10-persona cross-functional review (RTIC specialist, safety
+  architect, observability engineer, type-system advocate, CI/CD
+  engineer, hardware engineer, security reviewer, protocol
+  specialist, fleet operator, firmware QA) converged on the A+B
+  hybrid approach.  7 of 10 supported the strategy; consensus
+  covered both approach and timing — bring-up now, RTIC
+  integration when trigger criteria fire.
+- Key insight (Holloway): "three tasks at identical priority,
+  empty Shared struct, single 2-slot channel — there are no
+  priority inversions to test."  This justifies deferring Layer 3
+  until the firmware topology actually demands it.
+- The highest-risk untested scenario is the 2-slot `rtic_sync`
+  channel under TLS stall: if the network task blocks for longer
+  than 2× the sample interval, every subsequent sensor reading is
+  silently discarded.  No current test exercises this.
+- `embedded-test` cannot fill the RTIC integration gap, but it
+  *can* validate that peripherals initialize and respond.
+  Restructuring the on-device tests to do this is high-value and
+  low-effort.
+- Type-driven design eliminates tests that exist only because
+  the type system permits nonsense inputs.  On a device where
+  every test requires a flash cycle, this leverage is enormous.
+
+**Consequences:**
+
+- `bringup.rs` replaces the three former pure-logic on-device
+  tests with five peripheral validation tests (clock tree PLL,
+  RNG entropy, I2C SEN66 probe, SPI W5500 version register,
+  TIM2 tick rate) — a breaking change to test output.
+- Pure logic tests are removed from on-device; host tests
+  already cover them.
+- The smoke test becomes the primary integration gate until
+  Layer 3 trigger criteria fire and RTIC test binaries are
+  built.
+- New host tests will catch data integrity bugs (NaN handling,
+  buffer overflow, schema drift) that currently have zero
+  coverage.
+- The `defmt` milestone contract formalizes log output as
+  testable behavior, which constrains future refactoring — log
+  message changes become test-breaking changes.
+- Type system improvements (newtypes, typestates) will require
+  API changes across `core/`, `hal-abstractions/`, and the BSP.
+
+**Alternatives Considered:**
+
+- **Keep on-device tests as-is:** Rejected.  They consume flash
+  time and CI complexity while providing no coverage beyond host
+  tests.
+- **QEMU/Renode emulation:** Negative ROI at one board.  STM32F405
+  peripheral models are incomplete, RTIC interrupt dispatch has
+  subtle timing dependencies, and defmt integration is immature.
+- **RTIC integration test binaries now:** Deferred until trigger
+  criteria fire.  The current RTIC topology — three tasks at
+  identical priority, empty `Shared`, single 2-slot channel —
+  does not warrant the tooling investment.
+- **Full HIL framework now:** Deferred to Phase 3+.  Requires
+  self-hosted runner, USB passthrough, and container networking
+  that are not yet in place.
+
+---
+
 ## Template for New ADRs
 
 ```markdown
