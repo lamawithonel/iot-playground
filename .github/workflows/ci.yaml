@@ -40,6 +40,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      - name: Run host unit tests
+        run: |
+          HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+          cargo test --workspace --target "$HOST_TARGET" --exclude feather-stm32f405
+
       - name: Run clippy
         run: cargo clippy --workspace --target thumbv7em-none-eabihf -- -D warnings
 
