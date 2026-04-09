@@ -1,0 +1,16 @@
+[package]
+name = "mqtt-subscriber"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Minimal MQTT subscriber for smoke test validation"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rumqttc = { version = "0.25", features = ["use-rustls"] }
+tokio = { version = "1", features = [
+    "rt",
+    "macros",
+    "time",
+    "signal",
+] }

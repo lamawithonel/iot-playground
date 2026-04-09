@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#MISE description="Build the native MQTT subscriber binary"
+# The subscriber binary listens for MQTT messages over TLS
+# during smoke tests.  Validation of captured messages is
+# handled by the smoke-validator (Cucumber-RS) crate.
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_repo_root="$(cd "${_script_dir}/../../.." && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/../_lib.sh"
+
+_host_target="$(detect_host_target)"
+
+cargo build \
+	--manifest-path "${_repo_root}/test/mqtt-subscriber/Cargo.toml" \
+	--target "$_host_target" \
+	--release --quiet
+
+echo "✓ mqtt-subscriber built."
