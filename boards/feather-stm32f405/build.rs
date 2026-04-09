@@ -24,11 +24,15 @@ fn main() {
         .unwrap()
         .write_all(include_bytes!("memory.x"))
         .unwrap();
-    println!("cargo:rustc-link-search={}", out.display());
-    println!("cargo:rerun-if-changed=memory.x");
+    println!("cargo::rustc-link-search={}", out.display());
+    println!("cargo::rerun-if-changed=memory.x");
+
+    // --- embedded-test linker script for on-device tests ---
+    // Only applies to [[test]] targets, not the main binary.
+    println!("cargo::rustc-link-arg-tests=-Tembedded-test.x");
 
     // --- SAMPLE_INTERVAL_SECS ---
-    println!("cargo:rerun-if-env-changed=SAMPLE_INTERVAL_SECS");
+    println!("cargo::rerun-if-env-changed=SAMPLE_INTERVAL_SECS");
 
     let profile = env::var("PROFILE").unwrap_or_default();
 
@@ -41,7 +45,7 @@ fn main() {
                 (MIN_INTERVAL..=MAX_INTERVAL).contains(&parsed),
                 "SAMPLE_INTERVAL_SECS={parsed} out of range ({MIN_INTERVAL}–{MAX_INTERVAL})"
             );
-            println!("cargo:warning=SAMPLE_INTERVAL_SECS={parsed}s (env override)");
+            println!("cargo::warning=SAMPLE_INTERVAL_SECS={parsed}s (env override)");
             parsed
         }
         Err(_) => {
@@ -50,7 +54,7 @@ fn main() {
             } else {
                 DEBUG_DEFAULT
             };
-            println!("cargo:warning=SAMPLE_INTERVAL_SECS={default}s ({profile} default)");
+            println!("cargo::warning=SAMPLE_INTERVAL_SECS={default}s ({profile} default)");
             default
         }
     };
