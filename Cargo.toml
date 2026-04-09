@@ -7,6 +7,7 @@ members = [
 ]
 exclude = [
     "test/mqtt-subscriber",
+    "test/smoke-validator",
 ]
 # Default member for cargo embed and other commands from workspace root
 default-members = ["boards/feather-stm32f405"]
