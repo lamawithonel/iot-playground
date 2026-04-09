@@ -4,6 +4,7 @@
 /book/*/book
 target/
 Cargo.lock
+!test/mqtt-subscriber/Cargo.lock
 *.hex
 book-target/
 *.local.toml

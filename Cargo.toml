@@ -5,6 +5,9 @@ members = [
     "core",
     "hal-abstractions",
 ]
+exclude = [
+    "test/mqtt-subscriber",
+]
 # Default member for cargo embed and other commands from workspace root
 default-members = ["boards/feather-stm32f405"]
 
