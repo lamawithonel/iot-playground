@@ -9,7 +9,7 @@ _.source = 'test/scripts/env-defaults.sh'
 [tools]
 rust = { version = "stable", targets = "thumbv7em-none-eabihf", components = "rustfmt,clippy" }
 "cargo:flip-link" = "0.1.12"
-"cargo:probe-rs-tools" = "0.25.0"
+"cargo:probe-rs-tools" = "0.31.0"
 mdbook = '0.4.40'
 
 # ──────────────────────────────────────────────────────
