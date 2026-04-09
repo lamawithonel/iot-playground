@@ -4,7 +4,7 @@
 [env]
 CARGO_TERM_COLOR = 'always'
 DEFMT_LOG = 'info'
-_.source = 'test/scripts/env-defaults.sh'
+_.source = '.mise/env.sh'
 
 [tools]
 rust = { version = "stable", targets = "thumbv7em-none-eabihf", components = "rustfmt,clippy" }
@@ -143,6 +143,10 @@ run = 'mdbook build docs'
 # ── Testing ───────────────────────────────────────────
 
 [tasks.test]
+description = 'Run host unit tests (alias for test:host)'
+depends = ['test:host']
+
+[tasks."test:host"]
 description = 'Run host unit tests for platform-agnostic crates'
 run = '''
 #!/usr/bin/env bash
@@ -151,76 +155,6 @@ set -o nounset
 set -o pipefail
 
 _host_target="$(rustc -vV | sed -n 's/^host: //p')"
-exec cargo test --workspace --target "$_host_target" "$@"
-'''
-
-# ── Mosquitto MQTT Broker ────────────────────────────
-
-[tasks."broker:start"]
-description = 'Start the Mosquitto MQTT test broker'
-depends = ['tls:server:broker']
-run = '''
-#!/usr/bin/env bash
-set -o errexit
-set -o nounset
-set -o pipefail
-
-exec test/broker/start-broker.sh
-'''
-
-[tasks."broker:stop"]
-description = 'Stop the Mosquitto MQTT test broker'
-run = '''
-#!/usr/bin/env bash
-set -o errexit
-set -o nounset
-set -o pipefail
-
-exec test/broker/stop-broker.sh
-'''
-
-[tasks."broker:logs"]
-description = 'View Mosquitto MQTT test broker logs'
-run = '''
-#!/usr/bin/env bash
-set -o errexit
-set -o nounset
-set -o pipefail
-
-_container='mosquitto-tls'
-
-# Find which runtime owns the container.
-if [ -n "${CONTAINER_RUNTIME:-}" ]; then
-  case "$CONTAINER_RUNTIME" in
-    podman|docker) ;;
-    *)
-      printf 'ERROR: CONTAINER_RUNTIME=%s is not supported.\n' \
-        "$CONTAINER_RUNTIME" >&2
-      echo 'Set CONTAINER_RUNTIME to "podman" or "docker".' >&2
-      exit 1
-      ;;
-  esac
-  if ! command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1; then
-    printf 'ERROR: CONTAINER_RUNTIME=%s but %s is not installed.\n' \
-      "$CONTAINER_RUNTIME" "$CONTAINER_RUNTIME" >&2
-    exit 1
-  fi
-  _rt="$CONTAINER_RUNTIME"
-else
-  _rt=''
-  for _c in podman docker; do
-    if command -v "$_c" >/dev/null 2>&1 \
-        && "$_c" ps -a --format '{{.Names}}' 2>/dev/null \
-        | grep -q "^${_container}$"; then
-      _rt="$_c"
-      break
-    fi
-  done
-  if [ -z "$_rt" ]; then
-    echo 'Broker is not running.'
-    exit 0
-  fi
-fi
-
-exec "$_rt" logs -f "$_container"
+exec cargo test --workspace --target "$_host_target" \
+	--exclude feather-stm32f405 "$@"
 '''

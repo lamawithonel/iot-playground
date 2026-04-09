@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#MISE description="Run on-device tests via probe-rs (requires connected probe)"
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Check for connected debug probe
+_probe_output="$(probe-rs list 2>&1)"
+if echo "$_probe_output" | grep -q 'No probes were found'; then
+	echo '⏭  No debug probe connected — skipping device tests.' >&2
+	echo '   Connect a J-Link or compatible SWD probe and retry.' >&2
+	exit 0
+fi
+
+echo "🔌 Probe detected:"
+echo "$_probe_output" | sed 's/^/   /'
+echo ""
+
+_board="${BOARD:-feather-stm32f405}"
+_target="${TARGET:-thumbv7em-none-eabihf}"
+_timeout="${DEVICE_TEST_TIMEOUT:-120}"
+export PROBE_RS_CHIP="${PROBE_RS_CHIP:-STM32F405RGTx}"
+
+echo "🧪 Running on-device tests for ${_board} (timeout: ${_timeout}s)..."
+echo ""
+
+_rc=0
+timeout "$_timeout" cargo test \
+	-p "$_board" \
+	--target "$_target" \
+	-- "$@" \
+	|| _rc=$?
+
+if [ "$_rc" -eq 124 ]; then
+	echo "" >&2
+	echo "⏰ Device tests timed out after ${_timeout}s." >&2
+	exit 1
+fi
+
+exit "$_rc"

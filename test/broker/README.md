@@ -31,22 +31,17 @@ You need a container VM backend appropriate to your runtime:
 ```bash
 # From the repository root (recommended — auto-generates certs):
 mise run broker:start
-
-# Or directly (requires certs to already exist in .local/):
-test/broker/start-broker.sh
 ```
 
 > **Note:** `mise run broker:start` automatically generates TLS
-> certificates via its `tls:server:broker` dependency.  Running
-> `start-broker.sh` directly assumes certs are already present
-> in `.local/certs/` and `.local/private/`.  Generate them first
-> with `mise run tls:server:broker` if needed.
+> certificates via its `tls:server:broker` dependency.
 
-The script auto-detects the container runtime and platform:
+The task auto-detects the container runtime and platform:
 
 - Prefers `podman` if available, falls back to `docker`
 - Set `CONTAINER_RUNTIME=docker` (or `podman`) to override
-- **Linux:** binds to interface `eno1` at the detected IP
+- **Linux:** binds to the default-route interface at the
+  detected IP
 - **macOS:** binds to `127.0.0.1` (loopback)
 
 View logs with `mise run broker:logs` (or
@@ -56,9 +51,6 @@ View logs with `mise run broker:logs` (or
 
 ```bash
 mise run broker:stop
-
-# Or directly:
-test/broker/stop-broker.sh
 ```
 
 ## Configuration
@@ -69,7 +61,7 @@ test/broker/stop-broker.sh
 |----------|-------------|---------|
 | `CONTAINER_RUNTIME` | Container runtime (`podman` or `docker`) | Auto-detected |
 | `BROKER_HOST_IP` | Override the bind IP address | `127.0.0.1` (macOS), detected from `BROKER_INTERFACE` (Linux) |
-| `BROKER_INTERFACE` | Override the Linux network interface | `eno1` |
+| `BROKER_INTERFACE` | Override the Linux network interface | Auto-detected from default route |
 
 Set these before running `mise run broker:start` to customize
 the broker binding:
@@ -82,8 +74,7 @@ CONTAINER_RUNTIME=docker BROKER_HOST_IP=10.0.0.1 \
 
 ### Ports
 
-- **1883**: MQTT (non-encrypted)
-- **8883**: MQTTS (TLS encrypted)
+- **8883**: MQTTS (TLS 1.2+ only, no plaintext listener)
 
 ### TLS Settings
 
@@ -134,7 +125,6 @@ docker build -t mosquitto-tls:latest test/broker/
 ```bash
 podman run -d \
     --name mosquitto-tls \
-    -p 192.168.1.1:1883:1883 \
     -p 192.168.1.1:8883:8883 \
     -v mosquitto-data:/mosquitto/data \
     -v mosquitto-log:/mosquitto/log \
@@ -153,7 +143,6 @@ podman run -d \
 ```bash
 podman run -d \
     --name mosquitto-tls \
-    -p 127.0.0.1:1883:1883 \
     -p 127.0.0.1:8883:8883 \
     -v mosquitto-data:/mosquitto/data \
     -v mosquitto-log:/mosquitto/log \

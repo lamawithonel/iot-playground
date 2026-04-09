@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#MISE description="Run full test pipeline: host tests, device tests, and smoke test"
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_rc=0
+
+# ── Broker Lifecycle ───────────────────────────────
+_broker_was_running=false
+_broker_started=false
+
+if mise run broker:status >/dev/null 2>&1; then
+	_broker_was_running=true
+	echo "📡 Broker already running."
+else
+	echo "📡 Starting broker for smoke test..."
+	if mise run broker:start >/dev/null 2>&1; then
+		_broker_started=true
+		echo "   Broker started."
+		sleep 2  # Allow broker to fully initialize
+	else
+		echo "⚠️  Could not start broker — smoke test may show MQTT warnings." >&2
+	fi
+fi
+
+_cleanup() {
+	if [ "$_broker_started" = true ]; then
+		echo ""
+		echo "📡 Stopping broker (was not running before tests)..."
+		mise run broker:stop >/dev/null 2>&1 || true
+	fi
+}
+trap _cleanup EXIT
+
+echo "═══════════════════════════════════════════════"
+echo " Phase 1/3: Host Unit Tests"
+echo "═══════════════════════════════════════════════"
+mise run test:host || { _rc=1; echo '❌ Host tests FAILED.' >&2; exit "$_rc"; }
+echo ""
+
+echo "═══════════════════════════════════════════════"
+echo " Phase 2/3: On-Device Tests"
+echo "═══════════════════════════════════════════════"
+mise run test:device || {
+	_rc=$?
+	if [ "$_rc" -ne 0 ]; then
+		echo '❌ Device tests FAILED.' >&2
+		exit "$_rc"
+	fi
+}
+echo ""
+
+echo "═══════════════════════════════════════════════"
+echo " Phase 3/3: Smoke Test"
+echo "═══════════════════════════════════════════════"
+mise run test:smoke || {
+	_rc=$?
+	echo '❌ Smoke test FAILED.' >&2
+	exit "$_rc"
+}
+
+echo ""
+echo "═══════════════════════════════════════════════"
+echo " ✅ All integration tests PASSED"
+echo "═══════════════════════════════════════════════"
