@@ -116,7 +116,7 @@ dccd96634679d52a7eac7a0ed216b9c24dbfb122)
 **Future Consideration:** Revisit TLS library when:
 
 - Hardware with more memory is available (STM32F7/H7)
-- FIPS 140-3 certification is required (wolfSSL)
+- FIPS 140-3 is desired (wolfSSL)
 - RSA certificate support becomes mandatory
 
 ### 2.3 Serialization & Architecture Research ✅ Complete
@@ -354,9 +354,9 @@ only what requires custom firmware logic.
 
 ### Backlog: CAN Gateway
 
-Deferred from the active roadmap by cross-functional
-consensus.  CAN bus gateway is a different product vertical
-that does not contribute to the sensor telemetry MVP.
+Deferred from the active roadmap.  CAN bus gateway is a
+separate effort that does not contribute to the sensor
+telemetry MVP.
 
 - [ ] Verify CAN pin assignments with logic analyzer
 - [ ] CAN bus configuration at 1 Mbps
@@ -385,7 +385,46 @@ details.
 | On-device integration | 🔄 Future | Self-hosted runner |
 | Hardware validation | ❌ Manual | Local workstation |
 
-### 4.2 Self-Hosted Runner (Future)
+### 4.2 Test Component Implementation Timeline
+
+Items are grouped by when they should be implemented,
+based on a cross-functional engineering review
+(see [ADR-009](./architecture/decisions.md#adr-009-test-strategy-and-the-embedded-test-pyramid)).
+
+**Current (`feature/test-strategy` branch):**
+
+- [x] Rewrite on-device tests to peripheral bring-up
+  validation (`bringup.rs`): clock tree, I2C probe,
+  SPI/W5500 version, RNG entropy, TIM2 tick sanity
+- [x] Harden smoke test with milestone ordering
+  assertions and plausibility checks
+- [x] Add "Why no RTIC?" documentation paragraph
+- [x] Update ADR-009 with A+B hybrid test strategy
+
+**Next (Phase 2 completion or Phase 4 Security):**
+
+Triggered when `Shared` gains real members, a second
+board enters the workspace, or Phase 4 adds certificate
+verification.
+
+- [ ] First custom `#[app]` RTIC integration test binary
+  (channel backpressure under simulated TLS stall)
+- [ ] `MessagePort` trait abstraction for host-side
+  channel and state-machine testing
+- [ ] TLS handshake `#[app]` binary with certificate
+  rejection testing (Phase 4)
+
+**Phase 3+ (Multi-Board / Production Readiness):**
+
+- [ ] `test_support` shared module for `#[app]` test
+  boilerplate
+- [ ] Per-board `#[app]` integration test matrix
+- [ ] TLA+ model of sensor → channel → network pipeline
+- [ ] Self-hosted runner with nightly `#[app]` execution
+- [ ] Stack high-water-mark instrumentation in TLS test
+  binary
+
+### 4.3 Self-Hosted Runner (Future)
 
 When on-device testing automation becomes valuable, a
 self-hosted GitHub Actions runner will be configured:
@@ -468,9 +507,19 @@ Items intentionally deferred:
 2. **Additional Board Profiles** — future profiles added as
    `boards/<profile-name>/`
 3. **Multi-MCU Support** — ATSAM, STM32F7/H7, nRF52, ESP32
-4. **Full HIL Test Automation** — depends on project maturity
-5. **FIPS 140-3 Certification** — production requirement, not
-   development priority
+4. **Hardware-in-the-Loop (HIL) Test Automation** — use a
+   Saleae Logic Pro 16 (or similar MSO) with the Logic 2
+   gRPC automation API to validate bus-level behavior:
+   I2C transactions (SEN66), SPI timing (W5500, ePaper,
+   SD card), CAN bus signaling, interrupt latency, and
+   analog power rail stability.  Python test harness
+   drives captures and protocol decoding; results asserted
+   programmatically.  Depends on project maturity and
+   hardware investment (~$1,500 for Logic Pro 16).
+   Accessed via `mise run test:hil` with selectable test
+   suites (e.g., `test:hil:i2c`, `test:hil:spi`)
+5. **FIPS 140-3 Support** — desired for strong cryptographic
+   assurance, not a development priority
 6. **Wireless Connectivity** — WiFi/BLE modules (current
    primary design is Ethernet)
 7. **BBQueue Zero-Copy Pipeline** — lock-free SPSC inter-task
@@ -484,8 +533,8 @@ Items intentionally deferred:
    Implement when a second consumer demands the envelope.
 10. **Azure IoT Hub / GCP IoT** — secondary cloud support via
     trait-based abstraction; implemented after AWS is proven
-11. **CAN Bus Gateway** — deferred to backlog; different
-    product vertical from sensor telemetry
+11. **CAN Bus Gateway** — deferred to backlog; separate effort
+    from sensor telemetry
 
 ---
 

@@ -1,7 +1,7 @@
 # IoT Playground
 
 An embedded Rust IoT framework for STM32 and Microchip ATSAM microcontrollers,
-designed for services applications requiring real-time guarantees and security.
+with a focus on real-time performance and security.
 
 ## Overview
 

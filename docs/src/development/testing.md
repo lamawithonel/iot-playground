@@ -1,363 +1,284 @@
 # Testing Strategy
-## Embedded Rust IoT Firmware
 
-**Last Updated:** 2026-01-12
+This document describes the project's five-layer embedded test
+pyramid and how to run each layer.  For the full rationale behind
+this structure, see
+[ADR-009](../architecture/decisions.md#adr-009-test-strategy-and-the-embedded-test-pyramid).
 
----
+## Overview
 
-## 1. Overview
+Embedded firmware testing is hard: most interesting behavior
+requires physical hardware, flash cycles are slow, and emulators
+lack peripheral fidelity.  The test strategy addresses this by
+pushing as much validation as possible to the host, reserving
+on-device time for things *only hardware can answer*.
 
-This document describes the testing strategy for the embedded Rust IoT firmware project, covering automated CI/CD testing and manual hardware validation.
+The five layers, from cheapest to most expensive:
 
-### 1.1 Testing Challenges
+| Layer | Name | Runs On | Gate |
+|------:|------|---------|------|
+| 1 | Host unit tests | CI (x86_64) | Required, every PR |
+| 2 | Peripheral bring-up | MCU via probe-rs | Required with HW |
+| 3 | RTIC integration | Custom `#[app]` binaries | Future |
+| 4 | System smoke test | MCU via probe-rs + RTT | Required with HW |
+| 5 | End-to-end | MCU + MQTT broker | Future |
 
-Embedded firmware presents unique testing challenges:
-- **Hardware dependency**: Many tests require physical MCU and peripherals
-- **Real-time behavior**: Timing-sensitive code difficult to test in simulation
-- **Limited emulation**: QEMU has minimal STM32F4 peripheral support
-- **Debug interfaces**: On-device tests require SWD/JTAG access
+A new contributor should be able to run Layer 1 immediately and
+Layers 2 and 4 with a board and probe attached.
 
-### 1.2 Testing Philosophy
+## Why Bring-Up Tests Don't Use RTIC
 
-1. **Maximize host-testable code**: Pure logic in separate modules
-2. **Automate what's practical**: CI for builds, linting, host tests
-3. **Document manual procedures**: Hardware validation checklists
-4. **Defer complexity**: Self-hosted runners when test burden justifies
+Bring-up tests (Layer 2) deliberately run *outside* RTIC to
+validate the hardware foundation beneath the application
+runtime, not the runtime itself.  RTIC adds task scheduling,
+priority-based preemption, and shared-resource management above
+this foundation.  Testing without RTIC isolates hardware
+behavior — clock trees, bus timing, peripheral registers — from
+framework behavior.  If a bring-up test fails, the problem is
+in the hardware configuration or wiring, never in an RTIC task
+interaction.  This makes failures unambiguous and drastically
+simplifies debugging.
 
----
+## Test Layers
 
-## 2. Test Categories
+### Layer 1: Host Unit Tests
 
-### 2.1 Static Analysis (Automated)
+**What it tests:** Pure logic in `core/` and `hal-abstractions/`
+— state machines, data formatting, time math, sensor value
+conversions, and protocol encoding.
 
-**Environment:** GitHub Actions public runners
+**Where it runs:** `cargo test` on the host (x86_64).  No
+embedded target, no hardware.
 
-| Check | Tool | Configuration |
-|-------|------|---------------|
-| Formatting | `rustfmt` | Default settings |
-| Linting | `clippy` | `-D warnings` (deny all warnings) |
-| Build (debug) | `cargo build` | `thumbv7em-none-eabihf` target |
-| Build (release) | `cargo build --release` | Optimized for size (`opt-level = "s"`) |
+**Key test categories:**
 
-**Status:** ✅ Implemented in `.github/workflows/ci.yaml`
+- Data integrity across transformation boundaries (e.g.,
+  sensor value → formatted payload)
+- Payload size budgets (worst-case values must fit in bounded
+  buffers)
+- NaN/Inf handling (must propagate as `None`, not `0.0`)
+- Schema contract tests (field names, types, and optionality)
+- Channel backpressure properties (mock sender/receiver under
+  simulated stalls)
 
-### 2.2 Unit Tests (Automated)
+Host tests are the cheapest to write and the fastest to run.
+When in doubt, write a host test.
 
-**Environment:** GitHub Actions public runners (host architecture)
+### Layer 2: Peripheral Bring-Up
 
-**Testable Modules:**
-- `time/calendar.rs` - Date/time conversions (Howard Hinnant algorithms)
-- `time/rtc.rs` - Timestamp operations (without RTC hardware)
-- `ccmram.rs` - Wall-clock calibration math
-- Future: Protocol encoding/decoding, message parsing
+**What it tests:** Hardware initialization — clocks, buses,
+and peripherals respond as expected.
 
-**Running Tests:**
-```bash
-# Host-side unit tests (no embedded target)
-cargo test --manifest-path feather-stm32f405/Cargo.toml --lib
+**Where it runs:** On the MCU via `embedded-test` 0.7.x and
+probe-rs.  Each test gets a full device reset for isolation.
+
+**Test binary:** `boards/feather-stm32f405/tests/bringup.rs`
+
+**Current tests:**
+
+- **Clock tree:** Read `RCC_CFGR` SWS bits, confirm PLL is
+  SYSCLK source.
+- **RNG entropy:** Enable hardware RNG (requires 48 MHz PLLQ),
+  read four 32-bit values, assert non-zero and non-identical.
+- **I2C SEN66 probe:** Initialize I2C1 at 400 kHz, send
+  `GetSerialNumber` (0xD033), assert valid response.
+- **SPI W5500 version:** Reset W5500, read VERSIONR (0x0039)
+  via SPI2, assert 0x04.
+- **TIM2 tick rate:** Configure TIM2 at 1 MHz, measure counter
+  delta over a CPU delay, assert within broad tolerance.
+
+These tests catch PLL divider regressions, bus wiring
+mistakes, dead peripherals, and configuration drift between
+the test and production `init`.
+
+### Layer 3: RTIC Integration (Deferred)
+
+**What it will test:** Inter-task communication via
+`rtic_sync` channels, monotonic timer behavior under load,
+and vertical data slices (sensor → channel → network task).
+
+**Why deferred:** Building custom `#[app]` test binaries
+requires per-binary linker scripts, RTT-based pass/fail
+parsing, and dedicated mise tasks.  This investment is
+justified only after Layers 1, 2, and 4 are solid.
+
+**Trigger criteria for starting Layer 3:**
+
+- A bug escapes that Layer 2 + Layer 4 should have caught
+  but didn't because it involves RTIC task interaction
+- The `rtic_sync` channel backpressure under TLS stall
+  becomes a real failure mode (not just theoretical)
+- A second board profile is added, making shared RTIC test
+  infrastructure worthwhile
+
+### Layer 4: System Smoke Test
+
+**What it tests:** The full firmware boots
+successfully and reaches expected milestones in the correct
+order.
+
+**How it works:** Flash debug firmware, capture RTT output
+via probe-rs, and assert that `defmt` milestones appear in
+the expected sequence:
+
+1. `"System initialized"`
+2. `"TIM2 monotonic"`
+3. `"I2C1 initialized"`
+4. `"SEN66 initialized"`
+5. `"Network stack initialized"`
+6. `"SNTP sync successful"`
+
+Milestone ordering is the test contract.  Changing a log
+message that serves as a milestone is a test-breaking change.
+
+### Layer 5: End-to-End (Future)
+
+**What it will test:** The full data path from device through
+TLS to an MQTT broker, with a subscriber validating received
+messages.
+
+**Infrastructure:** MCU + Mosquitto container (already in
+`test/broker/`) + TLS certificates (generated by
+`test/scripts/gen-tls-cert.sh`).
+
+This layer is deferred until the MQTT publishing path is
+stable and a self-hosted runner with USB passthrough is
+available.
+
+## Running Tests
+
+### Layer 1: Host Unit Tests
+
+```sh
+mise run test:host
 ```
 
-**Status:** 🔄 Partially implemented - calendar tests exist, CI integration pending
+Or directly:
 
-### 2.3 Container Image Validation (Automated)
-
-**Environment:** GitHub Actions public runners
-
-**Purpose:** Catch regressions in test infrastructure (Mosquitto MQTT broker)
-
-**Tests:**
-- Container image builds successfully
-- Mosquitto starts and listens on expected ports
-- TLS certificates generated correctly
-
-**Status:** ⏳ To be implemented
-
-### 2.4 On-Device Integration Tests (Future - Self-Hosted)
-
-**Environment:** Self-hosted GitHub Actions runner
-
-**Prerequisites:**
-- Linux workstation with container runtime (Podman or Docker)
-- J-Link or compatible SWD debugger
-- STM32F405 Feather connected via USB
-- Local network access (for Mosquitto container)
-
-**Architecture:**
-```
-┌────────────────────────────────────────────────────┐
-│  Self-Hosted Runner (container)                     │
-│  ├─ probe-rs / cargo-embed                         │
-│  ├─ USB passthrough to J-Link                      │
-│  └─ Network access to Mosquitto container          │
-└──────────────────────┬─────────────────────────────┘
-                       │ USB
-                       ▼
-              ┌─────────────────┐
-              │ STM32F405       │
-              │ Feather Board   │
-              └─────────────────┘
+```sh
+cargo test --workspace \
+  --exclude feather-stm32f405 \
+  --target "$(rustc -vV | sed -n 's/^host: //p')"
 ```
 
-**Test Types:**
-- Flash and boot verification
-- RTT log capture and assertion
-- TLS handshake with local Mosquitto
-- SNTP synchronization
-- Sensor read (when implemented)
+### Layer 2: On-Device Bring-Up Tests
 
-**Status:** ⏳ Planned for Phase 3+
-
-### 2.5 Hardware Validation (Manual)
-
-**Environment:** Local workstation with test equipment
-
-**Equipment Required:**
-- Logic analyzer (SPI/I2C protocol decode)
-- Oscilloscope (timing, signal integrity)
-- Multimeter (power consumption)
-- Network packet capture (Wireshark)
-
-**Validation Procedures:**
-| Test | Equipment | Acceptance Criteria |
-|------|-----------|---------------------|
-| SPI timing (W5500) | Logic analyzer | Clock ≤21 MHz, Mode 0/3 |
-| I2C timing (SEN66) | Logic analyzer | 400 kHz, proper ACK/NAK |
-| EXTI latency | Oscilloscope | <500 μs interrupt response |
-| Power consumption | Multimeter | <100 mA average (spec SR-PERF-005) |
-| TLS handshake | Wireshark | TLS 1.3, correct cipher suite |
-
-**Status:** 🔄 Ongoing as features are implemented
-
----
-
-## 3. CI/CD Pipeline
-
-### 3.1 Current Pipeline (Public Runners)
-
-```yaml
-# .github/workflows/ci.yaml
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - Check formatting (rustfmt)
-      - Run clippy
-      - Build debug
-      - Build release
-      # Future additions:
-      - Run host unit tests
-      - Build Docker image
+```sh
+mise run test:device
 ```
 
-### 3.2 Future Pipeline (With Self-Hosted Runner)
+Or directly:
 
-```yaml
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    # ... existing checks ...
-
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - Build Mosquitto container image
-      - Validate image starts correctly
-
-  on-device:
-    runs-on: self-hosted
-    needs: [check]
-    steps:
-      - Flash firmware
-      - Capture RTT logs
-      - Run integration tests
-      - Report results
+```sh
+cargo test -p feather-stm32f405
 ```
 
----
+Requires a probe-rs-compatible debug probe (J-Link, ST-Link,
+or CMSIS-DAP) connected to the target board.
 
-## 4. Self-Hosted Runner Setup
+### Layer 4: System Smoke Test
 
-### 4.1 Requirements
-
-- Linux host (Ubuntu 22.04+ recommended)
-- Container runtime (Podman or Docker)
-- USB access for J-Link debugger
-- Network connectivity
-
-### 4.2 Installation (Container Method)
-
-```bash
-# Create runner container (using Docker as example)
-docker run -d \
-  --name github-runner \
-  --restart unless-stopped \
-  -e RUNNER_REPOSITORY_URL=https://github.com/lamawithonel/iot-playground \
-  -e RUNNER_TOKEN=<token_from_github> \
-  -v /dev/bus/usb:/dev/bus/usb \
-  --privileged \
-  myoung34/github-runner:latest
-
-# Verify runner registration
-docker logs github-runner
+```sh
+mise run test:smoke
 ```
 
-### 4.3 USB Device Access
+Flashes release firmware and monitors RTT output for
+milestone ordering.  If the test requires a broker, it will
+manage the broker lifecycle automatically.
 
-```bash
-# Add udev rules for J-Link (create /etc/udev/rules.d/99-jlink.rules)
-SUBSYSTEM=="usb", ATTR{idVendor}=="1366", MODE="0666"
+### Full Pipeline
 
-# Reload rules
-sudo udevadm control --reload-rules
-sudo udevadm trigger
+```sh
+mise run test:integration
 ```
 
-### 4.4 Network Configuration
+Runs Layers 1, 2, and 4 in sequence.
 
-The runner container needs access to:
-- Internet (for GitHub API)
-- Local Mosquitto container (e.g., via container bridge network)
+### Static Analysis
 
-```bash
-# Create shared network
-docker network create iot-test-net
+Formatting:
 
-# Run Mosquitto on shared network
-docker run -d \
-  --name mosquitto-test \
-  --network iot-test-net \
-  -p 8883:8883 \
-  docker.io/library/eclipse-mosquitto:latest
-
-# Connect runner to shared network
-docker network connect iot-test-net github-runner
+```sh
+cargo fmt --all -- --check
 ```
 
----
+Linting:
 
-## 5. Test Coverage Goals
+```sh
+cargo clippy --workspace \
+  --target thumbv7em-none-eabihf -- -D warnings
+```
 
-| Component | Target Coverage | Current Status |
-|-----------|----------------|----------------|
-| Time/calendar utilities | 100% | ✅ Achieved |
-| Network stack abstraction | 80% | ⏳ Not started |
-| TLS integration | 60% (integration tests) | ⏳ Not started |
-| Sensor drivers | 70% | ⏳ Not started |
-| Display drivers | 60% | ⏳ Not started |
-| CAN gateway | 80% | ⏳ Not started |
-| OTA bootloader | 90% | ⏳ Not started |
+## When to Add a Test
 
----
+Use this decision matrix to decide which layer needs a new
+test:
 
-## 6. Manual Testing Procedures
+| You changed… | Add a test in… |
+|:-------------|:---------------|
+| `core/` logic or data types | Layer 1 (host unit test) |
+| BSP peripheral init or pin mapping | Layer 2 (bring-up test) |
+| Boot sequence or milestone ordering | Layer 4 (smoke test covers you) |
+| RTIC task interaction or channel wiring | Layer 4 for now; Layer 3 when available |
+| MQTT payload format or TLS config | Layer 1 (schema/contract test) + Layer 4 |
 
-### 6.1 Network Stack Validation
+When in doubt: if the code can be tested without hardware,
+write a host test.  Hardware test cycles are expensive — save
+them for questions only hardware can answer.
 
-**Objective:** Verify TLS handshake with local Mosquitto broker
+## CI/CD Strategy
 
-**Procedure:**
-1. Start Mosquitto with TLS enabled: `mise run broker:start`
-2. Flash firmware: `cargo embed --release`
-3. Monitor RTT logs: Look for "TLS handshake successful"
-4. Capture packets: `sudo tcpdump -i any -w capture.pcap port 8883`
-5. Analyze with Wireshark: Verify TLS 1.3, cipher suite TLS_AES_128_GCM_SHA256
+**Host tests** (`test:host`) are a required merge gate on
+every PR.  They run on GitHub Actions public runners with no
+special hardware.
 
-**Pass Criteria:**
-- Handshake completes in <2 seconds
-- No certificate errors
-- Connection remains stable for 5+ minutes
+**On-device tests** and **smoke tests** require a probe and
+target board.  In CI, these jobs detect whether hardware is
+available and skip gracefully when it is not.  They run as
+non-blocking checks until the self-hosted runner has completed
+a 30-day reliability bake, after which they will be promoted
+to required.
 
-### 6.2 SPI Timing Verification (W5500)
+**Hardware attestation:** For changes that touch BSP code or
+peripheral configuration, contributors should run on-device
+tests locally and add a `Tested-on:` git trailer to their
+commit message:
 
-**Objective:** Validate SPI communication meets W5500 timing requirements
+```
+Tested-on: Feather STM32F405 + J-Link + SEN66 + W5500
+```
 
-**Equipment:** Logic analyzer with SPI decoder
+Maintainers may also apply an `hw-verified` label to PRs that
+have been validated on hardware.
 
-**Procedure:**
-1. Connect logic analyzer to SPI2 pins: PB13 (SCK), PB14 (MISO), PB15 (MOSI), PC6 (CS)
-2. Configure analyzer: SPI Mode 0, MSB first
-3. Flash firmware and trigger network activity
-4. Capture and analyze: Clock rate ≤21 MHz, proper CS toggling
+**QEMU/Renode emulation** is deliberately skipped.  STM32F405
+peripheral models are incomplete, and the ROI is negative at
+one board.  This will be revisited when three or more target
+boards are supported.
 
-**Pass Criteria:**
-- Clock frequency within specification
-- Setup/hold times met
-- No glitches or protocol errors
+## Future: RTIC Integration Tests
 
-### 6.3 Power Consumption Measurement
+Layer 3 will introduce custom `#[app]` test binaries that run
+real RTIC tasks with channels, monotonic timers, and
+peripheral interactions.  See the trigger criteria in the
+[Layer 3 section](#layer-3-rtic-integration-deferred) above.
 
-**Objective:** Verify average power consumption <100 mA
+When the time comes, each test binary will be a standalone
+RTIC application in `boards/<board>/tests/` with its own
+`#[app]` macro, RTT-based pass/fail reporting, and a
+corresponding mise task.
 
-**Equipment:** Multimeter with DC current measurement
+## Future: HIL Testing
 
-**Procedure:**
-1. Insert multimeter in series with 3.3V supply
-2. Run firmware in normal operation (periodic sensor reads + MQTT)
-3. Measure current over 5-minute window
-4. Calculate average (exclude display refresh spikes)
-
-**Pass Criteria:**
-- Average current <100 mA
-- Peak current (with display) <200 mA
-
----
-
-## 7. Known Limitations
-
-### 7.1 QEMU Emulation
-
-QEMU's STM32F4 support is limited:
-- Basic CPU and timers work
-- No W5500 emulation (network testing impossible)
-- No I2C peripheral emulation (sensor testing impossible)
-- SPI only partially implemented
-
-**Conclusion:** QEMU not suitable for meaningful integration testing.
-
-### 7.2 CI Hardware Tests
-
-On-device testing in CI requires:
-- Self-hosted runner (setup complexity)
-- Physical hardware (single point of failure)
-- USB device passthrough (limited to local machine)
-
-**Decision:** Defer until test burden justifies setup effort (Phase 3+).
+Hardware-in-the-loop (HIL) testing will use a Saleae Logic
+Pro 16 for automated protocol validation — capturing SPI,
+I2C, and UART traffic during test runs and asserting timing
+and data correctness programmatically.  This is planned for
+Phase 3+ when the self-hosted runner infrastructure is in
+place.
 
 ---
 
-## 8. Future Enhancements
-
-### 8.1 HIL Test Framework
-
-When the project matures, consider:
-- Dedicated test fixture with multiple boards
-- Automated flashing and test execution
-- Result aggregation and reporting
-- Integration with GitHub status checks
-
-### 8.2 Fuzz Testing
-
-For protocol parsing and encoding:
-- Use `cargo-fuzz` for protobuf decoders
-- Test TLS state machine edge cases
-- CAN message parser robustness
-
-### 8.3 Performance Benchmarks
-
-Track key metrics over time:
-- Flash/RAM utilization
-- Interrupt latency
-- MQTT message throughput
-- Power consumption trends
-
----
-
-## References
-
-- [System Requirements Specification](../system_requirements.md)
-- [Project Roadmap](../roadmap.md)
-- [CI Workflow](https://github.com/lamawithonel/iot-playground/blob/main/.github/workflows/ci.yaml)
-
----
-
-*This document evolves with the project. Update as testing practices mature.*
+See [ADR-009](../architecture/decisions.md#adr-009-test-strategy-and-the-embedded-test-pyramid)
+for the full decision record, including alternatives
+considered and consequences.
