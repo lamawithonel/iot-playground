@@ -81,6 +81,17 @@ lto = false
 panic = "abort"
 codegen-units = 16
 
+# Crypto crates use heavy const-eval and field arithmetic that is
+# painfully slow (or times out) without optimizations.
+[profile.dev.package.crypto-bigint]
+opt-level = 2
+[profile.dev.package.elliptic-curve]
+opt-level = 2
+[profile.dev.package.p256]
+opt-level = 2
+[profile.dev.package.p384]
+opt-level = 2
+
 [profile.release]
 opt-level = "s"    # optimize for size
 debug = true       # symbols are nice and they don't increase the size on Flash
