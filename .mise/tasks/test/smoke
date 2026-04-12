@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Flash firmware and verify healthy boot via RTT and MQTT"
+#MISE description="Smoke test (standard): boot + PM conditioning (~3 min)"
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -28,12 +28,11 @@ _duration="${SMOKE_TEST_DURATION:-165}"
 _max_errors="${SMOKE_MAX_ERRORS:-5}"
 export PROBE_RS_CHIP="${PROBE_RS_CHIP:-STM32F405RGTx}"
 
-# Hard-set sensor sample interval to 5 s so the observation
-# window captures multiple messages regardless of profile.
-# With channel-driven publishing, this controls how often the
-# sensor task sends readings — the MQTT client publishes each
-# one immediately as it arrives.
-export SAMPLE_INTERVAL_SECS=5
+# Sensor sample interval (seconds).  The default of 5 s
+# captures many data points in the standard tier.  Tiered
+# wrappers (smoke-extended, smoke-full) override this to
+# match realistic deployment intervals.
+export SAMPLE_INTERVAL_SECS="${SAMPLE_INTERVAL_SECS:-5}"
 
 # ── Temp files ───────────────────────────────────────
 

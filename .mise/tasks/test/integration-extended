@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Full test pipeline with extended smoke (~5 min smoke)"
+set -o errexit
+set -o nounset
+set -o pipefail
+export SMOKE_TEST_DURATION=300
+export SAMPLE_INTERVAL_SECS=15
+exec "$(dirname "$0")/integration" "$@"

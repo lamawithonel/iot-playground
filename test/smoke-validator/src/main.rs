@@ -22,6 +22,18 @@ use std::path::PathBuf;
 
 use cucumber::World;
 
+/// Default smoke test duration in seconds.
+const DEFAULT_TEST_DURATION: u64 = 165;
+
+/// Parse `SMOKE_TEST_DURATION` from the environment, falling back
+/// to [`DEFAULT_TEST_DURATION`] if unset or unparseable.
+fn smoke_test_duration() -> u64 {
+    std::env::var("SMOKE_TEST_DURATION")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_TEST_DURATION)
+}
+
 /// Deserialized MQTT telemetry message from the device.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct MqttMessage {
@@ -110,10 +122,7 @@ impl SmokeTestWorld {
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
 
-        let test_duration: u64 = std::env::var("SMOKE_TEST_DURATION")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(165);
+        let test_duration = smoke_test_duration();
 
         let sample_interval: u64 = std::env::var("SAMPLE_INTERVAL_SECS")
             .ok()
@@ -162,9 +171,23 @@ async fn main() {
                 .into_owned()
         });
 
+    // Read test duration for tag-based scenario filtering.
+    // Scenarios tagged @extended require ≥300 s (CO2 conditioning),
+    // and @full require ≥780 s (NOx conditioning).
+    let test_duration = smoke_test_duration();
+
     SmokeTestWorld::cucumber()
         .max_concurrent_scenarios(Some(1))
-        .run_and_exit(&features_path)
+        .filter_run_and_exit(&features_path, move |_, _, sc| {
+            for tag in &sc.tags {
+                match tag.as_str() {
+                    "extended" if test_duration < 300 => return false,
+                    "full" if test_duration < 780 => return false,
+                    _ => {}
+                }
+            }
+            true
+        })
         .await;
 }
 

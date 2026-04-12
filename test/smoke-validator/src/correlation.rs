@@ -125,3 +125,29 @@ fn last_timestamp_within_window(
          (expected ≤{window_secs}s)"
     );
 }
+
+/// The last MQTT timestamp should fall within the test window.
+///
+/// Uses `test_duration` as the window.  The actual elapsed
+/// time is always less because probe-rs flash overhead (~40 s)
+/// and SNTP synchronization (~2 s) consume part of the budget.
+#[then("the last MQTT timestamp should be within the test window")]
+fn last_timestamp_within_test_window(world: &mut SmokeTestWorld) {
+    let epoch = world.device_epoch
+        .expect("Device epoch not set");
+    let last = world.mqtt_messages.last()
+        .expect("No MQTT messages captured");
+    assert!(
+        last.timestamp >= epoch,
+        "Last message timestamp ({}) is before the SNTP epoch ({epoch}) \
+         — clock skew or corrupt data",
+        last.timestamp,
+    );
+    let elapsed = last.timestamp - epoch;
+    let window = world.test_duration;
+    assert!(
+        elapsed <= window,
+        "Last message is {elapsed}s after SNTP epoch \
+         (expected ≤{window}s = test_duration)"
+    );
+}

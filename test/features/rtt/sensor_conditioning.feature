@@ -19,8 +19,10 @@ Feature: Sensor Conditioning
   Scenario: Particulate matter conditioning
     Then the RTT log should match "PM conditioning complete" given at least 155 seconds
 
+  @extended
   Scenario: CO2 conditioning
-    Then the RTT log should match "CO.*conditioning complete" given at least 215 seconds
+    Then the RTT log should match "CO.*conditioning complete"
 
+  @full
   Scenario: NOx conditioning
-    Then the RTT log should match "NOx conditioning complete" given at least 635 seconds
+    Then the RTT log should match "NOx conditioning complete"
