@@ -17,6 +17,15 @@ fn have_mqtt_messages(world: &mut SmokeTestWorld) {
 
 // ── When steps ──────────────────────────────────────────
 
+/// Condition: at least N messages must be captured for this
+/// scenario to be meaningful.  Skips remaining steps if not.
+#[when(expr = "at least {int} messages have been captured")]
+fn at_least_n_messages(world: &mut SmokeTestWorld, min_count: usize) {
+    if world.mqtt_messages.len() < min_count {
+        world.skip_remaining = true;
+    }
+}
+
 /// Sets up context: a named field is present in at least one message.
 /// Subsequent Then steps operate on messages where that field exists.
 /// If the field is absent in all messages, remaining steps in this
@@ -199,6 +208,71 @@ fn msg_id_positive(world: &mut SmokeTestWorld) {
             msg.msg_id >= 1,
             "msg_id={} is not positive",
             msg.msg_id,
+        );
+    }
+}
+
+// ── Then steps: inter-message timing ────────────────────
+
+/// Compute inter-message intervals from timestamps.
+fn inter_message_intervals(messages: &[crate::MqttMessage]) -> Vec<f64> {
+    messages
+        .windows(2)
+        .map(|w| {
+            let dt_secs = w[1].timestamp as f64 - w[0].timestamp as f64;
+            let dt_micros = w[1].micros as f64 - w[0].micros as f64;
+            dt_secs + dt_micros / 1_000_000.0
+        })
+        .collect()
+}
+
+/// The median inter-message interval should be within a
+/// percentage of the expected sample interval.
+#[then(regex = r"^the median inter-message interval should be within (\d+)% of the sample interval$")]
+fn median_interval_near_sample(
+    world: &mut SmokeTestWorld,
+    tolerance_pct: u64,
+) {
+    if world.skip_remaining {
+        return;
+    }
+    let mut intervals = inter_message_intervals(&world.mqtt_messages);
+    if intervals.is_empty() {
+        return;
+    }
+    intervals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let median = intervals[intervals.len() / 2];
+    let expected = world.sample_interval as f64;
+    let tolerance = expected * tolerance_pct as f64 / 100.0;
+
+    assert!(
+        (median - expected).abs() <= tolerance,
+        "Median inter-message interval {median:.1}s is not within \
+         {tolerance_pct}% of expected {expected}s \
+         (tolerance: {tolerance:.1}s)",
+    );
+}
+
+/// No single gap between consecutive messages should exceed
+/// a multiple of the sample interval.
+#[then(regex = r"^no inter-message gap should exceed (\d+) times the sample interval$")]
+fn no_excessive_gap(
+    world: &mut SmokeTestWorld,
+    multiplier: u64,
+) {
+    if world.skip_remaining {
+        return;
+    }
+    let intervals = inter_message_intervals(&world.mqtt_messages);
+    let max_gap = world.sample_interval as f64 * multiplier as f64;
+
+    for (i, &gap) in intervals.iter().enumerate() {
+        assert!(
+            gap <= max_gap,
+            "Gap between msg_id={} and msg_id={} is {gap:.1}s \
+             (exceeds {multiplier}x sample interval = {max_gap:.0}s)",
+            world.mqtt_messages[i].msg_id,
+            world.mqtt_messages[i + 1].msg_id,
         );
     }
 }

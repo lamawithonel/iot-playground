@@ -25,3 +25,12 @@ Feature: Error Absence
 
   Scenario: No SNTP sync failure
     Then the RTT log should not contain "All SNTP sync attempts failed"
+
+  Scenario: No PUBACK poll failure
+    Then the RTT log should not contain "MQTT poll failed awaiting PUBACK"
+
+  Scenario: No sensor channel closure
+    Then the RTT log should not contain "Sensor channel closed"
+
+  Scenario: No broker rejection
+    Then the RTT log should not match "rejected by broker"
