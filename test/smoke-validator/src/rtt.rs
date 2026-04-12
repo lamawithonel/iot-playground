@@ -117,3 +117,43 @@ fn log_matches_within(
         world.test_duration
     );
 }
+
+/// Asserts the RTT log does NOT contain a literal substring,
+/// but only if the test ran long enough.
+#[then(expr = "the RTT log should not contain {string} given at least {int} seconds")]
+fn log_does_not_contain_within(
+    world: &mut SmokeTestWorld,
+    unexpected: String,
+    threshold: u64,
+) {
+    if world.test_duration < threshold {
+        return;
+    }
+    assert!(
+        !world.rtt_log.contains(&unexpected),
+        "RTT log unexpectedly contains \"{unexpected}\" \
+         (test ran {}s, threshold {threshold}s)",
+        world.test_duration
+    );
+}
+
+/// Asserts the RTT log does NOT match a regex, but only if
+/// the test ran long enough.
+#[then(expr = "the RTT log should not match {string} given at least {int} seconds")]
+fn log_does_not_match_within(
+    world: &mut SmokeTestWorld,
+    pattern: String,
+    threshold: u64,
+) {
+    if world.test_duration < threshold {
+        return;
+    }
+    let re = Regex::new(&pattern)
+        .unwrap_or_else(|e| panic!("invalid regex \"{pattern}\": {e}"));
+    assert!(
+        !re.is_match(&world.rtt_log),
+        "RTT log unexpectedly matches /{pattern}/ \
+         (test ran {}s, threshold {threshold}s)",
+        world.test_duration
+    );
+}

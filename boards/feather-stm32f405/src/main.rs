@@ -3,10 +3,18 @@
 #![no_main]
 #![no_std]
 
+use core::sync::atomic::{AtomicU32, Ordering};
 use defmt_rtt as _; // global logger
 use panic_probe as _;
 use rtic::app;
 use rtic_monotonics::stm32::prelude::*;
+
+/// Counter tracking WFI wakeup events.
+///
+/// Incremented in the idle task after each `wfi()` return.
+/// Read and reset by the MQTT publish loop to log
+/// sleep/wake behavior per publish cycle.
+pub(crate) static IDLE_WAKES: AtomicU32 = AtomicU32::new(0);
 
 mod ccmram;
 mod config;
@@ -366,6 +374,7 @@ mod app {
         info!("Idle task started - entering WFI loop");
         loop {
             cortex_m::asm::wfi();
+            IDLE_WAKES.fetch_add(1, Ordering::Relaxed);
         }
     }
 }
