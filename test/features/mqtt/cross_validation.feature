@@ -15,4 +15,4 @@ Feature: RTT/MQTT Cross-Stream Validation
   Scenario: All timestamps follow the SNTP epoch
     When the device has synchronized via SNTP
     Then every MQTT timestamp should be at or after the device epoch
-    And the last MQTT timestamp should be within 300 seconds of the device epoch
+    And the last MQTT timestamp should be within the test window

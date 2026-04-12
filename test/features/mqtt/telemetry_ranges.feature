@@ -34,4 +34,8 @@ Feature: MQTT Sensor Telemetry Ranges
       | pm2_5    | 155       |
       | pm4_0    | 155       |
       | pm10     | 155       |
+
+    @extended
+    Examples:
+      | field    | threshold |
       | co2      | 215       |

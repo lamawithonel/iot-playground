@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Extended smoke test: covers CO2 conditioning (~5 min)"
+set -o errexit
+set -o nounset
+set -o pipefail
+export SMOKE_TEST_DURATION=300
+export SAMPLE_INTERVAL_SECS=15
+exec "$(dirname "$0")/smoke" "$@"

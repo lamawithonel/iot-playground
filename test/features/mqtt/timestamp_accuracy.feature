@@ -12,4 +12,4 @@ Feature: MQTT Timestamp Accuracy
 
   Scenario: Last timestamp is within the test window
     When the device has synchronized via SNTP
-    Then the last MQTT timestamp should be within 300 seconds of the device epoch
+    Then the last MQTT timestamp should be within the test window
