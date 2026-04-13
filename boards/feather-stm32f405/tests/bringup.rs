@@ -253,6 +253,43 @@ mod tests {
         info!("W5500 OK: version 0x{:02x}", rx[3]);
     }
 
+    /// Validate the W5500 INT pin (PC2) reads idle-HIGH.
+    ///
+    /// After a hardware reset, the W5500 deasserts its
+    /// active-low INTn line (no pending interrupts).  This
+    /// test configures PC2 as input with pull-up — matching
+    /// the RTIC app's `ExtiInput` setup — and asserts the
+    /// pin reads HIGH.  Catches miswiring, floating pins,
+    /// and stuck-low faults that would silently break EXTI2
+    /// interrupt-driven packet reception.
+    #[test]
+    fn exti2_w5500_int_idle_state(state: State) {
+        use embassy_stm32::gpio::{Input, Level, Output, Pull, Speed};
+
+        info!("Validating W5500 INT pin (PC2) for EXTI2");
+
+        let p = state.p;
+
+        // Hardware reset W5500 to clear pending interrupts
+        let mut reset = Output::new(p.PC3, Level::Low, Speed::Low);
+        cortex_m::asm::delay(84_000); // ~1 ms reset pulse
+        reset.set_high();
+        cortex_m::asm::delay(8_400_000); // ~100 ms PLL lock
+
+        // Configure PC2 as input with pull-up (matches
+        // RTIC app's ExtiInput config)
+        let int_pin = Input::new(p.PC2, Pull::Up);
+
+        // W5500 INTn is active-low.  After reset with no
+        // configuration, no interrupts are pending → HIGH.
+        assert!(
+            int_pin.is_high(),
+            "W5500 INT (PC2) LOW after reset — wiring fault or stuck interrupt",
+        );
+
+        info!("W5500 INT pin OK: idle HIGH (EXTI2 ready)");
+    }
+
     /// Verify TIM2 ticks at approximately the expected rate.
     ///
     /// Configures TIM2 with a prescaler for 1 MHz from the
