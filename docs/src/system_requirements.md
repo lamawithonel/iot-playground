@@ -300,26 +300,30 @@ Once implemented, all QoS levels must be thoroughly tested because they provide 
 - [x] GPIO and LED control
 - [x] SWD debugging with RTT logging
 
-### Phase 2: Network Stack
+### Phase 2: Network Stack ✅
 - [x] Verify network pin assignments with logic analyzer
 - [x] W5500 SPI driver
 - [x] DHCP and Layer 2 networking
-- [x] Newtwork stack abstraction
+- [x] Network stack abstraction
 - [x] SNTP client (`sntpc`)
 - [x] TLS 1.3 handshake
-- [ ] MQTT client with AWS IoT Core
-- [ ] Event-driven MQTT message handling
-- [ ] Interrupt-driven packet reception
+- [x] MQTT v5.0 client with TLS 1.3
+- [x] Event-driven MQTT message handling (channel-driven
+  publish with QoS 1)
+- [x] Interrupt-driven packet reception (EXTI2/PC2)
+- [x] WFI/Sleep mode with DSB barrier and wake counter
 
-### Phase 3: Sensor Integration
-- [ ] Verify sensor pin assignments with logic analyzer
-- [ ] I2C abstraction
-- [ ] I2C bus initialization
-- [ ] SEN66 driver with CRC validation
-- [ ] Periodic sensor readings (60s timer)
-- [ ] Publish sensor data via MQTT
+### Phase 3: Sensor Integration ✅
+- [x] Verify sensor pin assignments with logic analyzer
+- [x] I2C abstraction
+- [x] I2C bus initialization
+- [x] SEN66 driver with CRC validation
+- [x] Periodic sensor readings (configurable interval)
+- [x] Publish sensor data via MQTT
 
 ### Phase 4: Security Foundation
+- [ ] AWS IoT Core endpoint and TLS certificate
+  verification (deferred from Phase 2)
 - [ ] Feature-gate `NoVerify` TLS
 - [ ] Software-only certificate verification
 - [ ] Threat model document
@@ -356,7 +360,7 @@ compliance gates.
 
 ### Test Methods
 - **Unit Tests:** All non-hardware functions, ≥80% coverage, `embedded-test` framework
-- **Integration Tests:** `defmt-test` on real hardware via GitHub Actions self-hosted runners
+- **Integration Tests:** `embedded-test` on real hardware via probe-rs; Cucumber-RS smoke tests with tiered durations
 - **Hardware Tests:** Logic analyzer for timing, oscilloscope for latency, packet capture for protocols
 
 ### Acceptance Criteria
@@ -412,7 +416,7 @@ compliance gates.
 **Testing:**
 - `embedded-test` - Unit tests
 - `embedded-hal-mock` - HAL mocking
-- `defmt-test` - Integration tests on hardware
+- `embedded-test` - Integration tests on hardware
 - `cargo-tarpaulin` - Coverage analysis
 
 ---
