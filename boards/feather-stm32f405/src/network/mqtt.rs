@@ -283,7 +283,8 @@ impl MqttClient {
             msg_count += 1;
 
             let wakes = crate::IDLE_WAKES.swap(0, core::sync::atomic::Ordering::Relaxed);
-            info!("wfi_wakes: {}", wakes);
+            let exti2 = crate::EXTI2_EVENTS.swap(0, core::sync::atomic::Ordering::Relaxed);
+            info!("wfi_wakes: {}, exti2_events: {}", wakes, exti2);
 
             let ts = time::get_timestamp();
             let topic_str = format_mqtt_topic(client_id.as_str(), "telemetry")?;
