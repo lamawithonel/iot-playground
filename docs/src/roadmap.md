@@ -2,8 +2,8 @@
 ## Embedded Rust IoT Firmware
 
 **Version:** 3.0
-**Last Updated:** 2026-04-05
-**Project Phase:** Phase 2 (Network Stack) / Phase 3 Complete
+**Last Updated:** 2026-04-13
+**Project Phase:** Phase 2 (Network Stack) Complete / Phase 3 Complete
 
 ---
 
@@ -63,7 +63,7 @@ on STM32F405RG, demonstrating:
 - [x] Build system fixes for `memory.x` linker script handling
 - [x] Documentation updates (README, AGENTS.md, ADRs)
 
-### 2.1 Phase 2: Network Stack (In Progress)
+### 2.1 Phase 2: Network Stack ✅ Complete
 
 **Completed:**
 
@@ -78,12 +78,18 @@ on STM32F405RG, demonstrating:
 - [x] Device identification using STM32 UID
 - [x] Decoupled error architecture
 - [x] Platform-agnostic `core/` crate with host-side unit tests
+- [x] Channel-driven event-driven MQTT publish loop
+- [x] QoS 1 with PUBACK polling and select-based timeout
+- [x] Interrupt-driven packet reception (EXTI2 on PC2)
+- [x] WFI/Sleep mode between messages (idle task with
+  DSB + WFI, wake counter telemetry)
+- [x] Cucumber-RS smoke test validator with tiered
+  durations and tag-based filtering
 
-**In Progress:**
+**Deferred to Phase 4:**
 
-- [ ] Interrupt-driven packet reception (EXTI2)
-- [ ] WFI/Sleep mode between messages
-- [ ] Full AWS IoT Core integration
+- [ ] AWS IoT Core endpoint and TLS certificate
+  verification (depends on Security Foundation)
 
 ### 2.2 TLS Library Decision
 
@@ -175,7 +181,7 @@ for formal decisions.
 - [x] GPIO and LED control
 - [x] SWD debugging with RTT logging
 
-### Phase 2: Network Stack 🔄 In Progress
+### Phase 2: Network Stack ✅ Complete
 
 - [x] Verify network pin assignments with logic analyzer
 - [x] W5500 SPI driver
@@ -188,19 +194,24 @@ for formal decisions.
 - [x] Decoupled error architecture
 - [x] MQTT persistent connection with exponential backoff
 - [x] MQTT keep-alive handling (configurable interval)
-- [ ] Event-driven MQTT message handling
-- [ ] Shared MQTT connection resource (RTIC Shared)
-- [ ] WFI/Sleep mode between messages
-- [ ] Interrupt-driven packet reception (EXTI2)
+- [x] Event-driven MQTT message handling (channel-driven
+  publish loop with QoS 1 and PUBACK timeout)
+- [x] WFI/Sleep mode between messages (DSB + WFI in idle
+  task, EXTI2 wake, wake counter telemetry)
+- [x] Interrupt-driven packet reception (EXTI2 on PC2
+  via `ExtiInput` → `embassy-net-wiznet` driver)
+
+**Not applicable:**
+
+- ~~Shared MQTT connection resource (RTIC Shared)~~ —
+  SR-NET-016 is `[Phase 3+]`.  Currently only
+  `network_task` uses MQTT; the embassy-net `Stack` is
+  `!Send` and must remain in one task.  Deferred until
+  multiple publishing tasks exist.
+
+**Deferred to Phase 4:**
+
 - [ ] AWS IoT Core endpoint and TLS cert verification
-
-**Phase 2 Remaining Work:**
-
-- Wire EXTI2 interrupt for W5500 packet reception
-- Implement proper interrupt-driven wake from WFI
-- Event-driven MQTT message handling
-- AWS IoT Core endpoint configuration and TLS cert
-  verification
 
 ### Phase 3: Sensor Integration ✅ Complete
 
@@ -222,6 +233,8 @@ threaded through all phases, not a late-stage bolt-on.
 **Compliance Gate 1:** No deployment beyond dev-lab without
 software certificate verification.
 
+- [ ] AWS IoT Core endpoint and TLS certificate
+  verification (deferred from Phase 2)
 - [ ] Feature-gate `NoVerify` behind `danger-no-verify`
   Cargo feature with `compile_error!` on default builds
 - [ ] Make `CryptoProvider` generic over verifier type
@@ -442,7 +455,7 @@ self-hosted GitHub Actions runner will be configured:
 |-----------|--------|
 | Phase 0: Workspace Migration | ✅ Complete |
 | Phase 1: Core Platform | ✅ Complete |
-| Phase 2: Network Stack | 🔄 In Progress |
+| Phase 2: Network Stack | ✅ Complete |
 | Phase 3: Sensor Integration | ✅ Complete |
 | Phase 4: Security Foundation | ⏳ Not Started |
 | Phase 5: Protobuf Telemetry | ⏳ Not Started |
