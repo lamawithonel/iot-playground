@@ -368,11 +368,17 @@ mod app {
             .await
     }
 
-    /// RTIC idle task - WFI sleep mode when no tasks active
+    /// RTIC idle task — WFI sleep mode when no tasks active.
+    ///
+    /// The DSB ensures all pending memory accesses (including
+    /// the previous iteration's `IDLE_WAKES` store) complete
+    /// before the CPU enters sleep.  This is standard ARM
+    /// Cortex-M practice per the Technical Reference Manual.
     #[idle]
     fn idle(_cx: idle::Context) -> ! {
         info!("Idle task started - entering WFI loop");
         loop {
+            cortex_m::asm::dsb();
             cortex_m::asm::wfi();
             IDLE_WAKES.fetch_add(1, Ordering::Relaxed);
         }
