@@ -16,8 +16,17 @@ use rtic_monotonics::stm32::prelude::*;
 /// sleep/wake behavior per publish cycle.
 pub(crate) static IDLE_WAKES: AtomicU32 = AtomicU32::new(0);
 
+/// Counter tracking EXTI2 interrupt events (W5500 INT pin).
+///
+/// Incremented by [`CountingExtiInput`] each time the
+/// embassy-net-wiznet driver completes a `Wait` call on the
+/// W5500 INT line.  Read and reset per publish cycle to prove
+/// interrupt-driven packet reception.
+pub(crate) static EXTI2_EVENTS: AtomicU32 = AtomicU32::new(0);
+
 mod ccmram;
 mod config;
+mod counting_exti;
 mod device_id;
 mod eth;
 mod network;
@@ -275,7 +284,8 @@ mod app {
 
         let cs = Output::new(periph.cs, Level::High, Speed::VeryHigh);
         let reset = Output::new(periph.reset, Level::High, Speed::Low);
-        let int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
+        let raw_int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
+        let int = counting_exti::CountingExtiInput::new(raw_int, &EXTI2_EVENTS);
 
         let eth_periph = eth::EthPeripherals {
             spi,

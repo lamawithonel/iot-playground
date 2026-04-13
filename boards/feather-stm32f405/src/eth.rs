@@ -6,12 +6,13 @@ use defmt::info;
 use embassy_embedded_hal::shared_bus::asynch::spi::SpiDevice as SpiDeviceBus;
 use embassy_net_wiznet::chip::W5500;
 use embassy_net_wiznet::{Device, Runner};
-use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::Output;
 use embassy_stm32::mode::Async;
 use embassy_stm32::spi::Spi;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use static_cell::StaticCell;
+
+use crate::counting_exti::CountingExtiInput;
 
 /// Type alias for the W5500 device used with embassy-net
 #[allow(dead_code)]
@@ -22,7 +23,7 @@ pub struct EthPeripherals<'a> {
     pub spi: Spi<'a, Async>,
     pub cs: Output<'a>,
     pub reset: Output<'a>,
-    pub int: ExtiInput<'a>,
+    pub int: CountingExtiInput<'a>,
 }
 
 /// Initialize the W5500 Ethernet hardware
@@ -37,7 +38,7 @@ pub async fn init_w5500(
         'static,
         W5500,
         SpiDeviceBus<'static, CriticalSectionRawMutex, Spi<'static, Async>, Output<'static>>,
-        ExtiInput<'static>,
+        CountingExtiInput<'static>,
         Output<'static>,
     >,
 ) {
