@@ -1,0 +1,38 @@
+[package]
+name = "nucleo-n657x0"
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+
+# This crate is workspace-excluded (see the root Cargo.toml), so
+# it cannot use `.workspace = true` inheritance; version and
+# edition are stated explicitly, matching the workspace values.
+
+[[bin]]
+bench = false
+name = "nucleo-n657x0"
+test = false
+
+# ── Dependencies (deliberately commented out) ────────────────────
+# Exact crates, versions, and feature sets get pinned at the
+# bring-up spike, once the flashless signed-FSBL boot chain and
+# embassy-stm32 N6 peripheral coverage are verified on hardware.
+# Until then the manifest stays dependency-free so that
+# `cargo metadata` remains valid if the crate is inspected
+# standalone.  Candidate set (features unverified):
+#
+# [dependencies]
+# cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+# critical-section = "1.1"
+# defmt = "1.0"
+# defmt-rtt = "1.1"
+# panic-probe = { version = "1.0", features = ["print-defmt"] }
+#
+# [dependencies.embassy-stm32]
+# version = "0.4"
+# default-features = false
+# features = ["defmt", "rt", "stm32n657x0", "time-driver-tim2"]
+#
+# [dependencies.rtic]
+# version = "2"
+# features = ["thumbv8main-backend"]

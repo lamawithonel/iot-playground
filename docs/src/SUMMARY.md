@@ -16,6 +16,11 @@
 - [Board Profiles](./boards/README.md)
   - [Adafruit Feather STM32F405](./boards/feather-stm32f405.md)
 
+# Projects
+
+- [ARS Toolhead Sensor](./projects/ars-toolhead-sensor/README.md)
+  - [Hardware](./projects/ars-toolhead-sensor/hardware.md)
+
 # Architecture
 
 - [Architecture Decisions](./architecture/decisions.md)
