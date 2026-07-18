@@ -20,3 +20,14 @@ book-target/
 # Generated TLS certificates and keys
 .local/
 .cache/
+
+# Claude Code local state -- only the symlinks into .agents/ are
+# tracked; settings, scheduled tasks, and other session state are
+# user-local and must never be committed.
+.claude/*
+!.claude/skills
+!.claude/agents
+!.claude/rules
+
+# User-local scratch prompt files at the repo root -- never tracked.
+prompt.txt

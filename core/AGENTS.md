@@ -1,0 +1,24 @@
+# core/ -- Platform-Agnostic Logic (`iot-core`)
+
+Pure `no_std` business logic with **zero hardware dependencies**.
+Compiles as a normal `std` crate during host tests via
+`#![cfg_attr(not(test), no_std)]`.
+
+## Contents
+
+| Module | Purpose |
+|--------|---------|
+| `network/error.rs` | `NetworkError`/`TlsError`/`MqttError`/`SntpError` enums |
+| `network/mqtt.rs` | MQTT topic and JSON payload formatting (pure, no I/O) |
+| `sensor/conditioning.rs` | Generic `ConditioningState<N>` warmup state machine |
+| `sensor/sen66.rs` | SEN66 phase constants and `Sen66Reading` (feature `sen66`) |
+| `time/` | `Timestamp`, NTP conversion, civil-calendar math |
+
+## Local Rules
+
+- Everything here MUST have host-side unit tests
+  (see [`testing_gates.md`](../.agents/rules/testing_gates.md)).
+- No `embassy-*`, `rtic*`, or MCU PAC dependencies -- hardware
+  I/O stays in board crates; traits go in `hal-abstractions/`.
+- Data crossing the core/board boundary uses deci-scaled
+  fixed-point integers, not `f32`.
