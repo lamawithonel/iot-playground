@@ -1,8 +1,8 @@
 # System Requirements Specification
 ## Embedded Rust IoT Firmware
 
-**Version:** 1.2  
-**Date:** January 3, 2026  
+**Version:** 1.3  
+**Date:** July 18, 2026  
 **Status:** Active Development  
 **Author:** Lucas Yamanishi
 
@@ -19,6 +19,11 @@ This document specifies requirements for embedded Rust firmware implementing rea
 ### 1.2 Scope
 
 **System:** Embedded Rust IoT Firmware on an Adafruit Feather STM32F405 Express development board
+
+This repository is a modular multi-project framework.  This SRS
+covers the framework itself plus the Feather STM32F405 reference
+project.  The ARS toolhead-sensor project is documented separately
+under [./projects/ars-toolhead-sensor/](./projects/ars-toolhead-sensor/).
 
 **In Scope:** Firmware, device drivers, network protocols, security, OTA mechanism  
 **Out of Scope:** Cloud infrastructure, AWS configuration, hardware design, manufacturing
@@ -45,7 +50,7 @@ This document specifies requirements for embedded Rust firmware implementing rea
 
 **Peripherals:**
 - W5500 Ethernet controller (SPI2)
-- SSD1681 E-ink display 200×200 with SRAM (SPI1)
+- SSD1681 E-ink display 200x200 with SRAM (SPI1)
 - SEN66 air quality sensor (I2C1)
 - TJA1051 CAN transceiver (CAN1)
 - microSD card (SDIO)
@@ -66,7 +71,7 @@ This document specifies requirements for embedded Rust firmware implementing rea
 2. **Real-Time:** RTIC framework with formal verification (Stack Resource Policy)
 3. **Security:** Defense-in-depth with TLS 1.3, authenticated updates
 4. **Maintainability:** Idiomatic Rust, comprehensive docs, 80%+ test coverage
-5. **Incremental:** Layer 2 → DHCP → TCP → TLS → MQTT progression
+5. **Incremental:** Layer 2 -> DHCP -> TCP -> TLS -> MQTT progression
 6. **Example-Driven:** Reference implementation for embedded Rust projects
 
 ### 2.4 Constraints
@@ -207,7 +212,7 @@ Once implemented, all QoS levels must be thoroughly tested because they provide 
 
 ### 4.2 Sensor Data
 
-**SR-SENS-001:** System SHALL read SEN66 sensor every 60 seconds (±5s)  
+**SR-SENS-001:** System SHALL read SEN66 sensor every 60 seconds (+/-5s)  
 **SR-SENS-002:** System SHALL retrieve PM1.0, PM2.5, PM4.0, PM10, CO2, VOC, NOx, temperature, humidity  
 **SR-SENS-003:** System SHALL validate readings using CRC-8 checksum, rejecting invalid data  
 **SR-SENS-004:** System SHALL publish sensor data as Protocol Buffers to `device/{id}/telemetry` with MQTT QoS level 1  
@@ -223,6 +228,10 @@ Once implemented, all QoS levels must be thoroughly tested because they provide 
 **SR-DISP-005:** System SHALL update the display after every network state change (online/offline status, CIDR IP address, FQDN)
 
 ### 4.4 CAN Gateway
+
+*Note: CAN is deferred to the backlog per roadmap section 1.3.
+The SR-CAN requirements below are retained for when the backlog
+item is picked up.*
 
 **SR-CAN-001:** System SHALL receive CAN 2.0B messages at 1 Mbps with standard/extended IDs  
 **SR-CAN-002:** System SHALL forward CAN messages to MQTT topic `device/{id}/can/{can_id}`  
@@ -255,7 +264,7 @@ Once implemented, all QoS levels must be thoroughly tested because they provide 
 **SR-PERF-004:** MQTT publish SHALL occur within 100 ms from data ready to transmission  
 **SR-PERF-005:** Average power consumption SHALL be <100 mA (excluding display updates)  
 **SR-PERF-006:** Incoming MQTT messages SHALL be processed within 50 ms  
-**SR-PERF-007:** Flash utilization SHALL be ≤90% (900 KB), SRAM ≤80% (154 KB)
+**SR-PERF-007:** Flash utilization SHALL be <=90% (900 KB), SRAM <=80% (154 KB)
 
 ---
 
@@ -280,7 +289,7 @@ Once implemented, all QoS levels must be thoroughly tested because they provide 
 **SR-MAINT-001:** Code SHALL follow Rust style guide, formatted with `rustfmt`, pass `clippy` with zero warnings  
 **SR-MAINT-002:** Public functions/modules SHALL have documentation comments  
 **SR-MAINT-003:** Code SHALL be organized in layers: drivers, application logic, protocols  
-**SR-MAINT-004:** Code coverage SHALL be ≥80%  
+**SR-MAINT-004:** Code coverage SHALL be >=80%  
 **SR-MAINT-005:** Rust file MUST use the `#![deny(warnings)]` macro
 
 ### 6.4 Design Constraints
@@ -359,47 +368,33 @@ compliance gates.
 ## 8. Verification
 
 ### Test Methods
-- **Unit Tests:** All non-hardware functions, ≥80% coverage, `embedded-test` framework
+- **Unit Tests:** All non-hardware functions, >=80% coverage, `embedded-test` framework
 - **Integration Tests:** `embedded-test` on real hardware via probe-rs; Cucumber-RS smoke tests with tiered durations
 - **Hardware Tests:** Logic analyzer for timing, oscilloscope for latency, packet capture for protocols
 
 ### Acceptance Criteria
 - All Critical/High priority requirements verified
-- ≥90% of Medium priority requirements verified
+- >=90% of Medium priority requirements verified
 - Zero Critical/High severity defects open
 - 30-day reliability test passes
-- Security audit finds no vulnerabilities ≥7.0 CVSS
+- Security audit finds no vulnerabilities >=7.0 CVSS
 
 ---
 
 ## 9. Architecture Decisions
 
-### ADR-001: RTIC vs Embassy Executor
-**Decision:** RTIC for scheduling, Embassy for HAL  
-**Rationale:** Need formal verification (SRP) for real-time guarantees; Embassy executor can't provide hard deadlines  
-**Trade-off:** Steeper learning curve, some driver incompatibilities
-
-### ADR-002: W5500 vs ESP32 WiFi
-**Decision:** W5500 hardwired Ethernet  
-**Rationale:** Hardware TCP/IP offload, deterministic behavior, easier debugging  
-**Trade-off:** Requires cable (no wireless mobility)
-
-### ADR-003: Protocol Buffers vs JSON
-**Decision:** Protocol Buffers for MQTT payloads  
-**Rationale:** Smaller size, faster, type-safe, industry standard  
-**Trade-off:** Less human-readable without decoder
-
-### ADR-004: E-ink vs OLED
-**Decision:** E-ink display  
-**Rationale:** Ultra-low power, sunlight readable, persistent without power  
-**Trade-off:** Slower refresh (~10s), but acceptable for sensor update intervals
+Architecture decisions for this project are tracked in the
+canonical ADR log at
+[./architecture/decisions.md](./architecture/decisions.md).  Refer
+to that document for the full set of decisions, rationale, and
+trade-offs rather than duplicating summaries here.
 
 ---
 
 ## 10. Reference Information
 
 **Development Tools:**
-- Rust stable (≥1.88.0 for micropb) with
+- Rust stable (>=1.88.0 for micropb) with
   `thumbv7em-none-eabihf` target
 - `cargo-embed` or `probe-rs` for flashing/debugging
 - J-Link tools for RTT logging
@@ -408,9 +403,9 @@ compliance gates.
 **Key Dependencies:**
 - `rtic` 2.x - Real-time framework
 - `embassy-stm32` - HAL and drivers
-- `embedded-tls` or `rustls` - TLS stack
-- `rumqttc` or `rust-mqtt` - MQTT client
-- `prost` - Protocol Buffers
+- `embedded-tls` - TLS stack (per ADR-005)
+- `rust-mqtt` (MQTT v5) - MQTT client
+- `micropb` (planned, Phase 5, per ADR-008) - Protocol Buffers
 - `defmt` + `defmt-rtt` - Logging
 
 **Testing:**
@@ -424,9 +419,9 @@ compliance gates.
 ## Appendix: Project Status
 
 **Known Risks:**
-- **R1:** Flash size constraints with TLS stack → Investigate `embedded-tls` lightweight implementation
-- **R2:** Embassy-RTIC compatibility gaps → Use PAC fallback for unsupported peripherals
-- **R3:** Limited secure boot on F4 → Plan hardware upgrade path to F7/H7 for production
+
+See [./risk_register.md](./risk_register.md) for the canonical,
+up-to-date risk register (currently R1-R10).
 
 ---
 

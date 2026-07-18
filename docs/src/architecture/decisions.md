@@ -299,7 +299,8 @@ build-time code generation from `.proto` files.
 ## ADR-009: Test Strategy and the Embedded Test Pyramid
 
 **Date:** 2026-04-06
-**Status:** Accepted
+**Updated:** 2026-07-18
+**Status:** Accepted (updated: sixth bring-up test, Layer 5 gate)
 
 **Context:**
 
@@ -345,7 +346,7 @@ emulation.
 | 2. On-device peripheral smoke | Hardware init: clock tree, I2C probe, SPI/W5500, RNG, TIM2 tick | MCU via probe-rs | Required with hardware |
 | 3. RTIC integration | Inter-task channels, monotonic timers, vertical data slices | Custom `#[app]` test binaries | Deferred (trigger-based) |
 | 4. System smoke test | Full firmware boot, milestone ordering, error detection | MCU via probe-rs + RTT | Required with hardware |
-| 5. End-to-end | Device → TLS → MQTT broker → subscriber validation | MCU + Mosquitto container | Future (Phase 3+) |
+| 5. End-to-end | Device → TLS → MQTT broker → subscriber validation | MCU + Mosquitto container | Required with hardware |
 
 **Layer 1 — Host Unit Tests (expand):**
 
@@ -373,7 +374,7 @@ integrity across transformation boundaries:
 
 **Layer 2 — On-Device Peripheral Tests (`bringup.rs`):**
 
-Five `embedded-test` tests in `bringup.rs` validate peripheral
+Six `embedded-test` tests in `bringup.rs` validate peripheral
 bring-up in `#[init]` context:
 
 - **Clock tree validation:** Read back `SYSCLK` via `RCC->CFGR`,
@@ -391,6 +392,9 @@ bring-up in `#[init]` context:
 - **TIM2 monotonic tick sanity:** Start TIM2, read counter, spin
   with `cortex_m::asm::delay`, read again, assert delta within
   ±5%.  Catches prescaler misconfigurations.
+- **W5500 INT pin (EXTI2):** Verify the W5500 INT line on PC2
+  asserts and is observable via EXTI2.  Proves the wiring that
+  interrupt-driven packet reception depends on.
 
 **Layer 3 — RTIC Integration Tests (deferred):**
 
@@ -478,9 +482,10 @@ reduce the test burden by making wrong states unrepresentable.
 **Consequences:**
 
 - `bringup.rs` replaces the three former pure-logic on-device
-  tests with five peripheral validation tests (clock tree PLL,
+  tests with six peripheral validation tests (clock tree PLL,
   RNG entropy, I2C SEN66 probe, SPI W5500 version register,
-  TIM2 tick rate) — a breaking change to test output.
+  TIM2 tick rate, W5500 INT/EXTI2 wiring) -- a breaking change
+  to test output.
 - Pure logic tests are removed from on-device; host tests
   already cover them.
 - The smoke test becomes the primary integration gate until
@@ -510,6 +515,88 @@ reduce the test burden by making wrong states unrepresentable.
 - **Full HIL framework now:** Deferred to Phase 3+.  Requires
   self-hosted runner, USB passthrough, and container networking
   that are not yet in place.
+
+---
+
+## ADR-010: ARS Toolhead-Sensor Project Track on STM32N657 (Scaffold)
+
+**Date:** 2026-07-18
+**Status:** Proposed (scaffold landed; accept at branch merge)
+
+**Context:**
+The framework needs a second consumer to prove its abstractions
+generalize beyond the STM32F405 air-quality node.  The candidate is
+an active acoustic resonance spectroscopy (ARS) device clamped to a
+Bambu Lab H2C toolhead to detect filament presence in the hot-end
+and cold-end.  Labeled positive/negative ARS captures will later
+train a passive CNN that detects filament at cold-pull start from
+printer sound alone; generalized fault detection is explicitly out
+of scope.  Prototype hardware: NUCLEO-N657X0-Q (STM32N657X0:
+Cortex-M55 @ 800 MHz, 4.2 MB RAM, flashless -- boots via signed
+FSBL from external NOR, Neural-ART NPU), an Adafruit MAX9744 20 W
+class-D amp driving a Dayton Audio EX25VT2-4 exciter (25 mm,
+4 ohm) as the acoustic source, and a SparkFun SPH8878LR5H-1 MEMS
+mic breakout (BOB-19389) modified with a TI OPA345NA op-amp and a
+30 kOhm resistor replacing C3.  The hardware is not in hand yet;
+today's work is scaffold only.
+
+**Decision:** Add the ARS toolhead sensor as a second project track
+in this repository: a `boards/nucleo-n657x0` crate, excluded from
+the workspace until it compiles in CI, with project documentation
+under `docs/src/projects/ars-toolhead-sensor/`.  The RTIC-first +
+Embassy-HAL constraints (ADR-001) apply to the ARS firmware
+unchanged.
+
+**Rationale:**
+
+- A second, dissimilar consumer (acoustic DSP and NPU inference vs
+  periodic sensor telemetry) pressure-tests the `core/` and
+  `hal-abstractions/` split from ADR-006 far better than a clone
+  of the first board would.
+- Workspace exclusion keeps CI green while the STM32N6 Rust
+  ecosystem matures; embassy-n6 youth, the unverified probe-rs
+  flashless-boot flow, and C-centric Neural-ART tooling are all
+  tracked as risk R10.
+- The Cortex-M55's Helium (MVE) vector extension and the
+  Neural-ART NPU give DSP and CNN-inference headroom no current
+  board in the workspace has.
+- 4.2 MB of SRAM holds chirp excitation buffers, response
+  captures, and FFT working sets without external RAM.
+- A docs-first scaffold records the signal chain and requirements
+  now, so hardware bring-up starts from a plan instead of ad-hoc
+  experiments.
+
+**Consequences:**
+
+- The excluded crate gets zero CI coverage until it is promoted to
+  workspace membership; API drift against `core/` is possible
+  until it first compiles.
+- Flashless boot (signed FSBL from external NOR) introduces a
+  flash-and-debug workflow unlike any existing board; the probe-rs
+  flow is unverified (R10).
+- Neural-ART deployment will likely require generated C artifacts
+  linked into the Rust firmware, adding a C toolchain to this
+  board's build.
+- Framework changes must now be validated against two consumers
+  with very different duty cycles (periodic telemetry vs streaming
+  audio).
+- ADR-006's board-profile architecture gains its second concrete
+  profile, exercising its "scalable" claim.
+
+**Alternatives Considered:**
+
+- **Separate repository:** Rejected.  The framework must co-evolve
+  with a second consumer; a separate repo would duplicate the
+  shared code that ADR-006 exists to centralize.
+- **Immediate workspace membership:** Rejected.  With no hardware
+  and no proven embassy-n6 build, an uncompilable member crate
+  breaks CI for every board.
+- **Reusing STM32F4-class hardware:** Rejected.  No NPU and weak
+  DSP headroom for CNN inference; the M55 + Neural-ART capability
+  is the reason this project exists.
+- **Adopting embassy-executor for this board:** Rejected.  It
+  violates the framework's RTIC-first constraint (ADR-001) and
+  would split the stack into two scheduling models.
 
 ---
 

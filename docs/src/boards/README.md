@@ -10,6 +10,8 @@ board-specific detail (flashing, debugging, configuration).
   Connected device with TLS/MQTT)
 - BBC micro:bit v2 (planned)
 - STM32F3 Discovery (planned)
+- **ST NUCLEO-N657X0-Q** (ARS toolhead sensor project;
+  scaffold-only, workspace-excluded)
 
 ## Board Profiles vs. Boards
 

@@ -190,18 +190,20 @@ iot-playground/
 ├── Embed.toml              # probe-rs presets for all boards (feather, microbit, stm32f3)
 ├── .cargo/config.toml      # Root config with generic probe-rs runner
 ├── AGENTS.md               # Project architecture and constraints
+├── .agents/                # Agent rules, skills, subagents (.claude/ symlinks here)
 ├── boards/                 # Board profiles (specific chip + peripherals + applications)
-│   └── feather-stm32f405/  # Example: Feather STM32F405 board profile
-│       ├── Embed.toml      # Board-specific probe-rs config (optional)
-│       ├── src/            # Board-specific firmware code
-│       └── memory.x        # Memory layout for this board
+│   ├── feather-stm32f405/  # Example: Feather STM32F405 board profile
+│   │   ├── Embed.toml      # Board-specific probe-rs config (optional)
+│   │   ├── src/            # Board-specific firmware code
+│   │   └── memory.x        # Memory layout for this board
+│   └── nucleo-n657x0/      # ST NUCLEO-N657X0-Q scaffold (ARS toolhead sensor; workspace-excluded)
 ├── core/                   # Platform-agnostic business logic (no_std)
 ├── hal-abstractions/       # Hardware abstraction traits (no_std)
 ├── test/                   # Test infrastructure
 │   ├── broker/             # Mosquitto MQTT test broker (containerized)
 │   └── scripts/            # Shared test scripts (TLS cert generation)
 ├── apps/                   # Application binaries (future)
-└── docs/                   # Documentation (mdBook)
+└── docs/                   # Documentation (mdBook; docs/src/projects/ holds per-project docs)
 ```
 
 ### Configuration Files
@@ -469,6 +471,10 @@ See `AGENTS.md` for:
 - Code style guidelines
 - Testing requirements
 - Development best practices
+
+`AGENTS.md` files are lazy-loaded per-directory indices; each one
+describes only its own directory, and detailed rules live in
+`.agents/rules/`.
 
 ## License
 

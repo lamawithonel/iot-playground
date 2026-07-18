@@ -1,7 +1,7 @@
 # Risk Register
 ## Embedded Rust IoT Firmware
 
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-07-18
 
 ---
 
@@ -18,6 +18,7 @@
 | R7 | CloudEvents Protobuf spec compliance | Low | Medium | Using `binary_data` — technically non-compliant for PB payloads | 📋 Accepted |
 | R8 | `embedded-tls` `NoVerify` in production | High | Medium | Custom `CertVerifier` required before staging deployment | ⚠️ Active |
 | R9 | AWS IoT double-decode limit | Medium | Low | Rules Engine allows max 2 decode() calls; sufficient for CE + payload | 🔄 Monitoring |
+| R10 | STM32N6 Rust ecosystem maturity (ARS project) | Medium | Medium | Project stays scaffold-only until a bring-up spike validates boot, flash, and HAL | 🔄 Monitoring |
 
 ---
 
@@ -186,6 +187,28 @@ Protobuf messages, a third `decode()` would fail.
 - Monitor AWS for `decode()` limit changes
 
 **Status:** 🔄 Monitoring — Current design is within limits
+
+---
+
+### R10: STM32N6 Rust Ecosystem Maturity (ARS Project)
+
+**Description:** The ARS toolhead-sensor project targets the
+NUCLEO-N657X0-Q board.  The STM32N657 is a flashless MCU that
+boots from external NOR flash via a signed First-Stage Boot
+Loader (FSBL), and its Rust story is young: `embassy-stm32`
+`stm32n657x0` support is recent and unproven here, the
+`probe-rs` flash/debug flow for the flashless boot chain is
+unverified, and Neural-ART NPU deployment tooling (ST Edge AI)
+is C-centric with no established Rust FFI path.
+
+**Impact:** Medium -- Blocks ARS bring-up, not the framework.
+
+**Mitigation:**
+- Project stays scaffold-only (workspace-excluded crate) until
+  a hardware bring-up spike validates boot, flash, and HAL
+- CNN work starts host-side and does not block on the NPU
+
+**Status:** 🔄 Monitoring
 
 ---
 

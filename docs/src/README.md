@@ -4,14 +4,25 @@ Welcome to the documentation for the Embedded Rust IoT Firmware project.
 
 ## Project Overview
 
-This project implements a multi-device embedded IoT firmware framework using Rust in a `no_std` environment. The framework uses a **Cargo workspace** architecture with **board profiles** that combine specific hardware, peripherals, and applications.
+This project implements a modular, multi-project embedded IoT
+firmware framework using Rust in a `no_std` environment.  The
+framework uses a **Cargo workspace** architecture with **board
+profiles** that combine specific hardware, peripherals, and
+applications, and it hosts more than one project built on that
+shared platform: the air-quality environmental monitoring node
+described below, and the ARS toolhead sensor (STM32N657,
+scaffold only).  Per-project documentation lives under
+`docs/src/projects/`, alongside each project's board profile(s)
+in `boards/` (see the Projects links below).
 
 ### Architecture
 
 The project uses a board profile architecture where each profile in `boards/` represents:
-- A specific board type (e.g., Feather STM32F405, Feather M4 CAN)
+- A specific board type (e.g., Feather STM32F405, Feather M4 CAN,
+  or the scaffolded ST NUCLEO-N657X0-Q)
 - Peripheral components (e.g., Ethernet, sensors, CAN)
-- Application purpose (e.g., MQTT gateway, PTP server)
+- Application purpose (e.g., MQTT gateway, PTP server, toolhead
+  sensor)
 
 Shared code lives in workspace crates:
 - `core/` - Platform-agnostic business logic
@@ -53,6 +64,10 @@ This documentation follows **IEEE 29148** (systems and software requirements eng
 
 ### Development
 - [Testing Strategy](./development/testing.md) - Test methodology and CI/CD pipeline
+
+### Projects
+- [ARS Toolhead Sensor](./projects/ars-toolhead-sensor/README.md) - Project overview (scaffold)
+- [ARS Toolhead Sensor Hardware](./projects/ars-toolhead-sensor/hardware.md) - Hardware platform details (scaffold)
 
 ## Getting Started
 
@@ -99,12 +114,25 @@ cargo test -p feather-stm32f405
 
 ## Project Status
 
-**Current Phase**: Phase 2 - Network Stack (In Progress)
+**Firmware Track**
 
-**Recent Completion**: Phase 0 - Workspace Migration ✅
-- Multi-device Cargo workspace with board profile architecture
-- Native probe-rs integration for flexible board selection
-- Skeleton crates for shared code (core/, hal-abstractions/)
+**Recent Completion**: Phases 0-3 ✅
+- Phase 0 - Workspace Migration: multi-device Cargo workspace
+  with board profile architecture
+- Phase 1 - Core Platform: shared platform-agnostic crates
+  (`core/`, `hal-abstractions/`)
+- Phase 2 - Network Stack: W5500 Ethernet, TLS 1.3, and MQTT
+  v5.0 messaging
+- Phase 3 - Sensor Integration: SEN66 environmental sensor (PM,
+  CO2, VOC, NOx, temperature, and humidity)
+
+**Current Phase**: Phase 4 - Security Foundation (Not Started)
+
+**Framework Track**: Active
+- Agentic AI scaffolding: ✅ Complete (2026-07-18) - project
+  rules, skills, and subagent definitions under `.agents/`
+- ARS toolhead sensor project: Scaffolded - ST NUCLEO-N657X0-Q
+  board profile (`boards/nucleo-n657x0/`), workspace-excluded
 
 See the [Roadmap](./roadmap.md) for detailed status and upcoming milestones.
 
@@ -118,4 +146,4 @@ See the repository root for license information.
 
 ---
 
-*Last updated: 2026-01-18*
+*Last updated: 2026-07-18*

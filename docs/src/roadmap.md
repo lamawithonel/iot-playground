@@ -1,9 +1,9 @@
 # Project Roadmap
 ## Embedded Rust IoT Firmware
 
-**Version:** 3.0
-**Last Updated:** 2026-04-13
-**Project Phase:** Phase 2 (Network Stack) Complete / Phase 3 Complete
+**Version:** 3.1
+**Last Updated:** 2026-07-18
+**Project Phase:** Phase 3 Complete / Framework Track Active
 
 ---
 
@@ -11,8 +11,9 @@
 
 ### 1.1 Objectives
 
-Build a reference implementation for embedded Rust IoT firmware
-on STM32F405RG, demonstrating:
+Build a modular, multi-project embedded Rust framework (hybrid
+RTIC 2.x + Embassy HAL), with the STM32F405 air-quality node as
+the reference project, demonstrating:
 
 - RTIC 2.x real-time framework with Embassy HAL
 - Secure MQTT connectivity via TLS 1.3
@@ -23,6 +24,10 @@ on STM32F405RG, demonstrating:
 - AsyncAPI contract for MQTT API documentation
 - E-ink display status dashboard
 - Secure OTA firmware updates via `embassy-boot-stm32`
+- Modular reuse across board profiles and projects
+- Built-in agentic AI coding framework (`.agents/` rules,
+  skills, and agents; lazy-loaded `AGENTS.md` directory
+  indices)
 
 ### 1.2 Deliverables
 
@@ -159,6 +164,28 @@ See [ADR-007](./architecture/decisions.md#adr-007-cloudevents-binary_data-over-p
 and [ADR-008](./architecture/decisions.md#adr-008-micropb-for-protobuf-encoding)
 for formal decisions.
 
+### 2.4 Framework Track
+
+**Completed 2026-07-18:**
+
+- [x] Agentic AI coding framework: `.agents/` directory with
+  `rules/`, `skills/`, and `agents/` subdirectories,
+  per-directory `AGENTS.md` indices, and `CLAUDE.md` /
+  `.claude` symlinks
+- [x] ARS toolhead-sensor project scaffold
+  (`docs/src/projects/ars-toolhead-sensor/`), a
+  workspace-excluded `boards/nucleo-n657x0` crate, ADR-010,
+  and risk R10
+
+**Pending:**
+
+- [ ] `hal-abstractions` RTC, RNG, and network traits
+- [ ] `MessagePort` trait abstraction
+- [ ] Promote `boards/nucleo-n657x0` to a workspace member
+  once it compiles in CI
+- [ ] Split the SRS into a framework-level document and
+  per-project documents
+
 ---
 
 ## 3. Implementation Phases
@@ -222,6 +249,13 @@ for formal decisions.
   Protobuf in Phase 5)
 - [x] Platform-agnostic sensor types and conditioning
   in `core/`
+
+### Framework Track (cross-cutting)
+
+Cross-cutting framework work runs alongside the numbered
+phases.  The canonical checklist and status live in
+[Section 2.4](#24-framework-track); this section intentionally
+holds no copy of it.
 
 ### Phase 4: Security Foundation ⏳ Not Started
 
@@ -394,8 +428,8 @@ details.
 | Security audit (`cargo audit`) | 🔜 Phase 4 | Public runners |
 | Proto linting (`buf`) | 🔜 Phase 5 | Public runners |
 | AsyncAPI validation | 🔜 Phase 5 | Public runners |
-| Container image builds | ✅ CI | Public runners |
-| On-device integration | 🔄 Future | Self-hosted runner |
+| Container image builds | ❌ Manual (`mise`) | Local environment |
+| On-device integration | ❌ Manual (`mise run test:device`, `test:smoke`, and `test:integration`) | Local workstation (self-hosted runner still future) |
 | Hardware validation | ❌ Manual | Local workstation |
 
 ### 4.2 Test Component Implementation Timeline
@@ -404,17 +438,17 @@ Items are grouped by when they should be implemented,
 based on a cross-functional engineering review
 (see [ADR-009](./architecture/decisions.md#adr-009-test-strategy-and-the-embedded-test-pyramid)).
 
-**Current (`feature/test-strategy` branch):**
+**Done:**
 
-- [x] Rewrite on-device tests to peripheral bring-up
-  validation (`bringup.rs`): clock tree, I2C probe,
-  SPI/W5500 version, RNG entropy, TIM2 tick sanity
+- [x] Rewrite on-device tests to peripheral bring-up validation
+  (`bringup.rs`): clock tree, I2C probe, SPI/W5500 version, RNG entropy,
+  TIM2 tick sanity, W5500 INT/EXTI2 wiring
 - [x] Harden smoke test with milestone ordering
   assertions and plausibility checks
 - [x] Add "Why no RTIC?" documentation paragraph
 - [x] Update ADR-009 with A+B hybrid test strategy
 
-**Next (Phase 2 completion or Phase 4 Security):**
+**Next (Phase 4 Security):**
 
 Triggered when `Shared` gains real members, a second
 board enters the workspace, or Phase 4 adds certificate
@@ -462,7 +496,9 @@ self-hosted GitHub Actions runner will be configured:
 | Phase 6: Display | ⏳ Not Started |
 | Phase 7: Secure Boot & OTA | ⏳ Not Started |
 | Phase 8: Fleet Operations | ⏳ Not Started |
-| Documentation Site | ⏳ Not Started |
+| Documentation Site | ✅ Complete (GitHub Pages auto-deploy on push to main) |
+| Framework: Agentic AI scaffolding | ✅ Complete |
+| ARS Project: Scaffold | ✅ Complete |
 
 ### 5.1 Compliance Gates
 
@@ -548,6 +584,11 @@ Items intentionally deferred:
     trait-based abstraction; implemented after AWS is proven
 11. **CAN Bus Gateway** — deferred to backlog; separate effort
     from sensor telemetry
+12. **ARS Toolhead-Sensor Project** -- the second framework
+    consumer (see
+    [ARS project docs](./projects/ars-toolhead-sensor/README.md)),
+    driving modularization of `core/` and `hal-abstractions/`
+    beyond the STM32F405 air-quality reference project
 
 ---
 
