@@ -9,11 +9,16 @@ host-testable, minimal dependencies (`embedded-io`/
 | Module | Purpose |
 |--------|---------|
 | `sensor.rs` | `EnvironmentalReading` trait (deci-scaled accessors) |
+| `message_port.rs` | Bounded inter-task message channel traits |
+| `rng.rs` | Cryptographically secure random byte source trait |
+| `rtc.rs` | Battery-backed wall-clock (`Rtc`) trait |
+| `time.rs` | Wall-clock timestamp vocabulary for the `Rtc` trait |
+| `test_support.rs` | Host-test doubles (`cfg(test)` / `mock` feature) |
 
-`rtc`, `rng`, and `network` trait modules are planned but not yet
-implemented (placeholders in `lib.rs`).  Adding them is framework
-modularization work-- see the roadmap's framework track before
-starting.
+The `network` trait module (DNS/TCP/TLS/MQTT session abstraction) is
+planned but not yet implemented (placeholder in `lib.rs`).  Adding it
+is framework modularization work-- see the roadmap's framework track
+before starting.
 
 ## Local Rules
 

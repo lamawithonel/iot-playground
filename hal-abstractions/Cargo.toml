@@ -7,7 +7,10 @@ description = "Hardware abstraction traits for IoT firmware"
 [features]
 default = []
 io = ["dep:embedded-io", "dep:embedded-io-async"]
+defmt = ["dep:defmt"]
+mock = []
 
 [dependencies]
+defmt = { workspace = true, optional = true }
 embedded-io = { workspace = true, optional = true }
 embedded-io-async = { workspace = true, optional = true }

@@ -7,9 +7,16 @@
 #![deny(unsafe_code)]
 #![deny(warnings)]
 
+pub mod message_port;
+pub mod rng;
+pub mod rtc;
 pub mod sensor;
+pub mod time;
 
-// Traits will be added in Batch 7
-// pub mod rtc;
-// pub mod rng;
+#[cfg(any(test, feature = "mock"))]
+pub mod test_support;
+
+// The `network` trait module (DNS/TCP/TLS/MQTT session
+// abstraction) is a separate framework-track effort with its own
+// design-- see the roadmap's framework track before starting.
 // pub mod network;
