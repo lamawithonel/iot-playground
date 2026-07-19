@@ -589,6 +589,11 @@ Items intentionally deferred:
     [ARS project docs](./projects/ars-toolhead-sensor/README.md)),
     driving modularization of `core/` and `hal-abstractions/`
     beyond the STM32F405 air-quality reference project
+13. **ARS I2S DAC Audio Path (PCM5102)**-- future enhancement
+    only; the plan of record stays TIM1 PWM + RC.  Boards are
+    purchased as bench insurance, adopted solely if spike gate
+    G3 measurements demand it (see the
+    [audio-board spike](./projects/ars-toolhead-sensor/spike-audio-board.md))
 
 ---
 
