@@ -1,10 +1,9 @@
 # nucleo-h753zi-- NUCLEO-H753ZI Bring-Up Board Crate
 
-**Status: bring-up.**  Workspace-excluded (see the root
-`Cargo.toml`) until it compiles and blinks in CI per
-[`boards/AGENTS.md`](../AGENTS.md).  Phase 1 proves flash, defmt
-over RTT, RTIC 2.x scheduling on TIM2, and the idle/WFI path with
-a heartbeat LED blink (LD1, PB0).
+**Status: active workspace member** (promoted 2026-07-19 after
+hardware-verified bring-up; workspace gates cover it).  Phase 1
+proves flash, defmt over RTT, RTIC 2.x scheduling on TIM2, and
+the idle/WFI path with a heartbeat LED blink (LD1, PB0).
 
 ## Hardware
 

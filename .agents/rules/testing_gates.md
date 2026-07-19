@@ -41,7 +41,7 @@ Or equivalently:
 
 ```bash
 cargo test --workspace \
-  --exclude feather-stm32f405 \
+  --exclude feather-stm32f405 --exclude nucleo-h753zi \
   --target "$(rustc -vV | sed -n 's/^host: //p')"
 ```
 
@@ -54,13 +54,19 @@ automatically.
 ### 3. Clippy (Embedded Target)
 
 ```bash
-cargo clippy --workspace \
+cargo clippy --workspace --exclude nucleo-h753zi \
+  --target thumbv7em-none-eabihf -- -D warnings
+cargo clippy -p nucleo-h753zi \
   --target thumbv7em-none-eabihf -- -D warnings
 ```
 
 Clippy MUST target the embedded architecture
 (`thumbv7em-none-eabihf`), not the host, because board crates
-only compile for ARM Cortex-M.
+only compile for ARM Cortex-M.  Board crates select
+mutually-exclusive stm32-metapac chip features, so two boards can
+never share one cargo invocation-- feature unification trips the
+metapac multiple-chips guard.  Each board gets its own `-p`
+invocation; extend the list when a board joins the workspace.
 
 ### 4. Device Tests (When Hardware Is Connected)
 

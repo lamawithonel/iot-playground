@@ -158,5 +158,5 @@ set -o pipefail
 
 _host_target="$(rustc -vV | sed -n 's/^host: //p')"
 exec cargo test --workspace --target "$_host_target" \
-	--exclude feather-stm32f405 "$@"
+	--exclude feather-stm32f405 --exclude nucleo-h753zi "$@"
 '''

@@ -31,6 +31,6 @@ network trigger board.
 - Hardware access is fenced to the ST-LINK at `0483:374e` with an
   explicit `--probe` selector in every command; never open the
   J-Link (`1366:1020`) shared with another workstream.
-- Promotion to `workspace.members` (out of `exclude`) is the
-  coordinator's call, not this crate's-- see
-  [`boards/AGENTS.md`](../AGENTS.md).
+- Promoted to `workspace.members` 2026-07-19 after
+  hardware-verified bring-up; host tests exclude this bin crate
+  (`--exclude nucleo-h753zi`), clippy/build gates cover it.

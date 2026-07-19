@@ -43,13 +43,24 @@ jobs:
       - name: Run host unit tests
         run: |
           HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
-          cargo test --workspace --target "$HOST_TARGET" --exclude feather-stm32f405
+          cargo test --workspace --target "$HOST_TARGET" --exclude feather-stm32f405 --exclude nucleo-h753zi
 
+      # Board crates select mutually-exclusive stm32-metapac chip
+      # features, so two boards can never share one cargo
+      # invocation (feature unification trips the metapac
+      # multiple-chips guard).  Each additional board gets its own
+      # -p invocation below.
       - name: Run clippy
-        run: cargo clippy --workspace --target thumbv7em-none-eabihf -- -D warnings
+        run: |
+          cargo clippy --workspace --exclude nucleo-h753zi --target thumbv7em-none-eabihf -- -D warnings
+          cargo clippy -p nucleo-h753zi --target thumbv7em-none-eabihf -- -D warnings
 
       - name: Build (debug)
-        run: cargo build --workspace --target thumbv7em-none-eabihf
+        run: |
+          cargo build --workspace --exclude nucleo-h753zi --target thumbv7em-none-eabihf
+          cargo build -p nucleo-h753zi --target thumbv7em-none-eabihf
 
       - name: Build (release)
-        run: cargo build --workspace --target thumbv7em-none-eabihf --release
+        run: |
+          cargo build --workspace --exclude nucleo-h753zi --target thumbv7em-none-eabihf --release
+          cargo build -p nucleo-h753zi --target thumbv7em-none-eabihf --release

@@ -2,11 +2,11 @@
 resolver = "2"
 members = [
     "boards/feather-stm32f405",
+    "boards/nucleo-h753zi",
     "core",
     "hal-abstractions",
 ]
 exclude = [
-    "boards/nucleo-h753zi",
     "boards/nucleo-n657x0",
     "test/mqtt-subscriber",
     "test/smoke-validator",
