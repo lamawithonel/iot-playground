@@ -119,6 +119,11 @@ echo ""
 
 # ── Flash and capture RTT ────────────────────────────
 
+# With more than one probe attached, probe-rs falls into an
+# interactive selection prompt and fails non-interactively.
+# Default to the feather's J-Link; override via PROBE_RS_PROBE.
+export PROBE_RS_PROBE="${PROBE_RS_PROBE:-1366:1020}"
+
 echo "🚀 Flashing and monitoring RTT for ${_duration}s..."
 echo ""
 
@@ -141,7 +146,7 @@ fi
 
 # ── Pre-validation: correlate streams ────────────────
 # Extract the device's SNTP-synced epoch from RTT output.
-# This is the authoritative wall-clock reference — it
+# This is the authoritative wall-clock reference-- it
 # eliminates host/device clock skew from all timestamp
 # comparisons.
 
@@ -175,7 +180,7 @@ if [ "$_mqtt_active" = true ] && [ -s "$_msg_file" ]; then
 fi
 
 # ── Critical failure guards ──────────────────────────
-# These abort before running the validator — panics and
+# These abort before running the validator-- panics and
 # HardFaults make all other test results meaningless.
 
 _pass=true
