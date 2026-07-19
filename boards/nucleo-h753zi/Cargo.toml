@@ -1,0 +1,42 @@
+[package]
+name = "nucleo-h753zi"
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+
+# This crate is workspace-excluded (see the root Cargo.toml), so
+# it cannot use `.workspace = true` inheritance; version, edition,
+# and every dependency version below are stated explicitly,
+# byte-matching the workspace pins in the root Cargo.toml so that
+# promotion to `members` is a mechanical rewrite to inheritance.
+
+[[bin]]
+bench = false
+name = "nucleo-h753zi"
+test = false
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+critical-section = "1.1"
+defmt = "1.0.1"
+defmt-rtt = "1.1.0"
+panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+
+[dependencies.embassy-stm32]
+version = "0.4.0"
+default-features = false
+features = ["defmt", "rt", "stm32h753zi", "time-driver-tim3"]
+
+[dependencies.embassy-time]
+version = "0.5.0"
+features = ["defmt", "defmt-timestamp-uptime", "generic-queue-16"]
+
+[dependencies.rtic]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+features = ["thumbv7-backend"]
+
+[dependencies.rtic-monotonics]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+features = ["defmt", "stm32_tim2", "stm32h753zi"]

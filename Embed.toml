@@ -81,3 +81,22 @@ up_channels = [
 
 [stm32f3.gdb]
 enabled = false
+
+# ST NUCLEO-H753ZI preset
+# Usage: PROBE_RS_CONFIG_PRESET=nucleo-h753 cargo embed
+[nucleo-h753.general]
+chip = "STM32H753ZITx"
+
+[nucleo-h753.probe]
+protocol = "Swd"
+usb_vid = "0483"
+usb_pid = "374e"
+
+[nucleo-h753.rtt]
+enabled = true
+up_channels = [
+  { channel = 0, name = "defmt", format = "Defmt" },
+]
+
+[nucleo-h753.gdb]
+enabled = false
