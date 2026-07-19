@@ -320,19 +320,28 @@ mod app {
         let mac_addr = device_id::mac_address();
         let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
 
+        // Initialize the hardware RNG before the network stack so the
+        // stack seed is drawn from a per-device entropy source rather
+        // than a fixed constant, giving each device a distinct stack
+        // state.  The same RNG is reused downstream for TLS and the
+        // SNTP request.
+        let mut rng = embassy_stm32::rng::Rng::new(rng_periph, RngIrqs);
+        let stack_seed = rng.next_u64();
+        info!("Hardware RNG initialized");
+
         // Socket budget: DHCP(1) + DNS(1) + SNTP(1) + MQTT/TLS(1) + margin(1)
         static RESOURCES: StaticCell<StackResources<5>> = StaticCell::new();
         let (stack, mut net_runner) = embassy_net::new(
             device,
             Config::dhcpv4(Default::default()),
             RESOURCES.init(StackResources::new()),
-            0x1234_5678_u64,
+            stack_seed,
         );
         info!("Network stack initialized with DHCP");
 
         let app_logic = async {
             manager::wait_for_config(&stack).await;
-            run_clients(&stack, rng_periph, sensor_rx).await;
+            run_clients(&stack, rng, sensor_rx).await;
         };
 
         join3(w5500_runner.run(), net_runner.run(), app_logic).await;
@@ -340,13 +349,12 @@ mod app {
 
     async fn run_clients(
         stack: &embassy_net::Stack<'static>,
-        rng_periph: embassy_stm32::Peri<'static, peripherals::RNG>,
+        mut rng: embassy_stm32::rng::Rng<'static, peripherals::RNG>,
         sensor_rx: Receiver<'static, Sen66Reading, SENSOR_CHANNEL_CAP>,
     ) -> ! {
-        use embassy_stm32::rng::Rng;
         use static_cell::StaticCell;
 
-        // --- SNTP time sync ---
+        // --- SNTP time sync (RNG is supplied by the caller) ---
         let mut sntp = SntpClient::new();
         info!("Initializing SNTP time synchronization with RTC (LSE)...");
         match sntp.run(stack).await {
@@ -356,11 +364,6 @@ mod app {
             ),
             Err(e) => warn!("SNTP initialization failed: {:?}", e),
         }
-
-        // --- Hardware RNG ---
-        info!("Initializing hardware RNG for TLS...");
-        let mut rng = Rng::new(rng_periph, RngIrqs);
-        info!("Hardware RNG initialized");
 
         // --- Static buffers for MQTT (RTIC StaticCell pattern) ---
         //
