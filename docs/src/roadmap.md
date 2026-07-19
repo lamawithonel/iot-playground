@@ -177,10 +177,34 @@ for formal decisions.
   workspace-excluded `boards/nucleo-n657x0` crate, ADR-010,
   and risk R10
 
+**Completed 2026-07-19:**
+
+- [x] Toolchain pinned via `rust-toolchain.toml` (single
+  authority: rustup, mise, rust-analyzer, CI)
+- [x] Second live board: `boards/nucleo-h753zi` bring-up
+  (hardware-verified blinky + defmt over RTT) and promotion to
+  workspace member-- the ADR-009 Layer 3 trigger ("a second
+  board enters the workspace") has fired; per-board cargo
+  invocations added to CI (metapac chip features are
+  mutually exclusive across boards)
+- [x] `hal-abstractions` Rtc and Rng traits plus the
+  `MessagePort` channel abstraction with deterministic host
+  mocks (TLS-stall backpressure now host-testable)
+- [x] ARS DSP core in `core/` (feature `ars`): fixed-point
+  Goertzel/NCO/biquad/MLS/noise kernels with analytic golden
+  vectors, versioned capture/label record schemas, synthetic
+  plant model
+- [x] Agent skills: `debug-probe` (live-validated) and
+  `saleae-logic`; G1's compile half closed via the `g1-spike`
+  feature in `boards/nucleo-n657x0`
+
 **Pending:**
 
-- [ ] `hal-abstractions` RTC, RNG, and network traits
-- [ ] `MessagePort` trait abstraction
+- [ ] `hal-abstractions` network trait
+- [ ] Unify `Timestamp`/`RtcError` (core re-exports the
+  hal-abstractions copy) before any board adopts `Rtc`
+- [ ] `tools/ars-synth` host CLI and checked-in golden corpus
+  for file-level fixtures
 - [ ] Promote `boards/nucleo-n657x0` to a workspace member
   once it compiles in CI
 - [ ] Split the SRS into a framework-level document and
