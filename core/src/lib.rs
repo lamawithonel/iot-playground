@@ -5,19 +5,25 @@
 //!
 //! # Features
 //!
-//! - `defmt` — Enable `defmt::Format` derives on public types
+//! - `defmt`-- Enable `defmt::Format` derives on public types
 //!   (disabled by default so host-side tests compile without a
 //!   defmt backend)
-//! - `embedded-io` — Enable `embedded_io_async::Error` impls
+//! - `embedded-io`-- Enable `embedded_io_async::Error` impls
 //!   on network error types
-//! - `sen66` — Enable SEN66-specific sensor types
+//! - `sen66`-- Enable SEN66-specific sensor types
 //!   (`Sen66Reading`), warmup thresholds, conditioning phase
 //!   configuration, and `EnvironmentalReading` trait implementation
+//! - `ars`-- Enable ARS domain types: capture/label record
+//!   schemas, excitation generators, and the synthetic plant
+//!   model (`ars` module); DSP kernels in `dsp` are always built
 
 #![cfg_attr(not(test), no_std)]
 #![deny(unsafe_code)]
 #![deny(warnings)]
 
+#[cfg(feature = "ars")]
+pub mod ars;
+pub mod dsp;
 pub mod network;
 pub mod sensor;
 pub mod time;
