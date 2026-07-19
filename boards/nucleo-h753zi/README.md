@@ -15,13 +15,20 @@ Rev 6.
 
 This board is a dual-role prototyping rig:
 
-- An ARS (Audio Response Sweep) loopback prototyping board:
-  DAC1_OUT1 (PA4) jumpered to an ADC input (A0/PA3), sweep
-  synthesis logic in `core/`.
+- An active acoustic resonance spectroscopy (ARS) loopback
+  prototyping board: DAC1_OUT1 (PA4) jumpered to an ADC input
+  (A0/PA3), sweep synthesis logic in `core/`.
 - The ADR-009 Layer-3 network trigger board: on-chip Ethernet MAC
   + on-board PHY over RMII + `embassy-net`.
 
 Neither module exists yet; see `AGENTS.md` for the module map.
+
+## Project Docs
+
+The ARS loopback role is part of the ARS toolhead sensor project;
+see
+[`docs/src/projects/ars-toolhead-sensor/`](../../docs/src/projects/ars-toolhead-sensor/README.md)
+for the full project context.
 
 ## Building and Flashing
 

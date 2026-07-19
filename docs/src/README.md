@@ -1,7 +1,5 @@
 # Embedded Rust IoT Firmware
 
-Welcome to the documentation for the Embedded Rust IoT Firmware project.
-
 ## Project Overview
 
 This project implements a modular, multi-project embedded IoT
@@ -17,12 +15,13 @@ in `boards/` (see the Projects links below).
 
 ### Architecture
 
-The project uses a board profile architecture where each profile in `boards/` represents:
-- A specific board type (e.g., Feather STM32F405, Feather M4 CAN,
+The project uses a board profile architecture where each profile in
+`boards/` represents:
+- A specific board type (e.g., Feather STM32F405, NUCLEO-H753ZI,
   or the scaffolded ST NUCLEO-N657X0-Q)
-- Peripheral components (e.g., Ethernet, sensors, CAN)
-- Application purpose (e.g., MQTT gateway, PTP server, toolhead
-  sensor)
+- Peripheral components (e.g., Ethernet, sensors)
+- Application purpose (e.g., environmental telemetry, bring-up
+  rig, toolhead sensor)
 
 Shared code lives in workspace crates:
 - `core/` - Platform-agnostic business logic
@@ -30,12 +29,16 @@ Shared code lives in workspace crates:
 
 ### Key Features
 
-- **Real-time Operation**: RTIC 2.x framework with formal verification via Stack Resource Policy
-- **Secure Connectivity**: TLS 1.3 encrypted MQTT communication with AWS IoT Core
-- **Environmental Monitoring**: SEN66 air quality sensor integration (PM, CO2, VOC, NOx, temperature, humidity)
+- **Real-time Operation**: RTIC 2.x framework with formal verification
+  via Stack Resource Policy
+- **Secure Connectivity**: TLS 1.3 encrypted MQTT communication with
+  AWS IoT Core
+- **Environmental Monitoring**: SEN66 air quality sensor integration
+  (PM, CO2, VOC, NOx, temperature, humidity)
 - **Local Display**: E-ink status dashboard with ultra-low power consumption
-- **CAN Bus Gateway**: Bidirectional CAN ↔ MQTT message forwarding
-- **Secure OTA Updates**: Firmware updates with signature verification and atomic rollback
+- **CAN Bus Gateway** (planned): Bidirectional CAN <-> MQTT message forwarding
+- **Secure OTA Updates**: Firmware updates with signature verification
+  and atomic rollback
 
 ### Hardware Platform
 
@@ -43,31 +46,39 @@ Shared code lives in workspace crates:
 - **Memory**: 1 MB Flash, 192 KB SRAM (128 KB main + 64 KB CCM)
 - **Network**: W5500 Ethernet controller with hardware TCP/IP offload
 - **Sensors**: Sensirion SEN66 environmental sensor
-- **Display**: SSD1681 E-ink display (200×200 pixels)
-- **CAN**: TJA1051 transceiver at 1 Mbps
+- **Display**: SSD1681 E-ink display (200x200 pixels)
 
 ## Documentation Standards
 
-This documentation follows **IEEE 29148** (systems and software requirements engineering) and **IEEE 16326** (project management) standards in a lightweight, agile manner suitable for embedded development.
+This documentation follows **IEEE 29148** (systems and software
+requirements engineering) and **IEEE 16326** (project management)
+standards in a lightweight, agile manner suitable for embedded
+development.
 
 ## Quick Links
 
 ### Requirements
-- [System Requirements Specification](./system_requirements.md) - Functional and non-functional requirements (IEEE 29148)
+- [System Requirements Specification](./system_requirements.md) -
+  Functional and non-functional requirements (IEEE 29148)
 
 ### Project Management
-- [Project Roadmap](./roadmap.md) - Implementation phases and milestones (IEEE 16326)
+- [Project Roadmap](./roadmap.md) - Implementation phases and
+  milestones (IEEE 16326)
 - [Risk Register](./risk_register.md) - Active and mitigated project risks
 
 ### Architecture
-- [Architecture Decisions](./architecture/decisions.md) - Key architectural decision records (ADRs)
+- [Architecture Decisions](./architecture/decisions.md) - Key
+  architectural decision records (ADRs)
 
 ### Development
-- [Testing Strategy](./development/testing.md) - Test methodology and CI/CD pipeline
+- [Testing Strategy](./development/testing.md) - Test methodology
+  and CI/CD pipeline
 
 ### Projects
-- [ARS Toolhead Sensor](./projects/ars-toolhead-sensor/README.md) - Project overview (scaffold)
-- [ARS Toolhead Sensor Hardware](./projects/ars-toolhead-sensor/hardware.md) - Hardware platform details (scaffold)
+- [ARS Toolhead Sensor](./projects/ars-toolhead-sensor/README.md) -
+  Project overview (scaffold)
+- [ARS Toolhead Sensor Hardware](./projects/ars-toolhead-sensor/hardware.md) -
+  Hardware platform details (scaffold)
 
 ## Getting Started
 
@@ -94,12 +105,10 @@ cargo build -p feather-stm32f405 --release
 cargo run --release
 cargo embed --release
 
-# Select different board via environment variable
-PROBE_RS_CONFIG_PRESET=microbit cargo run --release
-PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release
-
-# Or use cargo embed with --chip flag
-cargo embed --chip microbit --release
+# Build and flash a different board profile; see the board's own
+# README (e.g. boards/nucleo-h753zi/README.md) for its exact
+# probe/chip selectors
+cargo build -p nucleo-h753zi --release --target thumbv7em-none-eabihf
 ```
 
 ### Running Tests
@@ -131,6 +140,10 @@ cargo test -p feather-stm32f405
 **Framework Track**: Active
 - Agentic AI scaffolding: ✅ Complete (2026-07-18) - project
   rules, skills, and subagent definitions under `.agents/`
+- NUCLEO-H753ZI bring-up: ✅ Promoted to workspace member
+  (2026-07-19) after hardware-verified bring-up
+  (`boards/nucleo-h753zi/`); planned home for the ARS DAC->ADC
+  loopback rig and Ethernet bring-up
 - ARS toolhead sensor project: Scaffolded - ST NUCLEO-N657X0-Q
   board profile (`boards/nucleo-n657x0/`), workspace-excluded
 
@@ -138,12 +151,14 @@ See the [Roadmap](./roadmap.md) for detailed status and upcoming milestones.
 
 ## Contributing
 
-This is a reference implementation and learning project. Contributions, suggestions, and feedback are welcome.
+This is a reference implementation and learning project.
+Contributions, suggestions, and feedback are welcome.
 
 ## License
 
-See the repository root for license information.
+Licensed under Apache-2.0.  Copyright Lucas Yamanishi.  See
+[`LICENSE`](../../LICENSE) for the full text.
 
 ---
 
-*Last updated: 2026-07-18*
+*Last updated: 2026-07-19*

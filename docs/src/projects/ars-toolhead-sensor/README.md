@@ -8,7 +8,7 @@ presence in the hot end and cold end.
 
 ## Purpose and Staged Goals
 
-The project delivers value in three stages, each feeding the next:
+The project proceeds in three stages, each feeding the next:
 
 1. **Active ARS sensing.**  Sweep, capture, and classify: detect
    filament presence in the hot end and cold end from resonance
@@ -78,11 +78,17 @@ Pure signal-processing logic belongs in `core/`; the board crate
 holds hardware I/O and RTIC task wiring only, per the `boards/`
 rules.
 
+The
+[`nucleo-h753zi`](../../../../boards/nucleo-h753zi/README.md)
+board hosts a planned DAC->ADC loopback rig used to de-risk the
+sweep/capture pipeline before N657 hardware arrives.
+
 ## Phased Delivery
 
 1. **Bring-up spike.**  Boot chain (probe-rs vs
-   STM32CubeProgrammer for the flashless signed-FSBL flow),
-   blinky, defmt over RTT, embassy-stm32 N6 peripheral survey.
+   STM32CubeProgrammer for the flashless signed first-stage boot
+   loader (FSBL) flow), blinky, defmt over RTT, embassy-stm32 N6
+   peripheral survey.
 2. **Audio I/O.**  Decide and implement the audio output path to
    the MAX9744; capture mic samples through the ADC.
 3. **Sweep + capture.**  Synchronized sweep generation and

@@ -13,6 +13,10 @@ network trigger board.
 | `audio_loopback/` (planned) | DAC1_OUT1 (PA4) -> jumper -> ADC (PA3) sweep loopback; synthesis logic lives in `core/` |
 | `net/` (planned) | On-chip Ethernet MAC + on-board PHY over RMII + `embassy-net`; the ADR-009 Layer-3 trigger board |
 
+See the
+[ARS toolhead sensor project docs](../../docs/src/projects/ars-toolhead-sensor/README.md)
+for the loopback rig's role in the wider ARS pipeline.
+
 ## Local Rules
 
 - No unsafe allowlist entries here; nothing in this crate may be
