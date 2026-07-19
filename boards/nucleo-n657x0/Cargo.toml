@@ -13,26 +13,51 @@ bench = false
 name = "nucleo-n657x0"
 test = false
 
-# ── Dependencies (deliberately commented out) ────────────────────
-# Exact crates, versions, and feature sets get pinned at the
-# bring-up spike, once the flashless signed-FSBL boot chain and
-# embassy-stm32 N6 peripheral coverage are verified on hardware.
-# Until then the manifest stays dependency-free so that
-# `cargo metadata` remains valid if the crate is inspected
-# standalone.  Candidate set (features unverified):
+# ── Gate G1 compile spike ─────────────────────────────────────────
+# All real deps are optional, pulled in only by the "g1-spike"
+# feature, so plain `cargo check` (no features) stays dependency-
+# free and hits the scaffold `compile_error!` guard unchanged.  See
+# docs/src/projects/ars-toolhead-sensor/pinout.md gate G1 and
+# src/main.rs.
 #
-# [dependencies]
-# cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
-# critical-section = "1.1"
-# defmt = "1.0"
-# defmt-rtt = "1.1"
-# panic-probe = { version = "1.0", features = ["print-defmt"] }
-#
-# [dependencies.embassy-stm32]
-# version = "0.4"
-# default-features = false
-# features = ["defmt", "rt", "stm32n657x0", "time-driver-tim2"]
-#
-# [dependencies.rtic]
-# version = "2"
-# features = ["thumbv8main-backend"]
+# Version note (G1 finding): embassy-stm32 0.4.0 (the feather pin)
+# has NO stm32n6* features at all-- N6 support first appears at
+# 0.5.0 and is current on 0.6.0.  Pinned to 0.6.0 here; the feather
+# crate's 0.4.0 pin cannot target this board.
+
+[features]
+g1-spike = [
+  "dep:cortex-m",
+  "dep:critical-section",
+  "dep:defmt",
+  "dep:defmt-rtt",
+  "dep:embassy-stm32",
+  "dep:panic-probe",
+  "dep:rtic",
+  "dep:rtic-monotonics",
+]
+
+[dependencies]
+cortex-m = { version = "0.7", features = ["critical-section-single-core"], optional = true }
+critical-section = { version = "1.1", optional = true }
+defmt = { version = "1.0", optional = true }
+defmt-rtt = { version = "1.1", optional = true }
+panic-probe = { version = "1.0", features = ["print-defmt"], optional = true }
+
+[dependencies.embassy-stm32]
+version = "0.6.0"
+default-features = false
+features = ["defmt", "rt", "stm32n657x0", "time-driver-tim9"]
+optional = true
+
+[dependencies.rtic]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+features = ["thumbv8main-backend"]
+optional = true
+
+[dependencies.rtic-monotonics]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+features = ["cortex-m-systick", "defmt"]
+optional = true

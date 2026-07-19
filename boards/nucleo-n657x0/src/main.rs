@@ -22,6 +22,49 @@
 #![no_std]
 #![no_main]
 
+#[cfg(not(feature = "g1-spike"))]
 compile_error!("scaffold only -- see boards/nucleo-n657x0/README.md");
 
+// pins.rs is a documentation-only sketch of the pin map (see its
+// module doc); it is intentionally not compiled during the G1
+// spike since G1 only proves the dependency stack compiles, and
+// pulling it in would trip `#![deny(warnings)]` dead-code lints
+// on consts nothing in this minimal skeleton consumes yet.
+#[cfg(not(feature = "g1-spike"))]
 mod pins;
+
+// ── Gate G1 compile spike ────────────────────────────────────────
+// Minimal RTIC 2 skeleton to prove embassy-stm32 + rtic 2.x +
+// rtic-monotonics + defmt/defmt-rtt/panic-probe compile for the
+// Cortex-M55 (thumbv8m.main-none-eabihf target; there is no
+// distinct thumbv8.1m.main rustc target-- ARMv8.1-M/Helium is
+// selected via target-cpu/target-feature on top of v8-M
+// mainline).  No peripherals beyond what compiling demands; not a
+// real application.  See docs/src/projects/ars-toolhead-sensor/
+// pinout.md gate G1.
+#[cfg(feature = "g1-spike")]
+#[rtic::app(device = embassy_stm32, dispatchers = [USART1])]
+mod g1_spike {
+    use defmt_rtt as _;
+    use panic_probe as _;
+
+    #[shared]
+    struct Shared {}
+
+    #[local]
+    struct Local {}
+
+    #[init]
+    fn init(_cx: init::Context) -> (Shared, Local) {
+        let _p = embassy_stm32::init(Default::default());
+
+        (Shared {}, Local {})
+    }
+
+    #[idle]
+    fn idle(_cx: idle::Context) -> ! {
+        loop {
+            cortex_m::asm::wfi();
+        }
+    }
+}

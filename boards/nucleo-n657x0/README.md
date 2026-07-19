@@ -3,7 +3,8 @@
 **Status: scaffold only.**  No hardware is present, and nothing
 builds; `src/main.rs` is a deliberate `compile_error!`.
 
-Planned target: `thumbv8.1m.main-none-eabihf` (Cortex-M55).
+Planned target: `thumbv8m.main-none-eabihf` (Cortex-M55; rustc
+has no thumbv8.1m triple-- Helium/MVE selects via target-cpu).
 
 ## Why Workspace-Excluded
 

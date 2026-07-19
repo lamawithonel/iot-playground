@@ -102,9 +102,13 @@ Unverified claims stay here until a bring-up spike settles them.
   flashless signed-FSBL external-NOR boot chain; the probe-rs
   flow is unverified.
 - **embassy-stm32 N6 coverage.**  An `stm32n657x0` feature exists
-  (Cortex-M55 target `thumbv8.1m.main-none-eabihf`), but
-  peripheral coverage (ADC, timers, DMA) for this part is
-  unverified.
+  (Cortex-M55 target `thumbv8m.main-none-eabihf`; rustc has no
+  thumbv8.1m triple).  Compile-verified 2026-07-19: embassy-stm32
+  0.6.0 (not 0.4-- N6 support starts at 0.5) with
+  `time-driver-tim9` plus rtic 2.2.0 `thumbv8main-backend` and a
+  SysTick monotonic compiles cleanly (`g1-spike` feature in
+  `boards/nucleo-n657x0`).  Runtime peripheral coverage (ADC,
+  GPDMA, TIM1 PWM, I2C) remains unverified until hardware.
 - **Audio output path.**  Provisionally filtered PWM (TIM1_CH1 on
   PE9 plus an external RC low-pass) into the MAX9744 line input;
   confirmed or overturned at gate G3, with SAI1 plus an external

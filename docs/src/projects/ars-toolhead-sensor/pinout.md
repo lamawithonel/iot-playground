@@ -120,14 +120,13 @@ console.
    at gate G3 (phases 1-3).  Complementary/dead-time outputs are
    not used-- the amp input is a single-ended line-level signal,
    not a power bridge.
-2. Mic input is PA8/ADC1_INP5 via Arduino A0, deliberately
-   leveraging the Nucleo's on-board 3.3 V-to-1.8 V analog
-   adaptation amplifier (UM3417 Figure 14, p.29) instead of an
-   external divider.  Fallback: PA1/ADC1_INP1 on morpho CN15 pin
-   38-- the only raw survey-listed ADC pin exposed on any
-   connector after Ethernet (Port F) and camera/USB (PA0, PB11)
-   exclusions-- with an external scale/bias network into the
-   1.8 V domain (gate G2).
+2. Mic input is PA8/ADC1_INP5 via Arduino A0, deliberately using
+   the Nucleo's on-board 3.3 V-to-1.8 V analog adaptation amplifier
+   (UM3417 Figure 14, p.29) instead of an external divider.
+   Fallback: PA1/ADC1_INP1 on morpho CN15 pin 38-- the only raw
+   survey-listed ADC pin exposed on any connector after Ethernet
+   (Port F) and camera/USB (PA0, PB11) exclusions-- with an
+   external scale/bias network into the 1.8 V domain (gate G2).
 3. Amp control bus is I2C1 on PH9/PC1 at morpho CN15 pins 3/5: no
    solder-bridge change required.  PE5/PE6 (VCP) and PB10/PB11
    (USB-PD controller plus camera bus) are excluded.  If a future
@@ -213,16 +212,21 @@ console.
 What phases 1-3 must confirm before this map is final:
 
 - **G0** (pre-phase-1, blocks everything).  probe-rs flow for the
-  flashless signed-FSBL external-NOR boot chain works on the
-  NUCLEO-N657X0-Q.  The `nucleo-n657x0` crate stays workspace-excluded
-  with `compile_error!` until this passes
+  flashless external-NOR boot chain via a signed first-stage boot loader (FSBL)
+  works on the NUCLEO-N657X0-Q.  The `nucleo-n657x0` crate stays
+  workspace-excluded with `compile_error!` until this passes
   (`boards/nucleo-n657x0/README.md` and `AGENTS.md`).
-- **G1** (phases 1-2).  embassy-stm32 0.4 feature `stm32n657x0`
+- **G1** (phases 1-2).  embassy-stm32 feature `stm32n657x0`
   actually covers ADC plus GPDMA linked-list/circular capture, TIM1 PWM
   with DMA duty update, I2C1, and EXTI under RTIC 2 with the
-  thumbv8main backend on the Cortex-M55.  UNVERIFIED: no embassy-stm32
-  source was found in the local cargo registry and the crate manifest
-  deliberately pins nothing (`boards/nucleo-n657x0/Cargo.toml`).
+  thumbv8main backend on the Cortex-M55.  Compile half CLOSED
+  2026-07-19: embassy-stm32 0.6.0 (0.4 has no N6 features; support
+  starts at 0.5) with `time-driver-tim9` (TIM9 is the only usable
+  time-driver timer on this chip in 0.6.0) plus rtic 2.2.0
+  `thumbv8main-backend` and rtic-monotonics `cortex-m-systick` (no
+  N6 chip feature exists upstream) compiles cleanly for
+  `thumbv8m.main-none-eabihf`-- see the `g1-spike` feature in
+  `boards/nucleo-n657x0/Cargo.toml`.  Runtime half still open.
   Fallback: PAC-level drivers behind the same RTIC task API.  Also
   confirm whether GPDMA offers a true circular/ping-pong linked-list
   mode-- the survey verified only the section headings (RM0486 sect.
