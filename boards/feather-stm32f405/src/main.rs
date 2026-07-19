@@ -121,6 +121,11 @@ mod app {
     fn init(_cx: init::Context) -> (Shared, Local) {
         info!("IoT Playground starting...");
 
+        // The `.ccmram` section is NOLOAD (see memory.x), so the
+        // runtime startup does not apply these statics' initializers;
+        // set them explicitly before any reader runs.
+        ccmram::init_statics();
+
         // Adafruit Feather STM32F405: 12 MHz HSE, 32.768 kHz LSE (PC14/PC15)
         let mut config = embassy_stm32::Config::default();
         config.rcc.hse = Some(Hse {

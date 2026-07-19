@@ -1,7 +1,8 @@
 //! CCM RAM Memory Allocations Module
 //!
-//! This module is the **ONLY** place in the codebase where CCM RAM (Core-Coupled Memory)
-//! section attributes are used. All `#[link_section = ".ccmram"]` attributes must live here.
+//! This module is the **ONLY** place in the codebase where CCM RAM
+//! (Core-Coupled Memory) section attributes are used.  All
+//! `#[link_section = ".ccmram"]` attributes must live here.
 //!
 //! # Why This Module Exists
 //!
@@ -90,12 +91,28 @@ use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 #[link_section = ".ccmram"]
 pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
 
+/// Initialize the `.ccmram` statics to their intended startup values.
+///
+/// The `.ccmram` output section is `NOLOAD` (see `memory.x`), so the
+/// cortex-m-rt startup code does not copy or zero it: the statics
+/// declared with `#[link_section = ".ccmram"]` are never given their
+/// written initializers and instead hold whatever CCM RAM contained
+/// at reset.  Every reader (`read_rtc`'s `TIME_SYNCED` check,
+/// `now_unix_time`'s base loads) therefore depends on this function
+/// running once, before any of them, to make the values defined.
+pub fn init_statics() {
+    TIME_SYNCED.store(false, Ordering::Release);
+    BASE_UNIX_SECS.store(0, Ordering::Release);
+    BASE_UNIX_MICROS.store(0, Ordering::Release);
+    BASE_MONO_MICROS.store(0, Ordering::Release);
+}
+
 // ============================================================================
 // CLOCK_REALTIME IMPLEMENTATION (Linux-style wall-clock time)
 // ============================================================================
 //
 // This implements a high-precision wall-clock time system similar to Linux:
-// - CLOCK_MONOTONIC: TIM2 running at 1MHz (microsecond precision)
+// - CLOCK_MONOTONIC: TIM2 running at 1 MHz (microsecond precision)
 // - CLOCK_REALTIME: CLOCK_MONOTONIC + Unix time offset from NTP calibration
 // - RTC: Backup only (not used for primary timekeeping)
 //
@@ -104,31 +121,34 @@ pub static TIME_SYNCED: AtomicBool = AtomicBool::new(false);
 // 2. Monotonic timer value at that exact moment (microseconds)
 //
 // Note: Using 32-bit AtomicU32 instead of AtomicU64 since ARMv7-M (Cortex-M4)
-// doesn't have native 64-bit atomics. This limits us but is workable:
+// doesn't have native 64-bit atomics.  This limits us but is workable:
 // - Seconds stored as u32 (wraps in 2106, acceptable for embedded systems)
 // - Microseconds within second stored separately (0-999999)
-// - Monotonic ticks in microseconds (wraps after ~71.6 minutes, but handled via wrapping arithmetic)
+// - Monotonic ticks in microseconds (wraps after ~71.6 minutes, but
+//   handled via wrapping arithmetic)
 
 /// Base Unix time in seconds at calibration
 ///
 /// Set during NTP synchronization to the Unix epoch seconds
-/// at the moment of calibration. Zero means not yet calibrated.
+/// at the moment of calibration.  Zero means not yet calibrated.
 /// Using u32 limits us to year 2106 (acceptable for embedded).
 #[link_section = ".ccmram"]
 static BASE_UNIX_SECS: AtomicU32 = AtomicU32::new(0);
 
 /// Base microseconds within second at calibration
-///  
+///
 /// The fractional part of Unix time (0-999999 microseconds)
-/// captured at calibration moment.
+/// captured at the calibration moment.
 #[link_section = ".ccmram"]
 static BASE_UNIX_MICROS: AtomicU32 = AtomicU32::new(0);
 
 /// Base monotonic timer value at calibration (microseconds)
 ///
-/// Set during NTP synchronization to the monotonic timer ticks (microseconds)
-/// at the moment of calibration. This is captured at the same instant as BASE_UNIX_SECS/MICROS.
-/// Using u32 for microseconds means it wraps every ~71.6 minutes, but wrapping_sub handles this correctly.
+/// Set during NTP synchronization to the monotonic timer ticks
+/// (microseconds) at the moment of calibration.  This is captured at
+/// the same instant as BASE_UNIX_SECS/MICROS.  Using u32 for
+/// microseconds means it wraps every ~71.6 minutes, but wrapping_sub
+/// handles this correctly.
 #[link_section = ".ccmram"]
 static BASE_MONO_MICROS: AtomicU32 = AtomicU32::new(0);
 
@@ -255,7 +275,7 @@ static mut TLS_WRITE_BUF: [u8; TLS_WRITE_BUF_SIZE] = [0; TLS_WRITE_BUF_SIZE];
 ///
 /// # Returns
 ///
-/// `(read_buffer, write_buffer)` — Tuple of mutable slices
+/// `(read_buffer, write_buffer)` -- Tuple of mutable slices
 pub unsafe fn tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
     // SAFETY: Returns exclusive `&'static mut` references to
     // `static mut` buffers in CCM RAM.  Sound because:
