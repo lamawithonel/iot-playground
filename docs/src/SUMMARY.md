@@ -22,6 +22,7 @@
   - [Hardware](./projects/ars-toolhead-sensor/hardware.md)
   - [Pinout](./projects/ars-toolhead-sensor/pinout.md)
     - [Audio Board Spike](./projects/ars-toolhead-sensor/spike-audio-board.md)
+  - [Prior Art and Research](./projects/ars-toolhead-sensor/research-prior-art.md)
 
 # Architecture
 
