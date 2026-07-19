@@ -1,4 +1,4 @@
-# boards/ -- Board Profiles
+# boards/-- Board Profiles
 
 One directory per board profile: a specific board plus its
 peripherals and application purpose.  BSP crates are named after

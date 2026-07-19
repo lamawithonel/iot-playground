@@ -1,4 +1,4 @@
-# feather-stm32f405/ -- Air-Quality Sensor Node
+# feather-stm32f405/-- Air-Quality Sensor Node
 
 Adafruit Feather STM32F405 (Cortex-M4F, 1 MB flash, 192 KB SRAM)
 with W5500 Ethernet and SEN66 environmental sensor.  RTIC 2.x app
@@ -17,7 +17,7 @@ publishing telemetry over MQTT v5 + TLS 1.3.
 
 ## Local Rules
 
-- `ccmram.rs` is the sole allowlisted unsafe file -- see
+- `ccmram.rs` is the sole allowlisted unsafe file-- see
   [`rust_style.md`](../../.agents/rules/rust_style.md) before
   touching anything `unsafe`.
 - Pin assignments are fixed by the PCB; treat the pin map in

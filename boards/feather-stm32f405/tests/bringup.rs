@@ -1,7 +1,7 @@
 //! Peripheral bring-up tests for the Feather STM32F405
 //!
-//! These tests validate hardware initialization — clocks,
-//! buses, and peripherals — using `embedded-test` with
+//! These tests validate hardware initialization (clocks,
+//! buses, and peripherals) using `embedded-test` with
 //! probe-rs reset-per-test isolation.  They deliberately
 //! run *outside* RTIC: bring-up tests verify the hardware
 //! foundation beneath the application runtime, not the
@@ -39,7 +39,7 @@ unsafe fn DefaultHandler(_irqn: i16) -> ! {
 
 /// Build the production clock configuration.
 ///
-/// This mirrors the `init` function in `main.rs` — any
+/// This mirrors the `init` function in `main.rs`-- any
 /// divergence means the tests are validating a different
 /// clock tree than what ships.
 fn production_clock_config() -> embassy_stm32::Config {
@@ -108,7 +108,7 @@ mod tests {
         let cfgr = pac::RCC.cfgr().read();
         let sws = cfgr.sws().to_bits();
 
-        // SWS = 0b10 → PLL selected as system clock
+        // SWS = 0b10 -> PLL selected as system clock
         assert_eq!(sws, 0b10, "SYSCLK not PLL (SWS={})", sws);
 
         info!("PLL confirmed as SYSCLK source");
@@ -121,7 +121,7 @@ mod tests {
     /// they are non-zero and not all identical.  Catches
     /// PLLQ misconfiguration, stuck-at faults, and
     /// "peripheral not clocked" failures.  TLS depends on
-    /// a functioning RNG — a stuck RNG is security-critical.
+    /// a functioning RNG-- a stuck RNG is security-critical.
     #[test]
     fn rng_entropy(_state: State) {
         info!("Validating hardware RNG entropy");
@@ -193,7 +193,7 @@ mod tests {
         // SEN66 needs processing time
         cortex_m::asm::delay(1_000_000); // ~12 ms at 84 MHz
 
-        // Response: 4 words × (2 data + 1 CRC) = 12 bytes
+        // Response: 4 words x (2 data + 1 CRC) = 12 bytes
         let mut buf = [0u8; 12];
         i2c.read(SEN66_ADDR, &mut buf).unwrap();
 
@@ -257,8 +257,8 @@ mod tests {
     ///
     /// After a hardware reset, the W5500 deasserts its
     /// active-low INTn line (no pending interrupts).  This
-    /// test configures PC2 as input with pull-up — matching
-    /// the RTIC app's `ExtiInput` setup — and asserts the
+    /// test configures PC2 as input with pull-up-- matching
+    /// the RTIC app's `ExtiInput` setup-- and asserts the
     /// pin reads HIGH.  Catches miswiring, floating pins,
     /// and stuck-low faults that would silently break EXTI2
     /// interrupt-driven packet reception.
@@ -281,10 +281,10 @@ mod tests {
         let int_pin = Input::new(p.PC2, Pull::Up);
 
         // W5500 INTn is active-low.  After reset with no
-        // configuration, no interrupts are pending → HIGH.
+        // configuration, no interrupts are pending -> HIGH.
         assert!(
             int_pin.is_high(),
-            "W5500 INT (PC2) LOW after reset — wiring fault or stuck interrupt",
+            "W5500 INT (PC2) LOW after reset-- wiring fault or stuck interrupt",
         );
 
         info!("W5500 INT pin OK: idle HIGH (EXTI2 ready)");
@@ -295,7 +295,7 @@ mod tests {
     /// Configures TIM2 with a prescaler for 1 MHz from the
     /// 84 MHz APB1 timer clock, then measures the counter
     /// delta over a CPU delay loop.  The RTIC monotonic
-    /// depends on TIM2 — if it is misconfigured, every
+    /// depends on TIM2-- if it is misconfigured, every
     /// `Mono::delay()` and timeout in the firmware is wrong.
     #[test]
     fn tim2_tick_rate(_state: State) {
@@ -307,8 +307,8 @@ mod tests {
         pac::RCC.apb1enr().modify(|w| w.set_tim2en(true));
         cortex_m::asm::delay(16);
 
-        // APB1 timer clock = 2 × 42 MHz = 84 MHz
-        // Prescaler 83 → 1 MHz counter tick
+        // APB1 timer clock = 2 x 42 MHz = 84 MHz
+        // Prescaler 83 -> 1 MHz counter tick
         tim2.psc().write_value(83);
         tim2.arr().write_value(0xFFFF_FFFF);
         tim2.egr().write(|w| w.set_ug(true)); // load PSC

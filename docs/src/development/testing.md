@@ -133,7 +133,7 @@ orchestrates the entire pipeline:
 **Feature categories** (`test/features/`):
 
 - **RTT boot milestones** (`rtt/boot_sequence.feature`):
-  Assert `defmt` milestones appear in order — system init,
+  Assert `defmt` milestones appear in order-- system init,
   TIM2 monotonic, I2C, SEN66, network stack, SNTP sync.
 - **WFI sleep mode** (`rtt/wfi_sleep.feature`): Verify
   `wfi_wakes:` counter appears in RTT, values are non-zero
@@ -148,18 +148,18 @@ orchestrates the entire pipeline:
   and retain flag.
 - **Sensor conditioning**
   (`rtt/sensor_conditioning.feature`): Verify CO₂
-  conditioning (needs ≥60s) and VOC/NOx conditioning
+  conditioning (needs >=60s) and VOC/NOx conditioning
   (needs longer).  Uses `@extended` and `@full` tags to
   control which tiers run these scenarios.
 - **Error absence** (`rtt/error_absence.feature`): Assert
   no TLS errors, MQTT disconnections, or sensor CRC failures
   in the RTT log.
-- **RTT↔MQTT correlation**
+- **RTT<->MQTT correlation**
   (`mqtt/cross_validation.feature`): Verify that sensor
   readings logged via RTT match those published via MQTT.
 - **Message timing** (`mqtt/message_timing.feature`):
   Assert messages arrive at the configured sample interval
-  ± tolerance.
+  +/- tolerance.
 
 **Milestone ordering and log messages are the test contract.**
 Changing a `defmt` message that serves as a milestone or
@@ -231,7 +231,7 @@ Flashes debug firmware, captures RTT output, and validates
 boot milestones via Cucumber-RS.  Uses the standard tier
 (165 seconds, 5-second sample interval).
 
-### Layers 4–5: Tiered Integration Tests
+### Layers 4-5: Tiered Integration Tests
 
 The smoke and end-to-end tests support three duration tiers
 to balance fast feedback against thorough sensor validation.

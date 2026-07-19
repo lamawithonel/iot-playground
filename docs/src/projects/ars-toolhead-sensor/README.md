@@ -62,7 +62,7 @@ telemetry (framework MQTT stack, when ported)
 ## Firmware Architecture
 
 RTIC 2.x application on the Embassy HAL (no embassy-executor),
-`no_std`, no heap, defmt logging -- the same framework rules as
+`no_std`, no heap, defmt logging-- the same framework rules as
 the feather board.  Planned task topology:
 
 | Task | Purpose |
@@ -106,7 +106,7 @@ Unverified claims stay here until a bring-up spike settles them.
   peripheral coverage (ADC, timers, DMA) for this part is
   unverified.
 - **Audio output path.**  How the MCU drives the MAX9744 line
-  input -- e.g. filtered PWM vs an external DAC/codec.  Decided
+  input-- e.g. filtered PWM vs an external DAC/codec.  Decided
   at bring-up.
 - **ADC sampling strategy.**  Sample rate, trigger and DMA
   scheme, and anti-aliasing for the mic input.

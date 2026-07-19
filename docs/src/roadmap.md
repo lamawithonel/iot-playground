@@ -226,11 +226,11 @@ for formal decisions.
 - [x] WFI/Sleep mode between messages (DSB + WFI in idle
   task, EXTI2 wake, wake counter telemetry)
 - [x] Interrupt-driven packet reception (EXTI2 on PC2
-  via `ExtiInput` → `embassy-net-wiznet` driver)
+  via `ExtiInput` -> `embassy-net-wiznet` driver)
 
 **Not applicable:**
 
-- ~~Shared MQTT connection resource (RTIC Shared)~~ —
+- ~~Shared MQTT connection resource (RTIC Shared)~~--
   SR-NET-016 is `[Phase 3+]`.  Currently only
   `network_task` uses MQTT; the embassy-net `Stack` is
   `!Send` and must remain in one task.  Deferred until
@@ -584,7 +584,7 @@ Items intentionally deferred:
     trait-based abstraction; implemented after AWS is proven
 11. **CAN Bus Gateway** — deferred to backlog; separate effort
     from sensor telemetry
-12. **ARS Toolhead-Sensor Project** -- the second framework
+12. **ARS Toolhead-Sensor Project**-- the second framework
     consumer (see
     [ARS project docs](./projects/ars-toolhead-sensor/README.md)),
     driving modularization of `core/` and `hal-abstractions/`

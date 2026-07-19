@@ -1,4 +1,4 @@
-# docs/ -- Documentation Site (mdBook)
+# docs/-- Documentation Site (mdBook)
 
 mdBook sources in `src/`, built to gitignored `book/`
 (`mise run docs` to serve, `mise run docs:build` to build).
@@ -9,7 +9,7 @@ Deployed to GitHub Pages on push to `main` via
 
 | Path | Purpose |
 |------|---------|
-| `src/SUMMARY.md` | Navigation -- update it when adding any page |
+| `src/SUMMARY.md` | Navigation-- update it when adding any page |
 | `src/roadmap.md` | Phases, milestones, memory budget (living doc) |
 | `src/system_requirements.md` | IEEE 29148-style SRS (framework + feather board) |
 | `src/risk_register.md` | Canonical risk list (R1..) |

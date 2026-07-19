@@ -484,7 +484,7 @@ reduce the test burden by making wrong states unrepresentable.
 - `bringup.rs` replaces the three former pure-logic on-device
   tests with six peripheral validation tests (clock tree PLL,
   RNG entropy, I2C SEN66 probe, SPI W5500 version register,
-  TIM2 tick rate, W5500 INT/EXTI2 wiring) -- a breaking change
+  TIM2 tick rate, W5500 INT/EXTI2 wiring)-- a breaking change
   to test output.
 - Pure logic tests are removed from on-device; host tests
   already cover them.
@@ -532,7 +532,7 @@ and cold-end.  Labeled positive/negative ARS captures will later
 train a passive CNN that detects filament at cold-pull start from
 printer sound alone; generalized fault detection is explicitly out
 of scope.  Prototype hardware: NUCLEO-N657X0-Q (STM32N657X0:
-Cortex-M55 @ 800 MHz, 4.2 MB RAM, flashless -- boots via signed
+Cortex-M55 @ 800 MHz, 4.2 MB RAM, flashless-- boots via signed
 FSBL from external NOR, Neural-ART NPU), an Adafruit MAX9744 20 W
 class-D amp driving a Dayton Audio EX25VT2-4 exciter (25 mm,
 4 ohm) as the acoustic source, and a SparkFun SPH8878LR5H-1 MEMS

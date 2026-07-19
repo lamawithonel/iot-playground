@@ -1,4 +1,4 @@
-# nucleo-n657x0 -- ARS Toolhead Sensor Board Crate
+# nucleo-n657x0-- ARS Toolhead Sensor Board Crate
 
 **Status: scaffold only.**  No hardware is present, and nothing
 builds; `src/main.rs` is a deliberate `compile_error!`.

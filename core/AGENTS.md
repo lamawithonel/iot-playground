@@ -1,4 +1,4 @@
-# core/ -- Platform-Agnostic Logic (`iot-core`)
+# core/-- Platform-Agnostic Logic (`iot-core`)
 
 Pure `no_std` business logic with **zero hardware dependencies**.
 Compiles as a normal `std` crate during host tests via
@@ -18,7 +18,7 @@ Compiles as a normal `std` crate during host tests via
 
 - Everything here MUST have host-side unit tests
   (see [`testing_gates.md`](../.agents/rules/testing_gates.md)).
-- No `embassy-*`, `rtic*`, or MCU PAC dependencies -- hardware
+- No `embassy-*`, `rtic*`, or MCU PAC dependencies-- hardware
   I/O stays in board crates; traits go in `hal-abstractions/`.
 - Data crossing the core/board boundary uses deci-scaled
   fixed-point integers, not `f32`.

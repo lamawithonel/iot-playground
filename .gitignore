@@ -21,7 +21,7 @@ book-target/
 .local/
 .cache/
 
-# Claude Code local state -- only the symlinks into .agents/ are
+# Claude Code local state-- only the symlinks into .agents/ are
 # tracked; settings, scheduled tasks, and other session state are
 # user-local and must never be committed.
 .claude/*
@@ -29,5 +29,5 @@ book-target/
 !.claude/agents
 !.claude/rules
 
-# User-local scratch prompt files at the repo root -- never tracked.
+# User-local scratch prompt files at the repo root-- never tracked.
 prompt.txt

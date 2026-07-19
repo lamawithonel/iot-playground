@@ -36,7 +36,7 @@ the codebase.
 
 **Rules:**
 
-- Allowed files MUST be minimal -- only the code that *requires*
+- Allowed files MUST be minimal-- only the code that *requires*
   `unsafe` belongs there.  Business logic, protocol handling, and
   other safe code must live in separate modules that `use` the unsafe
   files.

@@ -1,7 +1,7 @@
 # Agent Instructions for iot-playground
 
 This file is a lazy-loaded index.  Read the linked file for a topic
-when -- and only when -- the task touches it.  Do not inline-include
+when-- and only when-- the task touches it.  Do not inline-include
 other files from here.
 
 ## Project Overview

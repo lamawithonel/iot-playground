@@ -15,7 +15,7 @@
 | R4 | `embedded-tls` lacks RSA support | Low | N/A | Use ECDSA certificates; document server requirements | ✅ Mitigated |
 | R5 | Self-hosted runner availability | Low | Medium | Manual testing fallback; runner on primary workstation | 📋 Accepted |
 | R6 | micropb MSRV 1.88.0 toolchain requirement | Low | Low | Workspace already tracks recent stable Rust | 🔄 Monitoring |
-| R7 | CloudEvents Protobuf spec compliance | Low | Medium | Using `binary_data` — technically non-compliant for PB payloads | 📋 Accepted |
+| R7 | CloudEvents Protobuf spec compliance | Low | Medium | Using `binary_data`-- technically non-compliant for PB payloads | 📋 Accepted |
 | R8 | `embedded-tls` `NoVerify` in production | High | Medium | Custom `CertVerifier` required before staging deployment | ⚠️ Active |
 | R9 | AWS IoT double-decode limit | Medium | Low | Rules Engine allows max 2 decode() calls; sufficient for CE + payload | 🔄 Monitoring |
 | R10 | STM32N6 Rust ecosystem maturity (ARS project) | Medium | Medium | Project stays scaffold-only until a bring-up spike validates boot, flash, and HAL | 🔄 Monitoring |
@@ -26,61 +26,65 @@
 
 ### R1: Flash Size Constraints with TLS Stack
 
-**Description:** TLS libraries (especially `rustls`) require significant flash and RAM, potentially exceeding STM32F405 resources.
+**Description:** TLS libraries (especially `rustls`) require
+significant flash and RAM, potentially exceeding STM32F405 resources.
 
-**Impact:** High - Cannot establish secure connections if TLS doesn't fit.
+**Impact:** High-- Cannot establish secure connections if TLS doesn't fit.
 
 **Mitigation:** 
 - Selected `embedded-tls` which requires no allocator
 - TLS buffers (34KB) fit in main SRAM
 - Flash usage currently well under 900KB limit
 
-**Status:** ✅ Mitigated - TLS 1.3 handshake working
+**Status:** ✅ Mitigated-- TLS 1.3 handshake working
 
 ---
 
 ### R2: Embassy-RTIC Compatibility Gaps
 
-**Description:** Some Embassy HAL drivers may conflict with RTIC's interrupt-driven model or require Embassy executor features.
+**Description:** Some Embassy HAL drivers may conflict with RTIC's
+interrupt-driven model or require Embassy executor features.
 
-**Impact:** Medium - May need to implement custom drivers using PAC.
+**Impact:** Medium-- May need to implement custom drivers using PAC.
 
 **Mitigation:**
 - Use Embassy HAL where compatible
 - PAC (Peripheral Access Crate) available for direct register access
 - RTIC-first architecture documented in design constraints
 
-**Status:** 🔄 Monitoring - No issues encountered yet
+**Status:** 🔄 Monitoring-- No issues encountered yet
 
 ---
 
 ### R3: Limited Secure Boot on STM32F4
 
-**Description:** STM32F4 series has limited hardware support for secure boot compared to F7/H7.
+**Description:** STM32F4 series has limited hardware support for
+secure boot compared to F7/H7.
 
-**Impact:** Medium - Production deployments may require stronger boot security.
+**Impact:** Medium-- Production deployments may require stronger boot security.
 
 **Mitigation:**
 - Current development uses F405 for cost/availability
 - Plan upgrade path to STM32F7/H7 for production
 - `embassy-boot-stm32` provides software-based secure boot
 
-**Status:** 📋 Accepted - Will address in production hardware selection
+**Status:** 📋 Accepted-- Will address in production hardware selection
 
 ---
 
 ### R4: `embedded-tls` Lacks RSA Support
 
-**Description:** The `embedded-tls` library only supports ECDSA signature algorithms; RSA certificates cause handshake failures.
+**Description:** The `embedded-tls` library only supports ECDSA
+signature algorithms; RSA certificates cause handshake failures.
 
-**Impact:** Low - Requires server-side certificate configuration.
+**Impact:** Low-- Requires server-side certificate configuration.
 
 **Mitigation:**
 - Document requirement for ECDSA certificates (secp384r1 recommended)
 - Local Mosquitto test broker configured with ECDSA
 - AWS IoT Core supports ECDSA certificates
 
-**Status:** ✅ Mitigated - Server requirements documented
+**Status:** ✅ Mitigated-- Server requirements documented
 
 ---
 
@@ -90,7 +94,7 @@
 GitHub Actions runner on local workstation, which may have
 availability issues.
 
-**Impact:** Low — Affects CI automation, not development
+**Impact:** Low-- Affects CI automation, not development
 capability.
 
 **Mitigation:**
@@ -98,7 +102,7 @@ capability.
 - Runner is simple Docker container (no Kubernetes)
 - Public runners handle all non-hardware tests
 
-**Status:** 📋 Accepted — Will implement when test burden
+**Status:** 📋 Accepted-- Will implement when test burden
 justifies
 
 ---
@@ -109,7 +113,7 @@ justifies
 crate recently bumped its MSRV (was 1.80) and may do so
 again as it adopts new language features.
 
-**Impact:** Low — Workspace already tracks recent stable
+**Impact:** Low-- Workspace already tracks recent stable
 Rust via mise.
 
 **Mitigation:**
@@ -117,7 +121,7 @@ Rust via mise.
 - Monitor upstream releases for MSRV bumps
 - mise manages Rust toolchain centrally
 
-**Status:** 🔄 Monitoring — Current toolchain satisfies
+**Status:** 🔄 Monitoring-- Current toolchain satisfies
 requirement
 
 ---
@@ -130,7 +134,7 @@ CloudEvents envelopes.  The CloudEvents Protobuf Event
 Format §3.2 states that `proto_data` MUST be used for
 Protobuf data.  Our approach is technically non-compliant.
 
-**Impact:** Low — No known conformance test suites or
+**Impact:** Low-- No known conformance test suites or
 enforcement mechanisms.  Cloud consumers route by `type`
 field, not `type_url`.
 
@@ -140,10 +144,10 @@ field, not `type_url`.
   clarity
 - Cloud-side routing uses `type` attribute (unaffected)
 - If spec finalizes with hard requirement, migration
-  path exists (swap `binary_data` → `proto_data` with
+  path exists (swap `binary_data` -> `proto_data` with
   manual `Any` packing)
 
-**Status:** 📋 Accepted — Defensible trade-off for
+**Status:** 📋 Accepted-- Defensible trade-off for
 no_std/no_alloc constraints
 
 ---
@@ -156,7 +160,7 @@ server certificate validation.  This is acceptable for
 development but is a compliance blocker for staging and
 production deployments.
 
-**Impact:** High — Certificates are not verified; a
+**Impact:** High-- Certificates are not verified; a
 man-in-the-middle attack could impersonate the MQTT broker.
 
 **Mitigation:**
@@ -164,7 +168,7 @@ man-in-the-middle attack could impersonate the MQTT broker.
   roots (no hardware dependency)
 - Schedule fix for Security Foundation phase
 
-**Status:** ⚠️ Active — Must resolve before any non-lab
+**Status:** ⚠️ Active-- Must resolve before any non-lab
 deployment
 
 ---
@@ -178,7 +182,7 @@ payload (base64-encoded in `binary_data`).  The AWS IoT
 Rules Engine allows only 2 `decode()` invocations per SQL
 expression.
 
-**Impact:** Medium — If future schemas require nested
+**Impact:** Medium-- If future schemas require nested
 Protobuf messages, a third `decode()` would fail.
 
 **Mitigation:**
@@ -186,7 +190,7 @@ Protobuf messages, a third `decode()` would fail.
 - Complex processing offloaded to Lambda functions
 - Monitor AWS for `decode()` limit changes
 
-**Status:** 🔄 Monitoring — Current design is within limits
+**Status:** 🔄 Monitoring-- Current design is within limits
 
 ---
 
@@ -201,7 +205,7 @@ Loader (FSBL), and its Rust story is young: `embassy-stm32`
 unverified, and Neural-ART NPU deployment tooling (ST Edge AI)
 is C-centric with no established Rust FFI path.
 
-**Impact:** Medium -- Blocks ARS bring-up, not the framework.
+**Impact:** Medium-- Blocks ARS bring-up, not the framework.
 
 **Mitigation:**
 - Project stays scaffold-only (workspace-excluded crate) until

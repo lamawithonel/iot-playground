@@ -97,13 +97,13 @@ completes in under 30 seconds.
 
 All of the following MUST pass before committing:
 
-1. **Formatting** -- `cargo fmt --all -- --check` reports no
+1. **Formatting**-- `cargo fmt --all -- --check` reports no
    diffs
-2. **Host tests** -- all tests pass (exit code 0, zero
+2. **Host tests**-- all tests pass (exit code 0, zero
    failures)
-3. **Clippy** -- zero warnings on the embedded target
+3. **Clippy**-- zero warnings on the embedded target
    (exit code 0)
-4. **Device tests** -- pass if hardware is connected; may be
+4. **Device tests**-- pass if hardware is connected; may be
    skipped otherwise
 
 **FORBIDDEN:** Do not use `--skip`, `#[ignore]`, or

@@ -1,4 +1,4 @@
-# ARS Toolhead Sensor -- Hardware
+# ARS Toolhead Sensor-- Hardware
 
 ## Bill of Materials
 

@@ -1,7 +1,5 @@
 ---
 # Applies to every commit, not to specific files.
-paths:
-  - "**/*"
 ---
 
 # Git Commit Style Guide

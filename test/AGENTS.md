@@ -1,4 +1,4 @@
-# test/ -- Host-Side Test Infrastructure
+# test/-- Host-Side Test Infrastructure
 
 Containerized broker plus host tools that validate the device from
 the outside.  These crates are `workspace.exclude`d and are NOT

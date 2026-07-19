@@ -1,4 +1,4 @@
-# hal-abstractions/ -- Hardware Abstraction Traits
+# hal-abstractions/-- Hardware Abstraction Traits
 
 Trait boundary between `core/` logic and board hardware.  `no_std`,
 host-testable, minimal dependencies (`embedded-io`/
@@ -12,7 +12,7 @@ host-testable, minimal dependencies (`embedded-io`/
 
 `rtc`, `rng`, and `network` trait modules are planned but not yet
 implemented (placeholders in `lib.rs`).  Adding them is framework
-modularization work -- see the roadmap's framework track before
+modularization work-- see the roadmap's framework track before
 starting.
 
 ## Local Rules

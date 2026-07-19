@@ -1,4 +1,4 @@
-//! ARS toolhead sensor -- NUCLEO-N657X0-Q board crate (scaffold).
+//! ARS toolhead sensor-- NUCLEO-N657X0-Q board crate (scaffold).
 //!
 //! Planned RTIC 2.x task topology, per
 //! `docs/src/projects/ars-toolhead-sensor/README.md`:
@@ -14,7 +14,7 @@
 //! Framework rules apply: RTIC 2.x scheduling, Embassy HAL only
 //! (no embassy-executor), `no_std`, no heap, defmt logging.
 //!
-//! Nothing here builds yet -- the toolchain and boot-chain
+//! Nothing here builds yet-- the toolchain and boot-chain
 //! decisions land at the bring-up spike.
 
 #![no_std]
