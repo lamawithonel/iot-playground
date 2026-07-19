@@ -5,6 +5,7 @@ members = [
     "boards/nucleo-h753zi",
     "core",
     "hal-abstractions",
+    "iot-net",
 ]
 exclude = [
     "boards/nucleo-n657x0",

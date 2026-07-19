@@ -43,7 +43,9 @@ jobs:
       - name: Run host unit tests
         run: |
           HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
-          cargo test --workspace --target "$HOST_TARGET" --exclude feather-stm32f405 --exclude nucleo-h753zi
+          # iot-net pulls embassy-net (no host build); it is covered
+          # by the embedded clippy/build workspace runs below.
+          cargo test --workspace --target "$HOST_TARGET" --exclude feather-stm32f405 --exclude nucleo-h753zi --exclude iot-net
           # iot-core's ars/ and sen66 modules are feature-gated and
           # invisible to the default-feature run above; exercise them.
           cargo test -p iot-core --all-features --target "$HOST_TARGET"

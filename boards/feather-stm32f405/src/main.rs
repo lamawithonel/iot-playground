@@ -29,7 +29,6 @@ mod config;
 mod counting_exti;
 mod device_id;
 mod eth;
-mod network;
 mod sensor;
 mod time;
 mod tls_buffers;
@@ -51,7 +50,9 @@ mod app {
     use embassy_stm32::time::Hertz;
     use rtic_sync::channel::{Receiver, Sender};
 
-    use network::{manager, NetworkClient as _, SntpClient};
+    use iot_net::{
+        manager, MqttBuffers, MqttClient, MqttConfig, NetworkClient as _, NetworkError, SntpClient,
+    };
     use sensor::Sen66Reading;
 
     /// Channel capacity for sensor readings
@@ -133,7 +134,7 @@ mod app {
             mode: HseMode::Oscillator,
         });
 
-        // Configure PLL for system clock and RNG (48MHz required for RNG)
+        // Configure PLL for system clock and RNG (48 MHz required for RNG)
         // HSE (12 MHz) / PREDIV(6) = 2 MHz (PLL input)
         // 2 MHz * MUL(168) = 336 MHz (VCO)
         // VCO / DIVP(4) = 84 MHz (SYSCLK)
@@ -205,7 +206,7 @@ mod app {
         );
         info!("I2C1 initialized: 400 kHz, PB6/PB7 (SEN66)");
 
-        // Sensor → network channel
+        // Sensor -> network channel
         let (sensor_tx, sensor_rx) = rtic_sync::make_channel!(Sen66Reading, SENSOR_CHANNEL_CAP);
 
         heartbeat::spawn().ok();
@@ -227,7 +228,7 @@ mod app {
         }
     }
 
-    /// Sensor task — reads SEN66 environmental sensor periodically
+    /// Sensor task-- reads SEN66 environmental sensor periodically
     ///
     /// Initializes I2C sensor driver, then reads all measurements
     /// at the configured sample interval and sends them to the
@@ -273,7 +274,7 @@ mod app {
         }
     }
 
-    /// Network task - orchestrates network stack and protocol clients
+    /// Network task-- orchestrates network stack and protocol clients
     ///
     /// Stack is !Send and must remain within this task.  Runs at
     /// priority 2 to guarantee <500 µs EXTI2 interrupt latency
@@ -355,7 +356,20 @@ mod app {
         use static_cell::StaticCell;
 
         // --- SNTP time sync (RNG is supplied by the caller) ---
-        let mut sntp = SntpClient::new();
+        //
+        // The RTC write and CCM RAM wall-clock calibration are
+        // board concerns, injected into the shared client as an
+        // `on_sync` callback.
+        let mut sntp = SntpClient::new(|ts| -> Result<(), NetworkError> {
+            time::write_rtc(ts)?;
+            let mono_micros = Mono::now().ticks() as u32;
+            ccmram::calibrate_wallclock(ts.unix_secs as u32, ts.micros, mono_micros);
+            info!(
+                "Wall-clock calibrated: RTC updated, mono={} µs",
+                mono_micros
+            );
+            Ok(())
+        });
         info!("Initializing SNTP time synchronization with RTC (LSE)...");
         match sntp.run(stack, &mut rng).await {
             Ok(ts) => info!(
@@ -381,30 +395,66 @@ mod app {
         let tcp_rx_buffer = TCP_RX_BUFFER.init([0u8; 4096]);
         let tcp_tx_buffer = TCP_TX_BUFFER.init([0u8; 4096]);
 
+        // TLS record buffers live in CCM RAM; fetching them is the
+        // board's (unsafe) concern, injected into the shared client.
+        let (tls_read_buffer, tls_write_buffer) = ccm_tls_buffers();
+
         // --- Persistent MQTT connection with auto-reconnect ---
-        let mqtt_config = network::MqttConfig {
+        let mqtt_config = MqttConfig {
             broker_host: "192.168.1.1",
             broker_port: 8883,
             keep_alive_secs: 60,
             clean_start: true,
         };
-        let mut mqtt_client = network::MqttClient::new(mqtt_config);
+        let mut mqtt_client = MqttClient::new(mqtt_config);
 
         info!("Starting persistent MQTT connection (channel-driven publish)");
 
-        let mut buffers = network::MqttBuffers {
+        let mut buffers = MqttBuffers {
             mqtt: mqtt_buffer,
             tcp_rx: tcp_rx_buffer,
             tcp_tx: tcp_tx_buffer,
+            tls_read: tls_read_buffer,
+            tls_write: tls_write_buffer,
         };
 
-        // Never returns — reconnects automatically on failure
+        let client_id = device_id::mqtt_client_id();
+
+        // Per-publish telemetry hook: swap and log the WFI/EXTI2
+        // counters so the smoke test's RTT assertions hold.
+        let on_cycle = || {
+            let wakes = IDLE_WAKES.swap(0, Ordering::Relaxed);
+            let exti2 = EXTI2_EVENTS.swap(0, Ordering::Relaxed);
+            info!("wfi_wakes: {}, exti2_events: {}", wakes, exti2);
+        };
+
+        // Never returns-- reconnects automatically on failure
         mqtt_client
-            .run(stack, &mut rng, &mut buffers, sensor_rx)
+            .run(
+                stack,
+                &mut rng,
+                client_id.as_str(),
+                &mut buffers,
+                sensor_rx,
+                time::get_timestamp,
+                on_cycle,
+            )
             .await
     }
 
-    /// RTIC idle task — WFI sleep mode when no tasks active.
+    /// Fetch the CCM RAM TLS record buffers for the MQTT session.
+    #[allow(unsafe_code)]
+    fn ccm_tls_buffers() -> (&'static mut [u8], &'static mut [u8]) {
+        // SAFETY: Called exactly once, from the never-returning
+        // `run_clients`, so the exclusive `&'static mut` references
+        // are never aliased; a single TLS connection uses the
+        // buffers at a time (sessions in `iot_net::MqttClient::run`
+        // are strictly sequential); CCM RAM is CPU-only and these
+        // buffers are never handed to DMA.
+        unsafe { tls_buffers::tls_buffers() }
+    }
+
+    /// RTIC idle task-- WFI sleep mode when no tasks active.
     ///
     /// The DSB ensures all pending memory accesses (including
     /// the previous iteration's `IDLE_WAKES` store) complete

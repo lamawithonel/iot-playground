@@ -53,6 +53,7 @@ Each directory below has its own `AGENTS.md` with local detail.
 |------|----------|
 | [`core/`](core/AGENTS.md) | Platform-agnostic business logic (no hardware deps) |
 | [`hal-abstractions/`](hal-abstractions/AGENTS.md) | Hardware abstraction traits |
+| [`iot-net/`](iot-net/AGENTS.md) | Shared MQTT/TLS/SNTP/DNS clients over embassy-net (no board deps) |
 | [`boards/`](boards/AGENTS.md) | Board profiles (one BSP + app per directory) |
 | [`test/`](test/AGENTS.md) | Host-side test infra (broker, subscriber, smoke validator) |
 | [`docs/`](docs/AGENTS.md) | mdBook documentation site |

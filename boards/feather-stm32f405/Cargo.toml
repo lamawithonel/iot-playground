@@ -21,6 +21,7 @@ embedded-io.workspace = true
 embedded-io-async.workspace = true
 heapless.workspace = true
 iot-core = { path = "../../core", features = ["defmt", "embedded-io", "sen66"] }
+iot-net = { path = "../../iot-net" }
 panic-probe.workspace = true
 static_cell.workspace = true
 
@@ -71,19 +72,6 @@ features = [
   "generic-queue-16",
 ]
 
-# NOTE: Replace with rustls-wolfcrypt-provider for FIPS 140-3 compliance
-# Using latest main branch which includes embedded-io-async 0.7 compatibility
-[dependencies.embedded-tls]
-git = "https://github.com/drogue-iot/embedded-tls"
-rev = "27874162c9d9105701d2b588092f39311e34bd93"
-default-features = false
-features = ["defmt"]
-
-# RNG for TLS handshake (version must match embedded-tls dependency)
-[dependencies.rand_core]
-version = "0.6"
-default-features = false
-
 [dependencies.rtic]
 workspace = true
 features = ["thumbv7-backend"]
@@ -104,13 +92,6 @@ features = ["defmt-03"]
 [dependencies.rtic-time]
 workspace = true
 
-# MQTT v5.0 client for Phase 2 network stack
-[dependencies.rust-mqtt]
-git = "https://github.com/obabec/rust-mqtt.git"
-rev = "d2ca25c5e828f205185c15858198329c02742d86"
-default-features = false
-features = ["bump", "defmt", "v5"]
-
 # SEN66 environmental sensor (I2C, async)
 [dependencies.sen6x]
 version = "0.1.4"
@@ -118,9 +99,10 @@ default-features = false
 features = ["async", "sen66", "defmt"]
 
 # SNTP client for time synchronization (SR-NET-006).
-# Staged for future use: network/sntp.rs currently hand-rolls
-# SNTP over embassy-net UDP and does not import this crate yet.
-# Version 0.11.0 renamed the no-std/embedded features to "sync"
+# Staged for future use: iot-net/src/sntp.rs currently hand-rolls
+# SNTP over embassy-net UDP (reply validation lives in
+# iot_core::network::sntp) and does not import this crate yet.
+# Version 0.11.0 renamed the no-std/embedded features to "sync".
 [dependencies.sntpc]
 version = "0.11.0"
 default-features = false

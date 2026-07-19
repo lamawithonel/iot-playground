@@ -42,10 +42,15 @@ Or equivalently:
 ```bash
 cargo test --workspace \
   --exclude feather-stm32f405 --exclude nucleo-h753zi \
+  --exclude iot-net \
   --target "$(rustc -vV | sed -n 's/^host: //p')"
 cargo test -p iot-core --all-features \
   --target "$(rustc -vV | sed -n 's/^host: //p')"
 ```
+
+The `iot-net` crate is excluded because it depends on
+`embassy-net`, which does not build for the host target; it is
+compile-gated by the embedded clippy/build workspace runs below.
 
 The `core/` and `hal-abstractions/` crates use
 `#![cfg_attr(not(test), no_std)]` to compile as normal `std`

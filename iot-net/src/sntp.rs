@@ -7,43 +7,51 @@ use embassy_net::dns::DnsQueryType;
 use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::{IpEndpoint, Stack};
 use embassy_time::{Duration, Instant, Timer};
+use iot_core::time::Timestamp;
 use rand_core::RngCore;
-use rtic_monotonics::fugit::ExtU64;
-use rtic_monotonics::Monotonic;
 
-use crate::ccmram;
-use crate::time::{write_rtc, Timestamp};
-use crate::Mono;
-
-use super::client::NetworkClient;
-use super::config::SntpConfig;
-use super::error::NetworkError;
+use crate::client::NetworkClient;
+use crate::config::SntpConfig;
+use crate::error::NetworkError;
 
 /// SNTP/NTP port (UDP 123)
 const SNTP_PORT: u16 = 123;
 
 /// SNTP client for time synchronization
-pub struct SntpClient {
+///
+/// The `on_sync` callback is invoked with each successfully
+/// validated timestamp before `run` returns, so the board can
+/// apply it to hardware (RTC write, wall-clock calibration)
+/// without this crate depending on any hardware.  An `Err` from
+/// the callback aborts the sync and propagates to the caller.
+pub struct SntpClient<F> {
     config: SntpConfig,
+    on_sync: F,
 }
 
-impl SntpClient {
+impl<F> SntpClient<F>
+where
+    F: FnMut(Timestamp) -> Result<(), NetworkError>,
+{
     /// Create a new SNTP client with default configuration
-    pub fn new() -> Self {
+    ///
+    /// `on_sync` receives each successfully validated timestamp
+    /// (e.g. to write the RTC and calibrate the wall clock).
+    pub fn new(on_sync: F) -> Self {
         Self {
             config: SntpConfig::default(),
+            on_sync,
         }
     }
 
     /// Create a new SNTP client with custom configuration
-    #[allow(dead_code)]
-    pub fn with_config(config: SntpConfig) -> Self {
-        Self { config }
+    pub fn with_config(config: SntpConfig, on_sync: F) -> Self {
+        Self { config, on_sync }
     }
 
-    /// Perform SNTP synchronization with internal RTC update
+    /// Perform SNTP synchronization, applying the result via `on_sync`
     async fn sync<R: RngCore>(
-        &self,
+        &mut self,
         stack: &Stack<'static>,
         rng: &mut R,
     ) -> Result<Timestamp, NetworkError> {
@@ -61,28 +69,18 @@ impl SntpClient {
                             "SNTP sync successful: {}.{:06} UTC",
                             timestamp.unix_secs, timestamp.micros
                         );
-                        write_rtc(timestamp)?;
-                        self.calibrate_wallclock(timestamp);
+                        (self.on_sync)(timestamp)?;
                         return Ok(timestamp);
                     }
                     Err(e) => {
                         warn!("SNTP sync failed: {:?}, retrying...", e);
-                        Mono::delay(2000_u64.millis()).await;
+                        Timer::after(Duration::from_millis(2000)).await;
                     }
                 }
             }
         }
         error!("All SNTP sync attempts failed");
         Err(NetworkError::AllServersFailed)
-    }
-
-    fn calibrate_wallclock(&self, timestamp: Timestamp) {
-        let mono_micros = Mono::now().ticks() as u32;
-        ccmram::calibrate_wallclock(timestamp.unix_secs as u32, timestamp.micros, mono_micros);
-        info!(
-            "Wall-clock calibrated: RTC updated, mono={} µs",
-            mono_micros
-        );
     }
 
     async fn sntp_request<R: RngCore>(
@@ -181,13 +179,10 @@ impl SntpClient {
     }
 }
 
-impl Default for SntpClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl NetworkClient for SntpClient {
+impl<F> NetworkClient for SntpClient<F>
+where
+    F: FnMut(Timestamp) -> Result<(), NetworkError>,
+{
     type Output = Timestamp;
 
     async fn run<R: RngCore>(

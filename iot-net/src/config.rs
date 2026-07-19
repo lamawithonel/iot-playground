@@ -25,23 +25,3 @@ impl Default for SntpConfig {
         }
     }
 }
-
-/// Network stack configuration
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct NetworkConfig {
-    /// MAC address for Ethernet
-    pub mac_addr: [u8; 6],
-    /// Random seed for network stack
-    pub seed: u64,
-}
-
-#[allow(dead_code)]
-impl Default for NetworkConfig {
-    fn default() -> Self {
-        Self {
-            mac_addr: [0x02, 0x00, 0x00, 0x12, 0x34, 0x56],
-            seed: 0x1234_5678_u64,
-        }
-    }
-}

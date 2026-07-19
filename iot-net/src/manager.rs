@@ -1,9 +1,12 @@
 #![deny(unsafe_code)]
 #![deny(warnings)]
-//! Network stack manager
+//! Network configuration helper
 //!
-//! Handles W5500 hardware initialization and embassy-net stack creation.
-//! This module isolates hardware setup from application logic.
+//! Waits for DHCP configuration to come up and logs the assigned
+//! address.  Transport-agnostic: it operates only on an
+//! `embassy_net::Stack`, so it works over any link driver (W5500
+//! SPI, on-chip RMII, etc.)-- stack and device creation stay in the
+//! board crate.
 
 use defmt::info;
 use embassy_net::Stack;

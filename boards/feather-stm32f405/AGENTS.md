@@ -8,8 +8,7 @@ publishing telemetry over MQTT v5 + TLS 1.3.
 
 | Module | Purpose |
 |--------|---------|
-| `main.rs` | RTIC `#[app]`: init, heartbeat, sensor_task, network_task, idle (WFI) |
-| `network/` | W5500/DHCP bring-up, MQTT+TLS session, SNTP, TCP socket adapter |
+| `main.rs` | RTIC `#[app]`: init, heartbeat, sensor_task, network_task, idle (WFI); injects board couplings (client ID, CCM TLS buffers, RTC clock, telemetry hook) into `iot-net` clients |
 | `sensor/` | SEN66 I2C driver glue (conditioning logic lives in `core/`) |
 | `time/` | RTC glue over `iot_core::time` calendar math |
 | `ccmram.rs` | **Only allowed-unsafe file**: CCM RAM placement (TLS buffers) |

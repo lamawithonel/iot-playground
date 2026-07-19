@@ -9,7 +9,7 @@
 //!
 //! # Cipher Suite
 //!
-//! AES-128-GCM-SHA256 — the only cipher suite supported by
+//! AES-128-GCM-SHA256-- the only cipher suite supported by
 //! `embedded-tls` and the mandatory-to-implement suite for TLS 1.3.
 //!
 //! # Certificate Verification
@@ -19,8 +19,9 @@
 //!
 //! # Memory
 //!
-//! TLS read/write buffers are in CCM RAM (see `ccmram.rs`).
-//! TCP socket buffers are caller-provided (typically `StaticCell`).
+//! TLS record buffers and TCP socket buffers are caller-provided
+//! (via `MqttBuffers`, typically `StaticCell`); placement-- for
+//! example CCM RAM on the Feather-- is a board concern.
 
 /// Default TLS port for MQTTS
 #[allow(dead_code)]

@@ -8,18 +8,21 @@
 //!
 //! # Memory Management
 //!
-//! All buffers are caller-provided to keep lifetimes explicit:
+//! All buffers are caller-provided to keep lifetimes explicit and to
+//! keep memory placement (e.g. CCM RAM on STM32F4) a board concern:
 //! - **MQTT packet buffer**: 2 KB for `rust-mqtt` bump allocator
-//! - **TCP RX/TX buffers**: 4 KB each (main SRAM, via `StaticCell`)
-//! - **TLS read/write buffers**: 34 KB total in CCM RAM (via
-//!   `tls_buffers`)
+//! - **TCP RX/TX buffers**: 4 KB each (typically via `StaticCell`)
+//! - **TLS read/write buffers**: 18 KB / 16 KB (see
+//!   [`MqttBuffers::tls_read`] / [`MqttBuffers::tls_write`])
 //!
 //! # Usage
 //!
 //! ```no_run
 //! let mut client = MqttClient::new(MqttConfig::default());
 //! // Never returns under normal operation
-//! client.run(stack, &mut rng, mqtt_buf, rx_buf, tx_buf, 30).await;
+//! client
+//!     .run(stack, &mut rng, client_id, &mut buffers, rx, now, on_cycle)
+//!     .await;
 //! ```
 
 #![deny(unsafe_code)]
@@ -44,17 +47,18 @@ use rust_mqtt::{
     Bytes,
 };
 
-use crate::{device_id, sensor::Sen66Reading, time, tls_buffers};
+use iot_core::sensor::EnvironmentalReading;
+use iot_core::time::Timestamp;
 
 // Re-export core formatting functions and types
 pub use iot_core::network::mqtt::{format_json_payload, format_mqtt_topic, MqttConfig};
 
-use super::error::{MqttError, NetworkError, TlsError};
-use super::socket::AsyncTcpSocket;
-use super::tls;
+use crate::error::{MqttError, NetworkError, TlsError};
+use crate::socket::AsyncTcpSocket;
+use crate::tls;
 
 /// MQTT packet buffer size: 2 KB for packet assembly
-const MQTT_BUFFER_SIZE: usize = 2048;
+pub const MQTT_BUFFER_SIZE: usize = 2048;
 
 /// Simple crypto provider wrapping an RNG for embedded-tls
 struct SimpleCryptoProvider<'a, RNG> {
@@ -91,8 +95,10 @@ where
 
 /// Caller-provided buffers for MQTT operation
 ///
-/// All buffers are `StaticCell`-allocated in the caller and passed
-/// by mutable reference to avoid lifetime complexity.
+/// All buffers are `StaticCell`-allocated (or otherwise `'static`)
+/// in the caller and passed by mutable reference to avoid lifetime
+/// complexity.  The TLS record buffers are injected fields so their
+/// placement (e.g. CCM RAM on the Feather) stays a board concern.
 pub struct MqttBuffers<'a> {
     /// 2 KB buffer for `rust-mqtt` bump allocator
     pub mqtt: &'a mut [u8; MQTT_BUFFER_SIZE],
@@ -100,11 +106,17 @@ pub struct MqttBuffers<'a> {
     pub tcp_rx: &'a mut [u8],
     /// TCP transmit buffer (typically 4 KB)
     pub tcp_tx: &'a mut [u8],
+    /// TLS record read buffer (18 KB recommended: maximum TLS 1.3
+    /// record plus header, AEAD tag, and safety margin)
+    pub tls_read: &'a mut [u8],
+    /// TLS record write buffer (16 KB recommended: maximum TLS 1.3
+    /// record)
+    pub tls_write: &'a mut [u8],
 }
 
 /// MQTT v5.0 client with persistent connection
 ///
-/// Manages the full lifecycle: DNS → TCP → TLS 1.3 → MQTT CONNECT →
+/// Manages the full lifecycle: DNS -> TCP -> TLS 1.3 -> MQTT CONNECT ->
 /// publish loop, with automatic reconnection on failure.
 pub struct MqttClient {
     config: MqttConfig,
@@ -119,23 +131,36 @@ impl MqttClient {
     /// Run the MQTT client forever with channel-driven publishing
     ///
     /// Establishes a TLS+MQTT connection, then publishes telemetry
-    /// as sensor readings arrive on the channel — no timer polling.
+    /// as sensor readings arrive on the channel-- no timer polling.
     /// On any failure, reconnects with exponential backoff
-    /// (5 s → 60 s cap).
+    /// (5 s -> 60 s cap).
     ///
-    /// # Safety
+    /// Board couplings are injected by the caller:
     ///
-    /// Accesses CCM RAM TLS buffers via `tls_buffers::tls_buffers()`.
-    /// Only one TLS connection may use those buffers at a time.
-    pub async fn run<RNG, const N: usize>(
+    /// - `client_id`: MQTT client identifier (e.g. derived from a
+    ///   device UID)
+    /// - `buffers`: all five working buffers, including the TLS
+    ///   record buffers (placement is the caller's concern)
+    /// - `now`: wall-clock source, invoked once per publish
+    /// - `on_cycle`: per-publish telemetry hook, invoked once per
+    ///   received reading before payload formatting (e.g. to swap
+    ///   and log idle/interrupt counters)
+    #[allow(clippy::too_many_arguments)] // One argument per injected coupling
+    pub async fn run<RNG, R, NOW, HOOK, const N: usize>(
         &mut self,
         stack: &Stack<'static>,
         rng: &mut RNG,
+        client_id: &str,
         buffers: &mut MqttBuffers<'_>,
-        mut sensor_rx: rtic_sync::channel::Receiver<'static, Sen66Reading, N>,
+        mut sensor_rx: rtic_sync::channel::Receiver<'static, R, N>,
+        mut now: NOW,
+        mut on_cycle: HOOK,
     ) -> !
     where
         RNG: rand_core::RngCore + rand_core::CryptoRng,
+        R: EnvironmentalReading,
+        NOW: FnMut() -> Timestamp,
+        HOOK: FnMut(),
     {
         let mut backoff_secs = tls::INITIAL_RECONNECT_BACKOFF_SECS;
 
@@ -145,7 +170,18 @@ impl MqttClient {
                 self.config.broker_host, self.config.broker_port
             );
 
-            match self.run_session(stack, rng, buffers, &mut sensor_rx).await {
+            match self
+                .run_session(
+                    stack,
+                    rng,
+                    client_id,
+                    buffers,
+                    &mut sensor_rx,
+                    &mut now,
+                    &mut on_cycle,
+                )
+                .await
+            {
                 Ok(()) => {
                     // run_session's inner loop is infinite; this path
                     // is unreachable in practice but satisfies the
@@ -154,14 +190,14 @@ impl MqttClient {
                     backoff_secs = tls::INITIAL_RECONNECT_BACKOFF_SECS;
                 }
                 Err(NetworkError::Mqtt(MqttError::Disconnected)) => {
-                    // Was connected, then lost — reset backoff so
+                    // Was connected, then lost-- reset backoff so
                     // the next reconnect starts quickly.
                     error!("MQTT session disconnected");
                     backoff_secs = tls::INITIAL_RECONNECT_BACKOFF_SECS;
                 }
                 Err(e) => {
                     // Connection never established (DNS, TCP, TLS,
-                    // or CONNECT failure) — escalate backoff.
+                    // or CONNECT failure)-- escalate backoff.
                     error!("MQTT session failed: {:?}", e);
                 }
             }
@@ -176,16 +212,22 @@ impl MqttClient {
     ///
     /// Returns `Err` when the connection is lost or any fatal error
     /// occurs.  The caller (`run`) handles reconnection.
-    #[allow(unsafe_code)] // Calls tls_buffers::tls_buffers()
-    async fn run_session<RNG, const N: usize>(
+    #[allow(clippy::too_many_arguments)] // One argument per injected coupling
+    async fn run_session<RNG, R, NOW, HOOK, const N: usize>(
         &self,
         stack: &Stack<'static>,
         rng: &mut RNG,
+        client_id: &str,
         buffers: &mut MqttBuffers<'_>,
-        sensor_rx: &mut rtic_sync::channel::Receiver<'static, Sen66Reading, N>,
+        sensor_rx: &mut rtic_sync::channel::Receiver<'static, R, N>,
+        now: &mut NOW,
+        on_cycle: &mut HOOK,
     ) -> Result<(), NetworkError>
     where
         RNG: rand_core::RngCore + rand_core::CryptoRng,
+        R: EnvironmentalReading,
+        NOW: FnMut() -> Timestamp,
+        HOOK: FnMut(),
     {
         // --- DNS resolution ---
         let server_ip = stack
@@ -215,13 +257,12 @@ impl MqttClient {
         info!("TCP connected to {}", Debug2Format(&endpoint));
 
         // --- TLS 1.3 handshake ---
-        // SAFETY: Single TLS connection at a time; buffers are used
-        // exclusively for the duration of this session.
-        let (tls_read, tls_write) = unsafe { tls_buffers::tls_buffers() };
-
         let tls_config = TlsConfig::new().with_server_name(self.config.broker_host);
-        let mut tls_conn =
-            TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(socket, tls_read, tls_write);
+        let mut tls_conn = TlsConnection::<AsyncTcpSocket, Aes128GcmSha256>::new(
+            socket,
+            buffers.tls_read,
+            buffers.tls_write,
+        );
 
         info!("TLS 1.3 handshake...");
         let provider = SimpleCryptoProvider::new(rng);
@@ -234,7 +275,6 @@ impl MqttClient {
         info!("TLS 1.3 handshake OK");
 
         // --- MQTT CONNECT ---
-        let client_id = device_id::mqtt_client_id();
         info!("MQTT client ID: {}", client_id);
 
         let mut buffer = BumpBuffer::new(buffers.mqtt);
@@ -260,7 +300,7 @@ impl MqttClient {
             password: None,
         };
 
-        let mqtt_client_id = MqttString::from_str(client_id.as_str()).map_err(|e| {
+        let mqtt_client_id = MqttString::from_str(client_id).map_err(|e| {
             error!("Invalid MQTT client ID: {:?}", Debug2Format(&e));
             MqttError::ProtocolError
         })?;
@@ -278,7 +318,7 @@ impl MqttClient {
         //
         // Block on the sensor channel instead of polling a timer.
         // Between readings the executor yields to RTIC, which enters
-        // WFI — no spurious timer wakeups.
+        // WFI-- no spurious timer wakeups.
         let mut msg_count = 0u32;
 
         loop {
@@ -291,12 +331,13 @@ impl MqttClient {
             };
             msg_count += 1;
 
-            let wakes = crate::IDLE_WAKES.swap(0, core::sync::atomic::Ordering::Relaxed);
-            let exti2 = crate::EXTI2_EVENTS.swap(0, core::sync::atomic::Ordering::Relaxed);
-            info!("wfi_wakes: {}, exti2_events: {}", wakes, exti2);
+            // Per-cycle telemetry hook (board-injected so this
+            // crate stays hardware-free; the Feather swaps and
+            // logs its WFI/EXTI2 counters here).
+            on_cycle();
 
-            let ts = time::get_timestamp();
-            let topic_str = format_mqtt_topic(client_id.as_str(), "telemetry")?;
+            let ts = now();
+            let topic_str = format_mqtt_topic(client_id, "telemetry")?;
             let payload = format_json_payload(msg_count, &ts, Some(&reading))?;
 
             info!(
@@ -357,7 +398,7 @@ impl MqttClient {
     /// arrive before the expected PUBACK.  Returns an error on
     /// rejection, timeout, or network failure.
     ///
-    /// The deadline is 2× `keep_alive_secs`.  If the broker has
+    /// The deadline is 2x `keep_alive_secs`.  If the broker has
     /// not responded by then, the TCP connection is likely dead
     /// and the caller should reconnect.
     async fn await_puback<
@@ -379,7 +420,7 @@ impl MqttClient {
         N: embedded_io_async::Read + embedded_io_async::Write,
         B: rust_mqtt::buffer::BufferProvider<'c>,
     {
-        // 2× keep-alive gives the broker ample time to respond.
+        // 2x keep-alive gives the broker ample time to respond.
         // When keep-alive is 0 (infinite), fall back to 30 s so
         // a silent broker doesn't block the publish loop forever.
         let deadline_secs = match self.config.keep_alive_secs {

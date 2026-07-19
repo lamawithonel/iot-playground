@@ -2,8 +2,8 @@
 #![deny(warnings)]
 //! Async TCP socket wrapper for embedded-tls integration
 //!
-//! This module provides an async wrapper around `embassy_net::tcp::TcpSocket`
-//! that implements the `embedded-io-async` traits required by `embedded-tls`.
+//! An async wrapper around `embassy_net::tcp::TcpSocket` that
+//! implements the `embedded-io-async` traits required by `embedded-tls`.
 
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpEndpoint, Stack};
@@ -14,7 +14,7 @@ use super::error::NetworkError;
 /// Async TCP socket wrapper implementing embedded-io-async traits
 ///
 /// This wrapper provides the `Read` and `Write` traits from `embedded-io-async`
-/// which are required by `embedded-tls` for performing TLS operations.
+/// that `embedded-tls` requires for TLS operations.
 ///
 /// # Example
 ///
@@ -68,8 +68,8 @@ impl<'a> AsyncTcpSocket<'a> {
 
 /// Error type for embedded-io-async traits
 ///
-/// We use NetworkError as our error type to maintain consistency
-/// with the rest of the network module.
+/// Uses `NetworkError` as the error type, for consistency with the
+/// rest of the crate.
 impl ErrorType for AsyncTcpSocket<'_> {
     type Error = NetworkError;
 }

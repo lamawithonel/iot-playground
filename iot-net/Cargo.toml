@@ -1,0 +1,52 @@
+[package]
+name = "iot-net"
+version.workspace = true
+edition.workspace = true
+description = "Transport-agnostic MQTT/TLS/SNTP/DNS clients over embassy-net"
+
+[dependencies]
+defmt.workspace = true
+embedded-io-async.workspace = true
+iot-core = { path = "../core", features = ["defmt", "embedded-io"] }
+
+[dependencies.embassy-futures]
+workspace = true
+
+[dependencies.embassy-net]
+workspace = true
+features = [
+  "defmt",
+  "dhcpv4",
+  "dns",
+  "medium-ethernet",
+  "tcp",
+  "udp",
+]
+
+[dependencies.embassy-time]
+workspace = true
+features = ["defmt"]
+
+# NOTE: Replace with rustls-wolfcrypt-provider for FIPS 140-3 compliance
+# Pinned to a main-branch rev for embedded-io-async 0.7 compatibility
+[dependencies.embedded-tls]
+git = "https://github.com/drogue-iot/embedded-tls"
+rev = "27874162c9d9105701d2b588092f39311e34bd93"
+default-features = false
+features = ["defmt"]
+
+# RNG for TLS handshake (version must match embedded-tls dependency)
+[dependencies.rand_core]
+version = "0.6"
+default-features = false
+
+[dependencies.rtic-sync]
+workspace = true
+features = ["defmt-03"]
+
+# MQTT v5.0 client
+[dependencies.rust-mqtt]
+git = "https://github.com/obabec/rust-mqtt.git"
+rev = "d2ca25c5e828f205185c15858198329c02742d86"
+default-features = false
+features = ["bump", "defmt", "v5"]

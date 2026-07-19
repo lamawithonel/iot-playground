@@ -843,16 +843,14 @@ dependencies = [
  "embedded-io 0.7.1",
  "embedded-io-async 0.7.0",
  "embedded-test",
- "embedded-tls",
  "heapless 0.9.3",
  "iot-core",
+ "iot-net",
  "panic-probe",
- "rand_core 0.6.4",
  "rtic",
  "rtic-monotonics",
  "rtic-sync",
  "rtic-time",
- "rust-mqtt",
  "sen6x",
  "sntpc",
  "static_cell",
@@ -1064,6 +1062,22 @@ dependencies = [
  "embedded-io-async 0.7.0",
  "hal-abstractions",
  "heapless 0.9.3",
+]
+
+[[package]]
+name = "iot-net"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.1.1",
+ "embassy-futures",
+ "embassy-net",
+ "embassy-time",
+ "embedded-io-async 0.7.0",
+ "embedded-tls",
+ "iot-core",
+ "rand_core 0.6.4",
+ "rtic-sync",
+ "rust-mqtt",
 ]
 
 [[package]]

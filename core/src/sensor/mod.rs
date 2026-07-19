@@ -17,12 +17,16 @@ pub mod sen66;
 #[cfg(feature = "sen66")]
 pub use sen66::Sen66Reading;
 
+// Re-export the trait so downstream crates (e.g. `iot-net`) can
+// bound generics without a direct `hal-abstractions` dependency.
+pub use hal_abstractions::sensor::EnvironmentalReading;
+
 /// Scale an f32 to deci-units (one decimal place) as i32
 ///
 /// Rounds half-away-from-zero after scaling.  Non-finite values
-/// (NaN, ±Inf) map to 0 rather than producing a plausible number.
+/// (NaN, +/-Inf) map to 0 rather than producing a plausible number.
 ///
-/// Example: `22.45` → `225`, `-3.14` → `-31`
+/// Example: `22.45` -> `225`, `-3.14` -> `-31`
 pub fn to_deci(val: f32) -> i32 {
     if !val.is_finite() {
         return 0;

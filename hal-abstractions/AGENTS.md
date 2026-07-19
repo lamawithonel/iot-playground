@@ -18,10 +18,13 @@ host-testable, minimal dependencies (`embedded-io`/
 | `time.rs` | Wall-clock timestamp vocabulary for the `Rtc` trait |
 | `test_support.rs` | Host-test doubles (`cfg(test)` / `mock` feature) |
 
-The `network` trait module (DNS/TCP/TLS/MQTT session abstraction) is
-planned but not yet implemented (placeholder in `lib.rs`).  Adding it
-is framework modularization work-- see the roadmap's framework track
-before starting.
+A `network` trait module (DNS/TCP/TLS/MQTT session abstraction) was
+once planned here (placeholder in `lib.rs`), but the framework took a
+different shape: the shared, transport-agnostic client implementation
+lives in the concrete [`iot-net/`](../iot-net/AGENTS.md) crate over
+`embassy-net`, with board couplings injected via buffers and
+closures.  Do not add a network trait module here without revisiting
+that decision in the roadmap's framework track.
 
 ## Local Rules
 
