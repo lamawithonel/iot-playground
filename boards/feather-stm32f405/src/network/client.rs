@@ -32,9 +32,12 @@ pub trait NetworkClient {
     ///
     /// This is an async method that performs a single client operation
     /// (e.g., one SNTP sync request). For periodic operations, the caller
-    /// should invoke this method on a schedule.
-    fn run(
+    /// should invoke this method on a schedule.  The RNG supplies any
+    /// per-request unpredictable values the protocol needs (e.g. the NTP
+    /// transmit value matched against the reply).
+    fn run<R: rand_core::RngCore>(
         &mut self,
         stack: &embassy_net::Stack<'static>,
+        rng: &mut R,
     ) -> impl core::future::Future<Output = Result<Self::Output, NetworkError>>;
 }

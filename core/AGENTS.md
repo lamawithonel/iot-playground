@@ -12,6 +12,7 @@ Compiles as a normal `std` crate during host tests via
 | `dsp/` | Fixed-point DSP kernels-- biquad, Goertzel, LFSR, NCO, xoshiro128 (unconditional, no feature gate) |
 | `network/error.rs` | `NetworkError`/`TlsError`/`MqttError`/`SntpError` enums |
 | `network/mqtt.rs` | MQTT topic and JSON payload formatting (pure, no I/O) |
+| `network/sntp.rs` | NTP request build and reply field validation (RFC 4330, pure, no I/O) |
 | `sensor/conditioning.rs` | Generic `ConditioningState<N>` warmup state machine |
 | `sensor/sen66.rs` | SEN66 phase constants and `Sen66Reading` (feature `sen66`) |
 | `time/` | `Timestamp`, NTP conversion, civil-calendar math |

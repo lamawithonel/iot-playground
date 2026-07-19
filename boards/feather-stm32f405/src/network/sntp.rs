@@ -7,6 +7,7 @@ use embassy_net::dns::DnsQueryType;
 use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::{IpEndpoint, Stack};
 use embassy_time::{Duration, Instant, Timer};
+use rand_core::RngCore;
 use rtic_monotonics::fugit::ExtU64;
 use rtic_monotonics::Monotonic;
 
@@ -41,7 +42,11 @@ impl SntpClient {
     }
 
     /// Perform SNTP synchronization with internal RTC update
-    async fn sync(&self, stack: &Stack<'static>) -> Result<Timestamp, NetworkError> {
+    async fn sync<R: RngCore>(
+        &self,
+        stack: &Stack<'static>,
+        rng: &mut R,
+    ) -> Result<Timestamp, NetworkError> {
         info!("Starting SNTP synchronization");
         for server in self.config.servers {
             for attempt in 0..self.config.retry_count {
@@ -50,7 +55,7 @@ impl SntpClient {
                     server,
                     attempt + 1
                 );
-                match self.sntp_request(stack, server).await {
+                match self.sntp_request(stack, server, rng).await {
                     Ok(timestamp) => {
                         info!(
                             "SNTP sync successful: {}.{:06} UTC",
@@ -80,10 +85,11 @@ impl SntpClient {
         );
     }
 
-    async fn sntp_request(
+    async fn sntp_request<R: RngCore>(
         &self,
         stack: &Stack<'static>,
         server: &str,
+        rng: &mut R,
     ) -> Result<Timestamp, NetworkError> {
         let server_ip = stack
             .dns_query(server, DnsQueryType::A)
@@ -109,9 +115,10 @@ impl SntpClient {
         );
         socket.bind(0).map_err(|_| NetworkError::SocketError)?;
 
-        // NTP request: LI=0, VN=3, Mode=3 (Client)
-        let mut ntp_packet = [0u8; 48];
-        ntp_packet[0] = 0x1B;
+        // Build the request with an unpredictable transmit value the
+        // server echoes back, so the reply can be matched to it.
+        let transmit = rng.next_u64();
+        let ntp_packet = iot_core::network::sntp::build_request(transmit);
         let transmit_time = Instant::now();
         socket
             .send_to(&ntp_packet, server_endpoint)
@@ -137,37 +144,34 @@ impl SntpClient {
             Debug2Format(&from_addr)
         );
 
-        if recv_len < 48 || from_addr.endpoint.addr != server_ip {
-            return Err(NetworkError::InvalidResponse);
-        }
-
-        let stratum = response[1];
-        info!("NTP server stratum: {}", stratum);
-
-        if stratum == 0 || stratum > self.config.max_stratum {
-            warn!(
-                "Invalid stratum {} (max {})",
-                stratum, self.config.max_stratum
-            );
-            return Err(NetworkError::ServerError);
-        }
-
-        let tx_timestamp_secs =
-            u32::from_be_bytes([response[40], response[41], response[42], response[43]]) as u64;
-        let tx_timestamp_frac =
-            u32::from_be_bytes([response[44], response[45], response[46], response[47]]);
+        // Validate the reply's fixed fields (source, mode, leap
+        // indicator, stratum, and the echoed transmit value) before
+        // trusting its time.  A reply that fails any check carries an
+        // indeterminate value and is discarded rather than written to
+        // the clock.
+        let source_matches = from_addr.endpoint.addr == server_ip;
+        let (ntp_secs, ntp_frac) = iot_core::network::sntp::validate_reply(
+            &response,
+            recv_len,
+            source_matches,
+            transmit,
+            self.config.max_stratum,
+        )
+        .map_err(|e| {
+            warn!("Rejected NTP reply: {:?}", e);
+            NetworkError::InvalidResponse
+        })?;
 
         let rtt = receive_time.duration_since(transmit_time);
         let rtt_correction_micros = rtt.as_micros() / 2;
 
-        let mut timestamp = Timestamp::from_ntp(tx_timestamp_secs, tx_timestamp_frac);
-        timestamp.micros = timestamp
-            .micros
-            .saturating_add(rtt_correction_micros as u32);
-        if timestamp.micros >= 1_000_000 {
-            timestamp.unix_secs = timestamp.unix_secs.saturating_add(1);
-            timestamp.micros -= 1_000_000;
-        }
+        // `Timestamp::new` carries any microsecond overflow into
+        // seconds, so the RTT correction cannot leave micros >= 1e6.
+        let base = Timestamp::from_ntp(ntp_secs, ntp_frac);
+        let timestamp = Timestamp::new(
+            base.unix_secs,
+            base.micros.saturating_add(rtt_correction_micros as u32),
+        );
 
         info!(
             "NTP timestamp: {}.{:06} UTC (RTT correction: {} µs)",
@@ -186,7 +190,11 @@ impl Default for SntpClient {
 impl NetworkClient for SntpClient {
     type Output = Timestamp;
 
-    async fn run(&mut self, stack: &Stack<'static>) -> Result<Self::Output, NetworkError> {
-        self.sync(stack).await
+    async fn run<R: RngCore>(
+        &mut self,
+        stack: &Stack<'static>,
+        rng: &mut R,
+    ) -> Result<Self::Output, NetworkError> {
+        self.sync(stack, rng).await
     }
 }

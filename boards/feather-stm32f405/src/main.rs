@@ -357,7 +357,7 @@ mod app {
         // --- SNTP time sync (RNG is supplied by the caller) ---
         let mut sntp = SntpClient::new();
         info!("Initializing SNTP time synchronization with RTC (LSE)...");
-        match sntp.run(stack).await {
+        match sntp.run(stack, &mut rng).await {
             Ok(ts) => info!(
                 "SNTP sync successful: {}.{:06} UTC (written to internal RTC)",
                 ts.unix_secs, ts.micros
