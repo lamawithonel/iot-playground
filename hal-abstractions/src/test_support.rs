@@ -13,7 +13,10 @@ use core::future::{poll_fn, Future};
 use core::pin::pin;
 use core::task::{Context, Poll, Waker};
 
+use crate::adc_capture::AdcCapture;
+use crate::excitation::ExcitationSink;
 use crate::message_port::{MessageReceiver, MessageSender, RecvError, TrySendError};
+use crate::record_store::RecordStore;
 use crate::rng::Rng;
 use crate::rtc::Rtc;
 use crate::time::{RtcError, Timestamp};
@@ -301,5 +304,205 @@ impl<T, const N: usize> MessageReceiver for MockReceiver<'_, T, N> {
 impl<T, const N: usize> Drop for MockReceiver<'_, T, N> {
     fn drop(&mut self) {
         self.channel.state.borrow_mut().receiver_alive = false;
+    }
+}
+
+/// Error type for [`MockAdcCapture`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MockAdcCaptureError {
+    /// The requested window exceeds `MAX_WINDOW_LEN`.
+    WindowTooLong,
+    /// Injected via [`MockAdcCapture::fail_next`], standing in for
+    /// a hardware overrun.
+    Overrun,
+}
+
+/// Deterministic [`AdcCapture`] test double.
+///
+/// Replays a fixed sample pattern cyclically with real stream
+/// semantics: consecutive windows continue where the previous one
+/// ended, regardless of how callers chunk their capture calls
+/// (mirroring [`MockRng`]'s byte-cursor design).
+pub struct MockAdcCapture<'a> {
+    pattern: &'a [i16],
+    cursor: usize,
+    sample_rate_hz: u32,
+    windows_captured: u32,
+    pending_failure: Option<MockAdcCaptureError>,
+}
+
+impl<'a> MockAdcCapture<'a> {
+    /// Create a mock replaying `pattern` at `sample_rate_hz`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `pattern` is empty-- an empty pattern has no
+    /// samples to replay.
+    pub fn new(pattern: &'a [i16], sample_rate_hz: u32) -> Self {
+        assert!(!pattern.is_empty(), "pattern must not be empty");
+        Self {
+            pattern,
+            cursor: 0,
+            sample_rate_hz,
+            windows_captured: 0,
+            pending_failure: None,
+        }
+    }
+
+    /// Number of windows successfully captured so far.
+    pub fn windows_captured(&self) -> u32 {
+        self.windows_captured
+    }
+
+    /// Make exactly the next `capture` call fail with `err`, then
+    /// recover to normal behavior without consuming pattern samples.
+    pub fn fail_next(&mut self, err: MockAdcCaptureError) {
+        self.pending_failure = Some(err);
+    }
+}
+
+impl AdcCapture for MockAdcCapture<'_> {
+    type Error = MockAdcCaptureError;
+
+    const MAX_WINDOW_LEN: usize = 4096;
+
+    fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    async fn capture(&mut self, window: &mut [i16]) -> Result<(), Self::Error> {
+        if let Some(err) = self.pending_failure.take() {
+            return Err(err);
+        }
+        if window.len() > Self::MAX_WINDOW_LEN {
+            return Err(MockAdcCaptureError::WindowTooLong);
+        }
+        for slot in window.iter_mut() {
+            *slot = self.pattern[self.cursor];
+            self.cursor = (self.cursor + 1) % self.pattern.len();
+        }
+        self.windows_captured += 1;
+        Ok(())
+    }
+}
+
+/// Error type for [`MockExcitation`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MockExcitationError {
+    /// The block would overflow the mock's fixed recording
+    /// capacity `N`; nothing from the block is retained.
+    CapacityExceeded,
+}
+
+/// Recording [`ExcitationSink`] test double.
+///
+/// Appends every written block into a fixed `[i16; N]` so tests
+/// can assert exactly what a sweep engine emitted, in order.
+/// Rejects (whole) blocks that would overflow `N`.
+pub struct MockExcitation<const N: usize> {
+    emitted: [i16; N],
+    len: usize,
+}
+
+impl<const N: usize> MockExcitation<N> {
+    /// Create an empty recording sink.
+    pub fn new() -> Self {
+        Self {
+            emitted: [0; N],
+            len: 0,
+        }
+    }
+
+    /// All samples written so far, in emission order.
+    pub fn emitted(&self) -> &[i16] {
+        &self.emitted[..self.len]
+    }
+}
+
+impl<const N: usize> Default for MockExcitation<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> ExcitationSink for MockExcitation<N> {
+    type Error = MockExcitationError;
+
+    async fn write(&mut self, samples: &[i16]) -> Result<(), Self::Error> {
+        if self.len + samples.len() > N {
+            return Err(MockExcitationError::CapacityExceeded);
+        }
+        self.emitted[self.len..self.len + samples.len()].copy_from_slice(samples);
+        self.len += samples.len();
+        Ok(())
+    }
+}
+
+/// Error type for [`MockRecordStore`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MockRecordStoreError {
+    /// Byte arena or record-slot capacity exhausted; the rejected
+    /// record is not retained, even partially.
+    Full,
+}
+
+/// Collecting [`RecordStore`] test double.
+///
+/// Stores appended records contiguously in a fixed `[u8; N]` byte
+/// arena with up to `M` per-record lengths, so tests can read each
+/// record back intact and in order.  No heap, matching the crate's
+/// `no_std`-clean mock rule.
+pub struct MockRecordStore<const N: usize, const M: usize> {
+    bytes: [u8; N],
+    used: usize,
+    lens: [usize; M],
+    count: usize,
+}
+
+impl<const N: usize, const M: usize> MockRecordStore<N, M> {
+    /// Create an empty store.
+    pub fn new() -> Self {
+        Self {
+            bytes: [0; N],
+            used: 0,
+            lens: [0; M],
+            count: 0,
+        }
+    }
+
+    /// Number of records appended so far.
+    pub fn record_count(&self) -> usize {
+        self.count
+    }
+
+    /// The bytes of record `i` (append order), or `None` if `i` is
+    /// out of range.
+    pub fn record(&self, i: usize) -> Option<&[u8]> {
+        if i >= self.count {
+            return None;
+        }
+        let start: usize = self.lens[..i].iter().sum();
+        Some(&self.bytes[start..start + self.lens[i]])
+    }
+}
+
+impl<const N: usize, const M: usize> Default for MockRecordStore<N, M> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize, const M: usize> RecordStore for MockRecordStore<N, M> {
+    type Error = MockRecordStoreError;
+
+    async fn append(&mut self, record: &[u8]) -> Result<(), Self::Error> {
+        if self.count == M || self.used + record.len() > N {
+            return Err(MockRecordStoreError::Full);
+        }
+        self.bytes[self.used..self.used + record.len()].copy_from_slice(record);
+        self.lens[self.count] = record.len();
+        self.used += record.len();
+        self.count += 1;
+        Ok(())
     }
 }

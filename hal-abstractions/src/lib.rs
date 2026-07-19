@@ -1,13 +1,16 @@
 //! Hardware abstraction traits for IoT firmware
 //!
 //! This crate defines traits that abstract over hardware differences
-//! between boards. BSPs implement these traits.
+//! between boards.  BSPs implement these traits.
 
 #![cfg_attr(not(test), no_std)]
 #![deny(unsafe_code)]
 #![deny(warnings)]
 
+pub mod adc_capture;
+pub mod excitation;
 pub mod message_port;
+pub mod record_store;
 pub mod rng;
 pub mod rtc;
 pub mod sensor;
