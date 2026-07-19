@@ -105,10 +105,14 @@ Unverified claims stay here until a bring-up spike settles them.
   (Cortex-M55 target `thumbv8.1m.main-none-eabihf`), but
   peripheral coverage (ADC, timers, DMA) for this part is
   unverified.
-- **Audio output path.**  How the MCU drives the MAX9744 line
-  input-- e.g. filtered PWM vs an external DAC/codec.  Decided
-  at bring-up.
-- **ADC sampling strategy.**  Sample rate, trigger and DMA
-  scheme, and anti-aliasing for the mic input.
+- **Audio output path.**  Provisionally filtered PWM (TIM1_CH1 on
+  PE9 plus an external RC low-pass) into the MAX9744 line input;
+  confirmed or overturned at gate G3, with SAI1 plus an external
+  I2S DAC as the fallback (pinout.md Decisions and Gates).
+- **ADC sampling strategy.**  DMA capture is provisionally fixed
+  to GPDMA1 adc1_dma REQSEL 7, linked-list circular mode,
+  confirmed at gate G1 (pinout.md Decisions and Gates).  Sample
+  rate, trigger source, and anti-aliasing for the mic input
+  remain open.
 - **Inference deployment.**  Neural-ART NPU vs CMSIS-NN on the
   M55 vs host-side-only inference for the passive CNN.

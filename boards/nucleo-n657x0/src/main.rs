@@ -16,8 +16,12 @@
 //!
 //! Nothing here builds yet-- the toolchain and boot-chain
 //! decisions land at the bring-up spike.
+//!
+//! See `pins.rs` for the pin map of record in code form.
 
 #![no_std]
 #![no_main]
 
 compile_error!("scaffold only -- see boards/nucleo-n657x0/README.md");
+
+mod pins;

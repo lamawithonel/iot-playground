@@ -1,15 +1,16 @@
 # nucleo-n657x0/-- ARS Toolhead Sensor Node
 
 ST NUCLEO-N657X0-Q (STM32N657X0, Cortex-M55 @ 800 MHz, ~4.2 MB
-contiguous SRAM, flashless signed-FSBL external-NOR boot,
-Neural-ART NPU).  **Status: scaffold**-- workspace-excluded, no
-hardware, `main.rs` is a deliberate `compile_error!`.
+contiguous SRAM, flashless external-NOR boot via a signed first-stage boot
+loader (FSBL), Neural-ART NPU).  **Status: scaffold**-- workspace-excluded,
+no hardware, `main.rs` is a deliberate `compile_error!`.
 
 ## Module Plan
 
 | Module | Purpose (planned) |
 |--------|-------------------|
 | `main.rs` | RTIC `#[app]`: init, sweep_engine, capture, analysis, telemetry, idle (WFI) |
+| `pins.rs` | Pin map of record in code form; see [Pinout](../../docs/src/projects/ars-toolhead-sensor/pinout.md) |
 | `audio/` | Sweep synthesis and the audio output path (spike-gated) |
 | `capture/` | ADC mic capture windows (spike-gated) |
 | `analysis/` | FFT / feature-extraction glue (pure logic goes to `core/`) |

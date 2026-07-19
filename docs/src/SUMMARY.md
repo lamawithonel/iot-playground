@@ -20,6 +20,7 @@
 
 - [ARS Toolhead Sensor](./projects/ars-toolhead-sensor/README.md)
   - [Hardware](./projects/ars-toolhead-sensor/hardware.md)
+  - [Pinout](./projects/ars-toolhead-sensor/pinout.md)
 
 # Architecture
 

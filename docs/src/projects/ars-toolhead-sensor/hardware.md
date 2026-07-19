@@ -1,5 +1,8 @@
 # ARS Toolhead Sensor-- Hardware
 
+See [Pinout](./pinout.md) for the provisional pin-level map of
+record.
+
 ## Bill of Materials
 
 | Part | Role |
@@ -12,8 +15,8 @@
 ### Part Notes
 
 - **NUCLEO-N657X0-Q**: Cortex-M55 @ 800 MHz, ~4.2 MB contiguous
-  SRAM, flashless with signed-FSBL external-NOR boot, Neural-ART
-  NPU.
+  SRAM, flashless with an external-NOR boot via a signed first-stage boot
+  loader (FSBL), Neural-ART NPU.
 - **MAX9744**: analog line-level input; drives the exciter.
 - **EX25VT2-4**: vented 25 mm exciter, two-hole mount, 20 W,
   4 ohm.
@@ -49,6 +52,7 @@ thermal exposure near the hot end.  No mount design exists yet.
 - **Acoustic isolation.**  Separating the structure-borne
   toolhead response from printer ambient noise (mount coupling,
   mic placement, shielding) is unresolved.
-- **Electrical specifics.**  Supply rails, wiring, and connector
-  choices are not yet defined; nothing beyond the parts listed
-  above is decided.
+- **Electrical specifics.**  Provisional rails, wiring, and
+  connectors are in [Pinout](./pinout.md) (Decisions 3-5); still
+  open there: external amp supply sizing, grounding plan, and
+  MUTE_INV pull-up rail.
