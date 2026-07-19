@@ -108,7 +108,9 @@ Unverified claims stay here until a bring-up spike settles them.
 - **Audio output path.**  Provisionally filtered PWM (TIM1_CH1 on
   PE9 plus an external RC low-pass) into the MAX9744 line input;
   confirmed or overturned at gate G3, with SAI1 plus an external
-  I2S DAC as the fallback (pinout.md Decisions and Gates).
+  I2S DAC as the fallback (pinout.md Decisions and Gates).  A
+  research spike surveyed and recommends the specific DAC/amp
+  hardware for that fallback; see spike-audio-board.md.
 - **ADC sampling strategy.**  DMA capture is provisionally fixed
   to GPDMA1 adc1_dma REQSEL 7, linked-list circular mode,
   confirmed at gate G1 (pinout.md Decisions and Gates).  Sample
