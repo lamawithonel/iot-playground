@@ -3,7 +3,7 @@
 mdBook sources in `src/`, built to gitignored `book/`
 (`mise run docs` to serve, `mise run docs:build` to build).
 Deployed to GitHub Pages on push to `main` via
-`.github/workflows/deploy-docs.yml`.
+`.github/workflows/deploy-docs.yaml`.
 
 ## Contents
 
