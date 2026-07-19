@@ -44,6 +44,9 @@ jobs:
         run: |
           HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
           cargo test --workspace --target "$HOST_TARGET" --exclude feather-stm32f405 --exclude nucleo-h753zi
+          # iot-core's ars/ and sen66 modules are feature-gated and
+          # invisible to the default-feature run above; exercise them.
+          cargo test -p iot-core --all-features --target "$HOST_TARGET"
 
       # Board crates select mutually-exclusive stm32-metapac chip
       # features, so two boards can never share one cargo
@@ -54,6 +57,9 @@ jobs:
         run: |
           cargo clippy --workspace --exclude nucleo-h753zi --target thumbv7em-none-eabihf -- -D warnings
           cargo clippy -p nucleo-h753zi --target thumbv7em-none-eabihf -- -D warnings
+          # Compile iot-core's feature-gated modules under clippy too,
+          # so ars/ cannot rot behind a feature no board enables.
+          cargo clippy -p iot-core --all-features --target thumbv7em-none-eabihf -- -D warnings
 
       - name: Build (debug)
         run: |

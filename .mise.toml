@@ -157,6 +157,10 @@ set -o nounset
 set -o pipefail
 
 _host_target="$(rustc -vV | sed -n 's/^host: //p')"
-exec cargo test --workspace --target "$_host_target" \
+cargo test --workspace --target "$_host_target" \
 	--exclude feather-stm32f405 --exclude nucleo-h753zi "$@"
+# iot-core has feature-gated modules (ars, sen66) that the default
+# feature set does not compile; run them explicitly so every gate
+# exercises the whole crate, not just its default surface.
+exec cargo test -p iot-core --all-features --target "$_host_target" "$@"
 '''

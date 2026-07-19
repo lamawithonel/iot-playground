@@ -43,6 +43,8 @@ Or equivalently:
 cargo test --workspace \
   --exclude feather-stm32f405 --exclude nucleo-h753zi \
   --target "$(rustc -vV | sed -n 's/^host: //p')"
+cargo test -p iot-core --all-features \
+  --target "$(rustc -vV | sed -n 's/^host: //p')"
 ```
 
 The `core/` and `hal-abstractions/` crates use
@@ -51,12 +53,20 @@ crates during host tests.  Board crate binaries have
 `test = false` and are excluded from `cargo test --workspace`
 automatically.
 
+`iot-core` has empty default features, so `ars/` and `sen66`
+only compile-- and their tests only run-- under `--all-features`.
+The second invocation exercises them; without it roughly half of
+`iot-core`'s tests are silently skipped and `ars/` compiles under
+no gate.
+
 ### 3. Clippy (Embedded Target)
 
 ```bash
 cargo clippy --workspace --exclude nucleo-h753zi \
   --target thumbv7em-none-eabihf -- -D warnings
 cargo clippy -p nucleo-h753zi \
+  --target thumbv7em-none-eabihf -- -D warnings
+cargo clippy -p iot-core --all-features \
   --target thumbv7em-none-eabihf -- -D warnings
 ```
 
