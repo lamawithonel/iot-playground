@@ -3,9 +3,10 @@
 #![allow(dead_code)] // Phase 2: Will be used when integrated into main.rs
 //! Device identifier utilities for STM32F405
 //!
-//! This module provides functions to retrieve and format the factory-programmed
-//! 96-bit unique device ID from the STM32F405 microcontroller. This ID is stable
-//! across reboots and unique to each chip.
+//! This module provides functions to retrieve and format the
+//! factory-programmed 96-bit unique device ID from the STM32F405
+//! microcontroller.  This ID is stable across reboots and unique to
+//! each chip.
 //!
 //! # Usage
 //!
@@ -56,6 +57,24 @@ pub fn uid_hex() -> &'static str {
 /// ```
 pub fn uid() -> [u8; 12] {
     embassy_stm32::uid::uid()
+}
+
+/// Derive a stable per-device MAC address from the factory UID.
+///
+/// The address is locally administered (bit 1 of the first octet
+/// set) and unicast (bit 0 clear), so it never clashes with a
+/// vendor OUI.  The lower five octets fold the full 96-bit UID, so
+/// two boards on one network get distinct addresses instead of a
+/// shared constant (which would collide at ARP/DHCP).
+pub fn mac_address() -> [u8; 6] {
+    let uid = uid();
+    let mut mac = [0x02u8, 0, 0, 0, 0, 0];
+    for (i, b) in uid.iter().enumerate() {
+        mac[1 + (i % 5)] ^= *b;
+    }
+    // Locally-administered unicast: LA bit set, group bit clear.
+    debug_assert_eq!(mac[0] & 0x03, 0x02);
+    mac
 }
 
 /// Generate an MQTT client ID from the device UID

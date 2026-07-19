@@ -317,7 +317,7 @@ mod app {
             int,
         };
 
-        let mac_addr = [0x02, 0x00, 0x00, 0x12, 0x34, 0x56];
+        let mac_addr = device_id::mac_address();
         let (device, w5500_runner) = eth::init_w5500(eth_periph, mac_addr).await;
 
         // Socket budget: DHCP(1) + DNS(1) + SNTP(1) + MQTT/TLS(1) + margin(1)
