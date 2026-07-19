@@ -1,12 +1,8 @@
 **/*.rs.bk
 .#*
 .gdb_history
-/book/*/book
 target/
-Cargo.lock
-!test/mqtt-subscriber/Cargo.lock
 *.hex
-book-target/
 *.local.toml
 
 # mdBook build output
@@ -14,10 +10,8 @@ book-target/
 
 .DS_Store
 .vscode/
-*qemu.log
-*qemuoutput.log
 
-# Generated TLS certificates and keys
+# Generated TLS certificates, agent journal, and other local state
 .local/
 .cache/
 
@@ -28,6 +22,3 @@ book-target/
 !.claude/skills
 !.claude/agents
 !.claude/rules
-
-# User-local scratch prompt files at the repo root-- never tracked.
-prompt.txt
