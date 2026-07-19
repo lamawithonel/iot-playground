@@ -23,7 +23,6 @@ use super::error::NetworkError;
 /// socket.connect(stack, endpoint).await?;
 /// // Now socket can be used with embedded-tls
 /// ```
-#[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
 pub struct AsyncTcpSocket<'a> {
     socket: TcpSocket<'a>,
 }
@@ -44,7 +43,6 @@ impl<'a> AsyncTcpSocket<'a> {
     /// let mut tx_buffer = [0u8; 4096];
     /// let socket = AsyncTcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
     /// ```
-    #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
     pub fn new(stack: Stack<'a>, rx_buffer: &'a mut [u8], tx_buffer: &'a mut [u8]) -> Self {
         Self {
             socket: TcpSocket::new(stack, rx_buffer, tx_buffer),
@@ -60,24 +58,11 @@ impl<'a> AsyncTcpSocket<'a> {
     /// # Errors
     ///
     /// Returns `NetworkError::SocketError` if connection fails
-    #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
     pub async fn connect(&mut self, endpoint: IpEndpoint) -> Result<(), NetworkError> {
         self.socket
             .connect(endpoint)
             .await
             .map_err(|_| NetworkError::SocketError)
-    }
-
-    /// Close the socket
-    #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
-    pub fn close(&mut self) {
-        self.socket.close();
-    }
-
-    /// Check if socket has local endpoint assigned
-    #[allow(dead_code)] // Phase 1: Will be used when TLS is integrated
-    pub fn may_send(&self) -> bool {
-        self.socket.may_send()
     }
 }
 
