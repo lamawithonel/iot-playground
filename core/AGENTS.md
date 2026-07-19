@@ -8,6 +8,8 @@ Compiles as a normal `std` crate during host tests via
 
 | Module | Purpose |
 |--------|---------|
+| `ars/` | ARS domain types: capture/label record schemas, excitation generators, and the synthetic plant model (feature `ars`) |
+| `dsp/` | Fixed-point DSP kernels-- biquad, Goertzel, LFSR, NCO, xoshiro128 (unconditional, no feature gate) |
 | `network/error.rs` | `NetworkError`/`TlsError`/`MqttError`/`SntpError` enums |
 | `network/mqtt.rs` | MQTT topic and JSON payload formatting (pure, no I/O) |
 | `sensor/conditioning.rs` | Generic `ConditioningState<N>` warmup state machine |
