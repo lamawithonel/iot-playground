@@ -1,7 +1,7 @@
 # IoT Playground
 
-An embedded Rust IoT framework for STM32 and Microchip ATSAM microcontrollers,
-with a focus on real-time performance and security.
+An embedded Rust IoT framework for STM32 microcontrollers, with a focus on
+real-time performance and security.  Microchip ATSAM support is planned.
 
 ## Overview
 
@@ -57,7 +57,7 @@ mise run tls:client device  # generate device client cert
    probe-rs-tools (includes `probe-rs`, `cargo-embed`, and
    `cargo-flash`), and mdbook.
 
-2. **Container runtime** (for the MQTT test broker) — one of:
+2. **Container runtime** (for the MQTT test broker)-- one of:
    - [Podman](https://podman.io/getting-started/installation)
      (preferred)
    - [Docker](https://docs.docker.com/get-docker/)
@@ -83,64 +83,56 @@ mise run tls:client device  # generate device client cert
 
 ### Quick Start (from workspace root)
 
-Build and flash firmware using `cargo run` or `cargo embed` with board presets:
+The workspace default member is `feather-stm32f405`, so plain
+`cargo run`/`cargo embed` from the root targets the feather:
 
 ```bash
-# Using cargo run with PROBE_RS_CONFIG_PRESET (recommended)
-cargo run --release                            # Uses default (feather)
-PROBE_RS_CONFIG_PRESET=feather cargo run --release     # Feather STM32F405
-PROBE_RS_CONFIG_PRESET=microbit cargo run --release    # BBC micro:bit v2
-PROBE_RS_CONFIG_PRESET=stm32f3 cargo run --release     # STM32F3 Discovery
-
-# Or use cargo embed with --chip flag
-cargo embed --release                          # Uses default (feather)
-cargo embed --chip feather --release           # Feather STM32F405
-cargo embed --chip microbit --release          # BBC micro:bit v2
-cargo embed --chip stm32f3 --release           # STM32F3 Discovery
+cargo run --release     # build + flash + attach RTT (feather)
+cargo embed --release   # same, via cargo-embed
 ```
 
 This will:
-1. Build the firmware for the selected board
+1. Build the firmware for the board
 2. Use the correct linker configuration automatically
-3. Flash it to your connected debug probe (with board-specific settings)
+3. Flash it via your connected debug probe
 4. Attach to RTT for live log viewing
-
-**Note:** The root `.cargo/config.toml` configures `probe-rs run` as the generic runner, and chip selection is handled via `Embed.toml` presets or the `PROBE_RS_CONFIG_PRESET` environment variable.
 
 ### Board Selection
 
-You can select boards in two ways (in order of precedence):
+Each board directory carries its own `Embed.toml` with the right
+chip (and, where safe, probe) settings.  To work on a non-default
+board, run from its directory:
 
-1. **PROBE_RS_CONFIG_PRESET environment variable** (recommended):
-   ```bash
-   PROBE_RS_CONFIG_PRESET=microbit cargo run --release
-   
-   # Or set it for multiple commands:
-   export PROBE_RS_CONFIG_PRESET=microbit
-   cargo run --release
-   cargo build --release
-   ```
+```bash
+cd boards/<board>
+cargo embed --release
+```
 
-2. **cargo embed --chip flag**:
-   ```bash
-   cargo embed --chip microbit --release
-   ```
+Or stay at the root and be explicit:
 
-3. **Default**: If nothing is specified, `feather` (Feather STM32F405) preset is used
+```bash
+cargo build -p <board> --release
+probe-rs run --chip <CHIP> --probe <VID:PID> \
+  target/thumbv7em-none-eabihf/release/<board>
+```
 
-**Available board presets:**
-- `feather` - Adafruit Feather STM32F405 (default)
-- `microbit` - BBC micro:bit v2 (nRF52833)
-- `stm32f3` - STM32F3 Discovery (STM32F303VC)
+The exact chip and probe values for each board live on its page
+under [docs/src/boards/](docs/src/boards/README.md).
+
+With more than one debug probe attached, always pin the probe
+(`--probe VID:PID` or the `PROBE_RS_PROBE` environment variable);
+an unpinned invocation falls into probe-rs's interactive
+selection prompt.  Per-bench overrides go in an untracked
+`Embed.local.toml` next to the relevant `Embed.toml`.
 
 ### Build Only
 
 ```bash
-# Build from workspace root
+# Build the default member (feather) from the workspace root
 cargo build --release
 
-# Build with specific board preset
-PROBE_RS_CONFIG_PRESET=microbit cargo build --release
+# Build a specific board
+cargo build -p nucleo-h753zi --release
 
 # Or build from a board directory
 cd boards/feather-stm32f405
@@ -187,34 +179,41 @@ each board's page under [docs/src/boards/](docs/src/boards/README.md).
 iot-playground/
 ├── .mise.toml              # mise tool versions and task definitions
 ├── Cargo.toml              # Workspace root with shared dependencies & default-members
-├── Embed.toml              # probe-rs presets for all boards (feather, microbit, stm32f3)
+├── Embed.toml              # probe-rs defaults for the default member (feather)
 ├── .cargo/config.toml      # Root config with generic probe-rs runner
 ├── AGENTS.md               # Project architecture and constraints
 ├── .agents/                # Agent rules, skills, subagents (.claude/ symlinks here)
 ├── boards/                 # Board profiles (specific chip + peripherals + applications)
-│   ├── feather-stm32f405/  # Example: Feather STM32F405 board profile
+│   ├── feather-stm32f405/  # Feather STM32F405 board profile (active, flagship)
 │   │   ├── Embed.toml      # Board-specific probe-rs config (optional)
 │   │   ├── src/            # Board-specific firmware code
+│   │   ├── tests/          # Layer 2 bring-up tests (embedded-test)
 │   │   └── memory.x        # Memory layout for this board
+│   ├── nucleo-h753zi/      # ST NUCLEO-H753ZI board profile (active workspace member)
 │   └── nucleo-n657x0/      # ST NUCLEO-N657X0-Q scaffold (ARS toolhead sensor; workspace-excluded)
 ├── core/                   # Platform-agnostic business logic (no_std)
 ├── hal-abstractions/       # Hardware abstraction traits (no_std)
 ├── test/                   # Test infrastructure
 │   ├── broker/             # Mosquitto MQTT test broker (containerized)
+│   ├── features/           # Gherkin feature files (smoke and integration layers)
+│   ├── mqtt-subscriber/    # Native MQTT subscriber used during smoke tests
+│   ├── smoke-validator/    # Cucumber-RS smoke test validator
 │   └── scripts/            # Shared test scripts (TLS cert generation)
-├── apps/                   # Application binaries (future)
 └── docs/                   # Documentation (mdBook; docs/src/projects/ holds per-project docs)
 ```
 
 ### Configuration Files
 
 **Workspace-level:**
-- `.cargo/config.toml`: Root configuration with generic `probe-rs run` runner and common linker flags
-- `Cargo.toml`: Sets `default-members = ["boards/feather-stm32f405"]` for cargo commands
-- `Embed.toml`: Defines board presets (feather, microbit, stm32f3) for probe-rs configuration
+- `.cargo/config.toml`: Root configuration with generic `probe-rs run`
+  runner and common linker flags
+- `Cargo.toml`: Sets `default-members = ["boards/feather-stm32f405"]` for
+  cargo commands
+- `Embed.toml`: probe-rs defaults for `cargo embed` from the root (default
+  member: feather)
 
 **Board-level:**
-- `boards/*/Embed.toml`: Optional board-specific probe-rs config overrides
+- `boards/*/Embed.toml`: Board-specific probe-rs config (chip, probe, RTT)
 - `boards/*/memory.x`: Memory layout for the specific chip
 - `boards/*/src/`: Board-specific application code and configuration
 
@@ -240,26 +239,25 @@ The board-profile concept and the profile roster are documented in
 
 ### Working with a Specific Board
 
-To work on a specific board profile, you can either:
+To work on a specific board profile, change to its directory so
+its `Embed.toml` (chip, probe, RTT settings) applies:
 
-1. **Use environment variable** (recommended):
-   ```bash
-   export PROBE_RS_CONFIG_PRESET=microbit
-   cargo run --release
-   cargo build --release
-   ```
+```bash
+cd boards/nucleo-h753zi
+cargo run --release
+cargo build --release
+```
 
-2. **Change to board directory**:
-   ```bash
-   cd boards/feather-stm32f405
-   cargo run --release
-   ```
+From the root, use `-p <board>` for builds and explicit
+`--chip`/`--probe` flags for probe-rs commands (see
+[Board Selection](#board-selection)).
 
 ## Architecture
 
 ### RTIC-First Design
 
-This framework uses **RTIC 2.x** (Real-Time Interrupt-driven Concurrency) for task scheduling:
+This framework uses **RTIC 2.x** (Real-Time Interrupt-driven Concurrency) for
+task scheduling:
 - Hardware interrupts trigger tasks
 - `WFI` (Wait For Interrupt) for power efficiency
 - Zero-cost abstractions for real-time guarantees
@@ -285,7 +283,8 @@ Embassy crates are used for **hardware abstraction only**:
 
 ### Customize probe-rs Settings
 
-Create `Embed.local.toml` or `.embed.local.toml` in the workspace root or board directory:
+Create `Embed.local.toml` or `.embed.local.toml` in the workspace root or
+board directory:
 
 ```toml
 [default.general]
@@ -320,7 +319,7 @@ Both profiles use `panic = "abort"` for embedded compatibility.
 
 | Variable | Default (debug) | Default (release) | Range | Description |
 |----------|----------------|-------------------|-------|-------------|
-| `SAMPLE_INTERVAL_SECS` | 5 | 60 | 1–3600 | Sensor read and MQTT publish interval |
+| `SAMPLE_INTERVAL_SECS` | 5 | 60 | 1-3600 | Sensor read and MQTT publish interval |
 
 Override at build time:
 
@@ -339,7 +338,7 @@ ARM), a plain `cargo test` cannot link the test harness.  Use the
 cargo alias or mise task instead:
 
 ```bash
-# Recommended — auto-detects host triple
+# Recommended-- auto-detects host triple
 mise run test
 
 # Or explicitly (replace target with your host triple)
@@ -361,10 +360,24 @@ mise run test -- -p iot-core       # Restrict to one crate
 
 ### On-Device Testing
 
+On-device tests use
+[`embedded-test`](https://crates.io/crates/embedded-test) over `probe-rs`
+(`defmt-test` is deprecated and is not used).  Each test layer has its own
+mise task; tier selection is a separate task name, not a flag:
+
 ```bash
-# Using defmt-test (when available)
-cargo test --target thumbv7em-none-eabihf
+mise run test:host                  # Layer 1: host unit tests
+mise run test:device                # Layer 2: on-device bring-up tests
+mise run test:smoke                 # Layer 4: standard smoke test (~3 min)
+mise run test:smoke-extended        # Layer 4: extended smoke test (~5 min)
+mise run test:smoke-full            # Layer 4: full smoke test (~13 min)
+mise run test:integration           # Layer 5: host + device + smoke pipeline
+mise run test:integration-extended  # Layer 5: pipeline with extended smoke
+mise run test:integration-full      # Layer 5: pipeline with full smoke
 ```
+
+See [`docs/src/development/testing.md`](docs/src/development/testing.md) for
+the full five-layer test pyramid and tier detail.
 
 ### TLS Certificates
 
@@ -387,7 +400,7 @@ mise run tls:server broker   # Generate broker server cert
 mise run tls:client device   # Generate device client cert
 ```
 
-Certs are NOOP if they already exist — safe to run repeatedly.
+Certs are NOOP if they already exist-- safe to run repeatedly.
 
 ### MQTT Test Broker
 
@@ -478,7 +491,8 @@ describes only its own directory, and detailed rules live in
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0.  Copyright Lucas Yamanishi.  See [`LICENSE`](LICENSE) for the
+full text.
 
 ## Resources
 
