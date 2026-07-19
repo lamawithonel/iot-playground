@@ -20,10 +20,12 @@ test = false
 # docs/src/projects/ars-toolhead-sensor/pinout.md gate G1 and
 # src/main.rs.
 #
-# Version note (G1 finding): embassy-stm32 0.4.0 (the feather pin)
-# has NO stm32n6* features at all-- N6 support first appears at
-# 0.5.0 and is current on 0.6.0.  Pinned to 0.6.0 here; the feather
-# crate's 0.4.0 pin cannot target this board.
+# Version note (G1 finding): stm32n6* support first appeared in
+# embassy-stm32 0.5.0.  The workspace (feather, nucleo-h753zi) was
+# bumped to embassy-stm32 0.6.0 as part of the Phase 2 dependency
+# migration, so this board's pin now matches the rest of the
+# workspace-- this crate stays workspace-excluded until its own
+# hardware bring-up spike lands, not because of a version gap.
 
 [features]
 g1-spike = [

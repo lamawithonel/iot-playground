@@ -8,20 +8,28 @@ use core::cell::RefCell;
 use core::sync::atomic::Ordering;
 use critical_section::Mutex;
 use defmt::info;
-use embassy_stm32::rtc::Rtc;
+use embassy_stm32::rtc::{Rtc, RtcTimeProvider};
 
 use super::calendar::{datetime_to_unix, unix_to_datetime};
 
 // Re-export core types (BSP consumers use these via `crate::time::*`)
 pub use iot_core::time::{RtcError, Timestamp};
 
-/// Global internal RTC instance
+/// Global internal RTC instance (write half: `set_datetime`)
 static RTC: Mutex<RefCell<Option<Rtc>>> = Mutex::new(RefCell::new(None));
 
+/// Global internal RTC time provider (read half: `now`)
+///
+/// embassy-stm32 0.6.0 split `Rtc` into a write-only handle plus a
+/// separate [`RtcTimeProvider`] for reads; both come from the same
+/// `Rtc::new()` call and are stored here together.
+static RTC_TIME: Mutex<RefCell<Option<RtcTimeProvider>>> = Mutex::new(RefCell::new(None));
+
 /// Initialize internal RTC
-pub fn initialize_rtc(rtc: Rtc) {
+pub fn initialize_rtc(rtc: Rtc, rtc_time: RtcTimeProvider) {
     critical_section::with(|cs| {
         RTC.borrow(cs).replace(Some(rtc));
+        RTC_TIME.borrow(cs).replace(Some(rtc_time));
     });
     info!("Internal RTC initialized");
 }
@@ -56,8 +64,8 @@ pub fn read_rtc() -> Result<Timestamp, RtcError> {
     }
 
     critical_section::with(|cs| {
-        if let Some(rtc) = RTC.borrow(cs).borrow_mut().as_mut() {
-            let datetime = rtc.now().map_err(|_| RtcError::HardwareError)?;
+        if let Some(rtc_time) = RTC_TIME.borrow(cs).borrow().as_ref() {
+            let datetime = rtc_time.now().map_err(|_| RtcError::HardwareError)?;
             let unix_secs = datetime_to_unix(datetime);
             Ok(Timestamp::new(unix_secs, 0))
         } else {

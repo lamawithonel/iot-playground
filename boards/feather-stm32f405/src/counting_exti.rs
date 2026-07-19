@@ -15,6 +15,7 @@ use core::convert::Infallible;
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use embassy_stm32::exti::ExtiInput;
+use embassy_stm32::mode::Async;
 use embedded_hal::digital::ErrorType;
 use embedded_hal_async::digital::Wait;
 
@@ -29,13 +30,13 @@ use embedded_hal_async::digital::Wait;
 /// into a `'static` async task.  In `no_std` without an allocator,
 /// the backing [`AtomicU32`] must be a module-level static.
 pub struct CountingExtiInput<'a> {
-    inner: ExtiInput<'a>,
+    inner: ExtiInput<'a, Async>,
     counter: &'static AtomicU32,
 }
 
 impl<'a> CountingExtiInput<'a> {
     /// Wrap an `ExtiInput` with the given wait-completion counter.
-    pub fn new(inner: ExtiInput<'a>, counter: &'static AtomicU32) -> Self {
+    pub fn new(inner: ExtiInput<'a, Async>, counter: &'static AtomicU32) -> Self {
         Self { inner, counter }
     }
 }

@@ -87,9 +87,26 @@ mod app {
     });
 
     // I2C1 interrupt bindings for SEN66 sensor (async DMA mode)
+    //
+    // embassy-stm32 0.6.0 requires the DMA channel's own interrupt to
+    // be bound alongside the peripheral's event/error interrupts (the
+    // same `_irq` value is passed to both halves of `I2c::new`).
     embassy_stm32::bind_interrupts!(struct I2c1Irqs {
         I2C1_EV => embassy_stm32::i2c::EventInterruptHandler<peripherals::I2C1>;
         I2C1_ER => embassy_stm32::i2c::ErrorInterruptHandler<peripherals::I2C1>;
+        DMA1_STREAM6 => embassy_stm32::dma::InterruptHandler<peripherals::DMA1_CH6>;
+        DMA1_STREAM0 => embassy_stm32::dma::InterruptHandler<peripherals::DMA1_CH0>;
+    });
+
+    // SPI2 DMA interrupt bindings (W5500 Ethernet, async DMA mode)
+    embassy_stm32::bind_interrupts!(struct Spi2Irqs {
+        DMA1_STREAM4 => embassy_stm32::dma::InterruptHandler<peripherals::DMA1_CH4>;
+        DMA1_STREAM3 => embassy_stm32::dma::InterruptHandler<peripherals::DMA1_CH3>;
+    });
+
+    // EXTI2 interrupt binding (W5500 INT pin)
+    embassy_stm32::bind_interrupts!(struct Exti2Irqs {
+        EXTI2 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI2>;
     });
 
     #[shared]
@@ -150,10 +167,10 @@ mod app {
         info!("TIM2 monotonic timer initialized at 1 MHz");
 
         let rtc_config = RtcConfig::default();
-        let rtc = Rtc::new(p.RTC, rtc_config);
+        let (rtc, rtc_time) = Rtc::new(p.RTC, rtc_config);
         info!("Internal RTC initialized with LSE (32.768kHz, ±20-50ppm accuracy)");
 
-        time::initialize_rtc(rtc);
+        time::initialize_rtc(rtc, rtc_time);
 
         let led = Output::new(p.PC1, Level::High, Speed::Low);
 
@@ -175,11 +192,11 @@ mod app {
         i2c_config.frequency = Hertz(400_000);
 
         let i2c = I2c::new(
-            p.I2C1, p.PB6, // SCL
-            p.PB7, // SDA
-            I2c1Irqs, p.DMA1_CH6, // TX: DMA1 Stream 6
+            p.I2C1, p.PB6,      // SCL
+            p.PB7,      // SDA
+            p.DMA1_CH6, // TX: DMA1 Stream 6
             p.DMA1_CH0, // RX: DMA1 Stream 0
-            i2c_config,
+            I2c1Irqs, i2c_config,
         );
         info!("I2C1 initialized: 400 kHz, PB6/PB7 (SEN66)");
 
@@ -279,12 +296,13 @@ mod app {
             periph.miso,
             periph.dma_tx,
             periph.dma_rx,
+            Spi2Irqs,
             spi_config,
         );
 
         let cs = Output::new(periph.cs, Level::High, Speed::VeryHigh);
         let reset = Output::new(periph.reset, Level::High, Speed::Low);
-        let raw_int = ExtiInput::new(periph.int, periph.exti, Pull::Up);
+        let raw_int = ExtiInput::new(periph.int, periph.exti, Pull::Up, Exti2Irqs);
         let int = counting_exti::CountingExtiInput::new(raw_int, &EXTI2_EVENTS);
 
         let eth_periph = eth::EthPeripherals {

@@ -5,15 +5,17 @@
 //! SR-NET-007.
 //!
 //! ## Architecture
+//!
 //! - SNTP client syncs with NTP servers every 15 minutes
 //! - Time is written to STM32 hardware internal RTC
 //! - Between syncs, timestamps are read from internal RTC hardware
 //! - Sync status stored atomically in CCM RAM
 //!
 //! ## Usage
+//!
 //! ```no_run
 //! // Initialize internal RTC
-//! time::initialize_rtc(rtc);
+//! time::initialize_rtc(rtc, rtc_time);
 //!
 //! // SNTP client is in network::SntpClient
 //! let mut sntp = network::SntpClient::new();

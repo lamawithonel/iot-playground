@@ -54,7 +54,7 @@ pub fn uid_hex() -> &'static str {
 /// let uid_bytes = device_id::uid();
 /// assert_eq!(uid_bytes.len(), 12);
 /// ```
-pub fn uid() -> &'static [u8; 12] {
+pub fn uid() -> [u8; 12] {
     embassy_stm32::uid::uid()
 }
 
@@ -89,7 +89,7 @@ pub fn mqtt_client_id() -> String<CLIENT_ID_MAX_LEN> {
 /// Provides a defmt-compatible wrapper for device identifiers
 #[derive(Clone, Copy, Format)]
 pub struct DeviceId {
-    uid: &'static [u8; 12],
+    uid: [u8; 12],
 }
 
 impl DeviceId {

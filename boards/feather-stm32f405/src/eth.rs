@@ -8,6 +8,7 @@ use embassy_net_wiznet::chip::W5500;
 use embassy_net_wiznet::{Device, Runner};
 use embassy_stm32::gpio::Output;
 use embassy_stm32::mode::Async;
+use embassy_stm32::spi::mode::Master as SpiMaster;
 use embassy_stm32::spi::Spi;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use static_cell::StaticCell;
@@ -20,7 +21,7 @@ pub type W5500Device = Device<'static>;
 
 /// Ethernet peripherals bundle
 pub struct EthPeripherals<'a> {
-    pub spi: Spi<'a, Async>,
+    pub spi: Spi<'a, Async, SpiMaster>,
     pub cs: Output<'a>,
     pub reset: Output<'a>,
     pub int: CountingExtiInput<'a>,
@@ -28,7 +29,8 @@ pub struct EthPeripherals<'a> {
 
 /// Initialize the W5500 Ethernet hardware
 ///
-/// Returns device and runner. Runner must be continuously polled for device operation.
+/// Returns the device and its runner.  The runner must be polled
+/// continuously for the device to operate.
 pub async fn init_w5500(
     periph: EthPeripherals<'static>,
     mac_addr: [u8; 6],
@@ -37,7 +39,12 @@ pub async fn init_w5500(
     Runner<
         'static,
         W5500,
-        SpiDeviceBus<'static, CriticalSectionRawMutex, Spi<'static, Async>, Output<'static>>,
+        SpiDeviceBus<
+            'static,
+            CriticalSectionRawMutex,
+            Spi<'static, Async, SpiMaster>,
+            Output<'static>,
+        >,
         CountingExtiInput<'static>,
         Output<'static>,
     >,
@@ -55,7 +62,8 @@ pub async fn init_w5500(
     reset.set_high();
     embassy_time::Timer::after_millis(2).await;
 
-    type SpiBusType = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, Spi<'static, Async>>;
+    type SpiBusType =
+        embassy_sync::mutex::Mutex<CriticalSectionRawMutex, Spi<'static, Async, SpiMaster>>;
     static SPI_BUS: StaticCell<SpiBusType> = StaticCell::new();
     let spi_bus = SPI_BUS.init(embassy_sync::mutex::Mutex::new(spi));
     let spi_device = SpiDeviceBus::new(spi_bus, cs);

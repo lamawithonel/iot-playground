@@ -24,6 +24,8 @@
 
 #![deny(unsafe_code)]
 
+use core::num::NonZero;
+
 use defmt::{error, info, warn, Debug2Format};
 use embassy_net::{dns::DnsQueryType, IpEndpoint, Stack};
 use embassy_time::{Duration, Timer};
@@ -37,8 +39,8 @@ use rust_mqtt::{
         options::{ConnectOptions, PublicationOptions, TopicReference},
         Client,
     },
-    config::{KeepAlive, SessionExpiryInterval},
-    types::{MqttString, QoS, TopicName},
+    config::{KeepAlive, MaximumPacketSize, SessionExpiryInterval},
+    types::{MqttString, PacketIdentifier, QoS, TopicName},
     Bytes,
 };
 
@@ -174,7 +176,7 @@ impl MqttClient {
     ///
     /// Returns `Err` when the connection is lost or any fatal error
     /// occurs.  The caller (`run`) handles reconnection.
-    #[allow(unsafe_code)] // Calls tls_buffers::tls_buffers() and TopicName::new_unchecked()
+    #[allow(unsafe_code)] // Calls tls_buffers::tls_buffers()
     async fn run_session<RNG, const N: usize>(
         &self,
         stack: &Stack<'static>,
@@ -236,7 +238,7 @@ impl MqttClient {
         info!("MQTT client ID: {}", client_id);
 
         let mut buffer = BumpBuffer::new(buffers.mqtt);
-        let mut mqtt = Client::<'_, _, _, 1, 1, 1, 0>::new(&mut buffer);
+        let mut mqtt = Client::<'_, _, _, 1, 1, 1, 0, 0>::new(&mut buffer);
 
         let connect_opts = ConnectOptions {
             session_expiry_interval: SessionExpiryInterval::EndOnDisconnect,
@@ -244,14 +246,21 @@ impl MqttClient {
             keep_alive: if self.config.keep_alive_secs == 0 {
                 KeepAlive::Infinite
             } else {
-                KeepAlive::Seconds(self.config.keep_alive_secs)
+                KeepAlive::Seconds(
+                    NonZero::new(self.config.keep_alive_secs)
+                        .expect("keep_alive_secs checked non-zero above"),
+                )
             },
+            maximum_packet_size: MaximumPacketSize::Unlimited,
+            request_response_information: false,
+            request_problem_information: true,
+            user_properties: &[],
             will: None,
             user_name: None,
             password: None,
         };
 
-        let mqtt_client_id = MqttString::new(client_id.as_str().into()).map_err(|e| {
+        let mqtt_client_id = MqttString::from_str(client_id.as_str()).map_err(|e| {
             error!("Invalid MQTT client ID: {:?}", Debug2Format(&e));
             MqttError::ProtocolError
         })?;
@@ -297,21 +306,26 @@ impl MqttClient {
                 payload.len()
             );
 
-            // SAFETY: format_mqtt_topic validates no wildcards or nulls
-            let topic_name = unsafe {
-                TopicName::new_unchecked(MqttString::new(topic_str.as_str().into()).map_err(
-                    |e| {
-                        error!("Topic string error: {:?}", Debug2Format(&e));
-                        MqttError::ProtocolError
-                    },
-                )?)
-            };
+            // rust-mqtt's `TopicName::new_unchecked` is a safe `const fn`
+            // as of the current pin (formerly `unsafe`); the topic is
+            // still validated by `format_mqtt_topic` for wildcards/nulls.
+            let topic_name = TopicName::new_unchecked(
+                MqttString::from_str(topic_str.as_str()).map_err(|e| {
+                    error!("Topic string error: {:?}", Debug2Format(&e));
+                    MqttError::ProtocolError
+                })?,
+            );
 
             let pub_opts = PublicationOptions {
                 retain: false,
                 message_expiry_interval: None,
                 topic: TopicReference::Name(topic_name),
                 qos: QoS::AtLeastOnce,
+                payload_format_indicator: None,
+                response_topic: None,
+                correlation_data: None,
+                user_properties: &[],
+                content_type: None,
             };
 
             let packet_id = match mqtt
@@ -329,8 +343,9 @@ impl MqttClient {
             };
 
             // QoS 1: poll for PUBACK to confirm delivery and free
-            // the in-flight slot (SEND_MAXIMUM=1).
-            if packet_id > 0 {
+            // the in-flight slot (SEND_MAXIMUM=1).  QoS::AtLeastOnce
+            // always yields a packet identifier.
+            if let Some(packet_id) = packet_id {
                 self.await_puback(&mut mqtt, msg_count, packet_id).await?;
             }
         }
@@ -353,11 +368,12 @@ impl MqttClient {
         const RM: usize,
         const SM: usize,
         const MSI: usize,
+        const MUP: usize,
     >(
         &self,
-        mqtt: &mut Client<'c, N, B, MS, RM, SM, MSI>,
+        mqtt: &mut Client<'c, N, B, MS, RM, SM, MSI, MUP>,
         msg_count: u32,
-        packet_id: u16,
+        packet_id: PacketIdentifier,
     ) -> Result<(), NetworkError>
     where
         N: embedded_io_async::Read + embedded_io_async::Write,

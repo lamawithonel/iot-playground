@@ -75,7 +75,7 @@ features = [
 # Using latest main branch which includes embedded-io-async 0.7 compatibility
 [dependencies.embedded-tls]
 git = "https://github.com/drogue-iot/embedded-tls"
-rev = "4bc3df1dffccb318a564ef4c258c3a82c2eb13ed"
+rev = "27874162c9d9105701d2b588092f39311e34bd93"
 default-features = false
 features = ["defmt"]
 
@@ -107,24 +107,26 @@ workspace = true
 # MQTT v5.0 client for Phase 2 network stack
 [dependencies.rust-mqtt]
 git = "https://github.com/obabec/rust-mqtt.git"
-rev = "d8d470bd4f03ed2b303af83d3dbfb8b3854c8302"
+rev = "d2ca25c5e828f205185c15858198329c02742d86"
 default-features = false
 features = ["bump", "defmt", "v5"]
 
 # SEN66 environmental sensor (I2C, async)
 [dependencies.sen6x]
-version = "0.1.0"
+version = "0.1.4"
 default-features = false
 features = ["async", "sen66", "defmt"]
 
-# SNTP client for time synchronization (SR-NET-006)
-# Version 0.7.0 adds async support
+# SNTP client for time synchronization (SR-NET-006).
+# Staged for future use: network/sntp.rs currently hand-rolls
+# SNTP over embassy-net UDP and does not import this crate yet.
+# Version 0.11.0 renamed the no-std/embedded features to "sync"
 [dependencies.sntpc]
-version = "0.7.0"
+version = "0.11.0"
 default-features = false
 
 [dependencies.stm32-metapac]
-version = "18.0.0"
+version = "21.0.0"
 features = [
   "defmt",
   "rt",
@@ -141,17 +143,17 @@ name = "bringup"
 harness = false
 
 [dev-dependencies.embedded-test]
-version = "0.7"
+version = "0.7.1"
 default-features = false
 features = ["semihosting", "defmt"]
 
 # cortex-m-rt is needed in test binaries for the vector table
 # and DefaultHandler symbol that link.x requires.
 [dev-dependencies.cortex-m-rt]
-version = "0.7"
+version = "0.7.5"
 
 # stm32-metapac provides the device-specific interrupt vector
 # table (DefaultHandler_) that cortex-m-rt's link.x expects.
 [dev-dependencies.stm32-metapac]
-version = "18.0.0"
+version = "21.0.0"
 features = ["rt", "stm32f405rg"]
