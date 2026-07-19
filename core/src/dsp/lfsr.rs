@@ -2,7 +2,7 @@
 //!
 //! Generic maximal-length sequence (MLS) generator.  The feedback
 //! tap positions are supplied by the caller as a bitmask, so the
-//! kernel itself carries no domain knowledge-- [`XAPP052_TAPS`]
+//! kernel itself carries no domain knowledge-- [`xapp052_taps`]
 //! supplies known-maximal taps (per Xilinx application note
 //! XAPP052, "Efficient Shift Registers, LFSR Counters, and Long
 //! Pseudo-Random Sequence Generators") for a curated set of
@@ -53,7 +53,7 @@ impl Lfsr {
     }
 
     /// Build an LFSR of the given `order` using the curated
-    /// [`XAPP052_TAPS`] table
+    /// [`xapp052_taps`] table
     ///
     /// Returns `None` if `order` has no entry in the table.
     pub fn new(order: u8, seed: u32) -> Option<Self> {
@@ -91,6 +91,7 @@ pub fn xapp052_taps(order: u8) -> Option<u32> {
         5 => 0x0000_0014,  // taps 5, 3
         7 => 0x0000_0060,  // taps 7, 6
         9 => 0x0000_0110,  // taps 9, 5
+        10 => 0x0000_0240, // taps 10, 7
         11 => 0x0000_0500, // taps 11, 9
         15 => 0x0000_6000, // taps 15, 14
         16 => 0x0000_D008, // taps 16, 15, 13, 4
@@ -107,7 +108,7 @@ mod tests {
     /// the safety net for the hand-transcribed XAPP052 tap masks.
     #[test]
     fn test_all_taps_are_maximal_length() {
-        for order in [4u8, 5, 7, 9, 11, 15, 16] {
+        for order in [4u8, 5, 7, 9, 10, 11, 15, 16] {
             let mut lfsr = Lfsr::new(order, 1).unwrap();
             let expected_period = (1u32 << order) - 1;
             let start = lfsr.state;

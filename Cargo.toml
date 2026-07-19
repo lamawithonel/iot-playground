@@ -11,6 +11,7 @@ exclude = [
     "boards/nucleo-n657x0",
     "test/mqtt-subscriber",
     "test/smoke-validator",
+    "tools/ars-synth",
 ]
 # Default member for cargo embed and other commands from workspace root
 default-members = ["boards/feather-stm32f405"]

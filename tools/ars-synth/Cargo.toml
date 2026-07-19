@@ -1,0 +1,10 @@
+[package]
+name = "ars-synth"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Golden-corpus generator and checker for the ARS fixed-point DSP pipeline"
+license = "Apache-2.0"
+
+[dependencies]
+iot-core = { path = "../../core", features = ["ars"] }

@@ -1,0 +1,22 @@
+# Golden fixture for the ARS fixed-point DSP pipeline.
+# Regenerate: see tools/ars-synth/AGENTS.md; format: core/tests/golden/README.md
+# Goertzel 3-bin peak straddle: NCO tone at 1203 Hz (off-grid
+# on purpose), detectors at 1190/1200/1210 Hz (peak straddle
+# for parabolic interpolation) plus a 2400 Hz off-bin.
+schema = ars-golden-v1
+kind = goertzel_tone
+fs_hz = 48000
+freq_dhz = 12030
+nco_coeff_q30 = 1060456237
+nco_y1_init = -1568
+nco_y2_init = -3098
+count = 4800
+
+[goertzel_freq_dhz]
+11900 12000 12100 24000
+
+[goertzel_coeff_q30]
+1060741244 1060522280 1060301499 1021189159
+
+[expected_goertzel_mag_u32]
+4759982 20613280 8828483 51874

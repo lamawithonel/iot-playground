@@ -1,0 +1,4 @@
+# Do not inherit the workspace-level thumbv7em-none-eabihf
+# target.  The caller passes --target with the detected host
+# triple (see AGENTS.md); this file only overrides runner
+# settings if needed in the future.
