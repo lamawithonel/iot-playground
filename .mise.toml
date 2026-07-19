@@ -7,7 +7,9 @@ DEFMT_LOG = 'info'
 _.source = '.mise/env.sh'
 
 [tools]
-rust = { version = "stable", targets = "thumbv7em-none-eabihf", components = "rustfmt,clippy" }
+# Rust toolchain version, targets, and components are pinned in
+# rust-toolchain.toml (idiomatic version file); mise installs it
+# via the idiomatic_version_file_enable_tools setting.
 "cargo:flip-link" = "0.1.12"
 "cargo:probe-rs-tools" = "0.31.0"
 mdbook = '0.4.40'

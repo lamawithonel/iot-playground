@@ -1,0 +1,10 @@
+# Single source of truth for the Rust toolchain.  rustup, mise
+# (idiomatic version files), rust-analyzer, and CI all read this
+# file.  Bump the channel deliberately.  thumbv8m.main-none-eabihf
+# serves the nucleo-n657x0 g1-spike compile check (Cortex-M55 uses
+# the v8-M mainline triple; there is no thumbv8.1m triple-- MVE
+# comes via target-cpu).
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy", "rust-analyzer", "rust-src"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf"]
