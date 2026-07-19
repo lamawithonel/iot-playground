@@ -76,7 +76,7 @@ topics).
 **Rationale:**
 
 - 82% smaller telemetry payloads (32 B vs 220 B JSON)
-- Deterministic encoding (~7–11 µs on Cortex-M4 at 168 MHz)
+- Deterministic encoding (~7-11 µs on Cortex-M4 at 168 MHz)
 - Native AWS IoT Rules Engine `decode()` support
 - Type-safe with compile-time schema validation
 - Wide adoption in IoT and cloud ecosystems (AWS IoT
@@ -88,7 +88,7 @@ topics).
 - Requires `.proto` schema files in `proto/` and
   `micropb-gen` code generation in `core/build.rs`
 - Requires MSRV 1.88.0 (micropb requirement)
-- AWS Device Shadows still need JSON — dual format approach
+- AWS Device Shadows still need JSON-- dual format approach
 - Less human-readable; `buf` tooling for schema management
 - AWS Rules Engine needs `.desc` descriptor files in S3
 
@@ -97,7 +97,7 @@ topics).
 - JSON: Human-readable but 82% larger, slower parsing
 - CBOR: 42 B (vs 32 B Protobuf), no native AWS `decode()`
 - MessagePack: Less tooling, no AWS Rules Engine support
-- `prost`: Requires `alloc` — incompatible with no_std
+- `prost`: Requires `alloc`-- incompatible with no_std
 
 ---
 
@@ -181,6 +181,14 @@ Need to support multiple board profiles (board type + peripherals + application 
 - Board selection via probe-rs native `PROBE_RS_CONFIG_PRESET` environment variable
 - Board-specific configurations centralized in root `Embed.toml`
 
+**Update (2026-07-19):** the two configuration bullets above are
+superseded.  `PROBE_RS_CONFIG_PRESET` is broken under probe-rs 0.31
+(it reads a separate preset config, not `Embed.toml` tables) and
+was retired; board selection is now per-board `Embed.toml` files
+plus explicit `--chip`/`--probe` flags or `PROBE_RS_CHIP`/
+`PROBE_RS_PROBE` environment variables.  The workspace decision
+itself stands.
+
 **Consequences:**
 - All boards share common Cargo profile settings (panic = "abort")
 - Workspace-level dependency versions ensure consistency
@@ -196,8 +204,8 @@ Need to support multiple board profiles (board type + peripherals + application 
 
 **Board Profile Examples:**
 - `boards/feather-stm32f405/` - STM32F405 + Ethernet + sensors + MQTT gateway
-- Future: `boards/feather-ptp-server/` - STM32F405 + Ethernet + GPS + PTP server
-- Future: `boards/feather-m4-can/` - SAMD51 + CAN + sensors
+- Future: a PTP (IEEE 1588) server profile
+- Future: a CAN gateway profile (first ATSAM target)
 
 ---
 
@@ -213,8 +221,8 @@ data variants: `binary_data` (bytes), `text_data` (string), and
 `proto_data` MUST be used "where the data is a protobuf message."
 However, `google.protobuf.Any` requires runtime type URLs and
 dynamic dispatch, which are fundamentally incompatible with
-no_std/no_alloc embedded systems.  Furthermore, `micropb` — the
-only viable Protobuf crate for our constraints — does not
+no_std/no_alloc embedded systems.  Furthermore, `micropb`-- the
+only viable Protobuf crate for our constraints-- does not
 support `google.protobuf.Any`.
 
 **Decision:** Use the `binary_data` (bytes) field to carry
@@ -225,12 +233,12 @@ field (e.g., `iot.sen66.v1`).
 **Rationale:**
 
 - micropb 0.6 does not support `google.protobuf.Any`
-- `binary_data` saves 12–20 bytes per message (no type URL
+- `binary_data` saves 12-20 bytes per message (no type URL
   overhead), reducing CloudEvents PB from ~96 B to ~80 B
-- Encoding is simpler: two-pass (inner message → bytes →
+- Encoding is simpler: two-pass (inner message -> bytes ->
   envelope) with no `Any::pack()` complexity
 - Cloud-side routing uses the CloudEvents `type` field, not
-  type URLs — functionally equivalent
+  type URLs-- functionally equivalent
 - AWS IoT Rules Engine double-decode works with both variants
 - Widely practiced in production IoT systems
 
@@ -246,11 +254,11 @@ field (e.g., `iot.sen66.v1`).
 **Alternatives Considered:**
 
 - `proto_data` with manual `Any` encoding: Possible but adds
-  complexity, 12–20 B overhead, and requires string formatting
+  complexity, 12-20 B overhead, and requires string formatting
   for type URLs on the MCU
 - Custom envelope (skip CloudEvents): Loses interoperability
   with EventBridge and cross-system consumers
-- CloudEvents JSON: 3.5× larger than CloudEvents PB; negates
+- CloudEvents JSON: 3.5x larger than CloudEvents PB; negates
   the benefit of Protobuf telemetry
 
 ---
@@ -272,25 +280,25 @@ build-time code generation from `.proto` files.
 - Purpose-built for no_std/no_alloc embedded systems
 - Uses `heapless` containers for bounded collections
 - TOML configuration files for per-field capacity budgets
-- ~8–12 KB flash, <1 KB RAM for typical sensor schemas
-- Deterministic encoding: ~1,200–1,800 cycles per message
+- ~8-12 KB flash, <1 KB RAM for typical sensor schemas
+- Deterministic encoding: ~1,200-1,800 cycles per message
 - Proto3 support with full encode/decode
 - Actively maintained and widely used in the Rust ecosystem
 
 **Consequences:**
 
-- MSRV 1.88.0 — must track recent stable Rust
+- MSRV 1.88.0-- must track recent stable Rust
 - No `google.protobuf.Any` support (see ADR-007)
-- No Protobuf Editions — proto3 only
-- No defmt integration — requires manual `Format` impls
+- No Protobuf Editions-- proto3 only
+- No defmt integration-- requires manual `Format` impls
 - Every `string`/`bytes`/`repeated`/`map` field needs explicit
   `max_len()` configuration in build.rs or TOML config
 - `micropb-gen` requires `protoc` on the build host
 
 **Alternatives Considered:**
 
-- `prost`: Mature, widely used — requires `alloc` (disqualified)
-- `femtopb`: Smallest footprint, zero-panic — borrow-based API
+- `prost`: Mature, widely used-- requires `alloc` (disqualified)
+- `femtopb`: Smallest footprint, zero-panic-- borrow-based API
   complicates ownership across RTIC tasks, API still evolving
 - `nanopb` (C via FFI): Proven but adds C toolchain dependency
 
@@ -310,15 +318,15 @@ RTT-based smoke test.  A review of the on-device tests revealed a
 structural problem: all three tests (`sanity_check`,
 `core_conditioning_on_device`, `heapless_string_on_device`) exercise
 pure logic that already passes on the host.  `embedded-test` 0.7.x
-replaces the RTIC dispatcher entirely — it cannot run async tasks,
+replaces the RTIC dispatcher entirely-- it cannot run async tasks,
 `rtic_sync` channels, monotonic timers, or real peripheral
 interactions.  The on-device tests prove the test harness works,
 not the hardware.
 
 Meanwhile, the only mechanism that validates actual hardware
-integration — PLL configuration, I2C bus timing, SPI
+integration-- PLL configuration, I2C bus timing, SPI
 initialization, interrupt routing, and the full sensor-to-MQTT data
-path — is the smoke test, which amounts to "flash and hope the RTT
+path-- is the smoke test, which amounts to "flash and hope the RTT
 output looks right for 45 seconds."
 
 For an IoT device with real-time constraints, this gap is
@@ -330,7 +338,7 @@ integrity bugs cheaply.
 **Decision:** Adopt a five-layer embedded test pyramid with strict
 layer ownership and an A+B hybrid on-device strategy.  Layer 2
 uses `embedded-test` for peripheral bring-up validation (clock
-tree, I2C, SPI, RNG, timer tick) — not pure logic.  Layer 3
+tree, I2C, SPI, RNG, timer tick)-- not pure logic.  Layer 3
 uses custom `#[app]` test binaries for RTIC integration, deferred
 until explicit trigger criteria are met.  Expand host-side
 property and adversarial tests.  Formalize `defmt` milestones as
@@ -346,16 +354,16 @@ emulation.
 | 2. On-device peripheral smoke | Hardware init: clock tree, I2C probe, SPI/W5500, RNG, TIM2 tick | MCU via probe-rs | Required with hardware |
 | 3. RTIC integration | Inter-task channels, monotonic timers, vertical data slices | Custom `#[app]` test binaries | Deferred (trigger-based) |
 | 4. System smoke test | Full firmware boot, milestone ordering, error detection | MCU via probe-rs + RTT | Required with hardware |
-| 5. End-to-end | Device → TLS → MQTT broker → subscriber validation | MCU + Mosquitto container | Required with hardware |
+| 5. End-to-end | Device -> TLS -> MQTT broker -> subscriber validation | MCU + Mosquitto container | Required with hardware |
 
-**Layer 1 — Host Unit Tests (expand):**
+**Layer 1-- Host Unit Tests (expand):**
 
 Add adversarial and property-based tests that exercise data
 integrity across transformation boundaries:
 
 - **Channel backpressure property test:** Mock `Sender`/`Receiver`
   pair, simulate 200 sensor reads with randomized MQTT stalls
-  (0–300 s).  Assert no panic, receiver gets the most recent
+  (0-300 s).  Assert no panic, receiver gets the most recent
   reading after drain, and dropped-reading count matches
   channel-full events.
 - **Payload size budget:** Construct `Sen66Reading` with all 9
@@ -372,7 +380,7 @@ integrity across transformation boundaries:
   types, and optionality as a fixture.  Any change to
   `format_json_payload()` that alters the schema breaks this test.
 
-**Layer 2 — On-Device Peripheral Tests (`bringup.rs`):**
+**Layer 2-- On-Device Peripheral Tests (`bringup.rs`):**
 
 Six `embedded-test` tests in `bringup.rs` validate peripheral
 bring-up in `#[init]` context:
@@ -388,21 +396,21 @@ bring-up in `#[init]` context:
   alive.
 - **RNG entropy check:** Read 32 bytes from hardware RNG, assert
   non-zero and not all-identical.  TLS depends on a functioning
-  RNG — a stuck RNG is security-critical.
+  RNG-- a stuck RNG is security-critical.
 - **TIM2 monotonic tick sanity:** Start TIM2, read counter, spin
   with `cortex_m::asm::delay`, read again, assert delta within
-  ±5%.  Catches prescaler misconfigurations.
+  +/-5%.  Catches prescaler misconfigurations.
 - **W5500 INT pin (EXTI2):** Verify the W5500 INT line on PC2
   asserts and is observable via EXTI2.  Proves the wiring that
   interrupt-driven packet reception depends on.
 
-**Layer 3 — RTIC Integration Tests (deferred):**
+**Layer 3-- RTIC Integration Tests (deferred):**
 
 Custom `#[app]` test binaries are deferred until the firmware
 topology grows beyond what the smoke test can cover.  Build
 Layer 3 when any of the following trigger criteria are met:
 
-- `Shared` gains real members (currently an empty struct — no
+- `Shared` gains real members (currently an empty struct-- no
   shared resources means no priority inversions to test).
 - A second board enters the workspace (cross-board regressions
   require isolated integration tests).
@@ -411,12 +419,12 @@ Layer 3 when any of the following trigger criteria are met:
 - Channel or priority topology changes (additional channels,
   split priority levels, or new inter-task dependencies).
 
-**Layer 4 — Smoke Test (harden):**
+**Layer 4-- Smoke Test (harden):**
 
 - Define expected `defmt` milestones and assert their order
-  (e.g., `"System initialized"` → `"TIM2 monotonic"` →
-  `"I2C1 initialized"` → `"SEN66 initialized"` → `"Network
-  stack initialized"` → `"SNTP sync successful"`).
+  (e.g., `"System initialized"` -> `"TIM2 monotonic"` ->
+  `"I2C1 initialized"` -> `"SEN66 initialized"` -> `"Network
+  stack initialized"` -> `"SNTP sync successful"`).
 - Add per-milestone timeouts, not just a single wall-clock
   timeout.
 - Add a `TELEMETRY_JSON:` structured log prefix to the firmware
@@ -428,15 +436,15 @@ Layer 3 when any of the following trigger criteria are met:
 Invest in newtypes and typestates to push runtime invariants
 into the type system, eliminating entire classes of tests:
 
-- `DeciCelsius(i32)`, `Ppm(u16)`, etc. — prevent field mixups
+- `DeciCelsius(i32)`, `Ppm(u16)`, etc.-- prevent field mixups
   at compile time.
-- `Reading::Ready(T)` vs `Reading::Conditioning` — distinguish
+- `Reading::Ready(T)` vs `Reading::Conditioning`-- distinguish
   temporal absence from structural absence, replacing `Option<T>`
   ambiguity.
-- `Phase` enum for conditioning stages — prevent out-of-bounds
+- `Phase` enum for conditioning stages-- prevent out-of-bounds
   phase indices.
-- `BoundedMicros(u32)` — enforce `< 1_000_000` at construction.
-- `ValidatedTopic`/`ClientId` newtypes — validate once, carry
+- `BoundedMicros(u32)`-- enforce `< 1_000_000` at construction.
+- `ValidatedTopic`/`ClientId` newtypes-- validate once, carry
   proof in the type.
 
 These are not part of the test infrastructure itself but they
@@ -451,7 +459,7 @@ reduce the test burden by making wrong states unrepresentable.
   human attestation for hardware-dependent changes.
 - Self-hosted runner (Pi + J-Link, ~$200): start as nightly
   non-blocking, promote to required after 30-day reliability bake.
-- Skip QEMU/Renode emulation — negative ROI at one board.
+- Skip QEMU/Renode emulation-- negative ROI at one board.
   Revisit at 3+ target boards.
 
 **Rationale:**
@@ -461,15 +469,15 @@ reduce the test burden by making wrong states unrepresentable.
   engineer, hardware engineer, security reviewer, protocol
   specialist, fleet operator, firmware QA) converged on the A+B
   hybrid approach.  7 of 10 supported the strategy; consensus
-  covered both approach and timing — bring-up now, RTIC
+  covered both approach and timing-- bring-up now, RTIC
   integration when trigger criteria fire.
 - Key insight (Holloway): "three tasks at identical priority,
-  empty Shared struct, single 2-slot channel — there are no
+  empty Shared struct, single 2-slot channel-- there are no
   priority inversions to test."  This justifies deferring Layer 3
   until the firmware topology actually demands it.
 - The highest-risk untested scenario is the 2-slot `rtic_sync`
   channel under TLS stall: if the network task blocks for longer
-  than 2× the sample interval, every subsequent sensor reading is
+  than 2x the sample interval, every subsequent sensor reading is
   silently discarded.  No current test exercises this.
 - `embedded-test` cannot fill the RTIC integration gap, but it
   *can* validate that peripherals initialize and respond.
@@ -477,7 +485,7 @@ reduce the test burden by making wrong states unrepresentable.
   low-effort.
 - Type-driven design eliminates tests that exist only because
   the type system permits nonsense inputs.  On a device where
-  every test requires a flash cycle, this leverage is enormous.
+  every test requires a flash cycle, this payoff is enormous.
 
 **Consequences:**
 
@@ -495,7 +503,7 @@ reduce the test burden by making wrong states unrepresentable.
   buffer overflow, schema drift) that currently have zero
   coverage.
 - The `defmt` milestone contract formalizes log output as
-  testable behavior, which constrains future refactoring — log
+  testable behavior, which constrains future refactoring-- log
   message changes become test-breaking changes.
 - Type system improvements (newtypes, typestates) will require
   API changes across `core/`, `hal-abstractions/`, and the BSP.
@@ -509,8 +517,8 @@ reduce the test burden by making wrong states unrepresentable.
   peripheral models are incomplete, RTIC interrupt dispatch has
   subtle timing dependencies, and defmt integration is immature.
 - **RTIC integration test binaries now:** Deferred until trigger
-  criteria fire.  The current RTIC topology — three tasks at
-  identical priority, empty `Shared`, single 2-slot channel —
+  criteria fire.  The current RTIC topology-- three tasks at
+  identical priority, empty `Shared`, single 2-slot channel--
   does not warrant the tooling investment.
 - **Full HIL framework now:** Deferred to Phase 3+.  Requires
   self-hosted runner, USB passthrough, and container networking
@@ -532,13 +540,12 @@ and cold-end.  Labeled positive/negative ARS captures will later
 train a passive CNN that detects filament at cold-pull start from
 printer sound alone; generalized fault detection is explicitly out
 of scope.  Prototype hardware: NUCLEO-N657X0-Q (STM32N657X0:
-Cortex-M55 @ 800 MHz, 4.2 MB RAM, flashless-- boots via signed
-FSBL from external NOR, Neural-ART NPU), an Adafruit MAX9744 20 W
-class-D amp driving a Dayton Audio EX25VT2-4 exciter (25 mm,
-4 ohm) as the acoustic source, and a SparkFun SPH8878LR5H-1 MEMS
-mic breakout (BOB-19389) modified with a TI OPA345NA op-amp and a
-30 kOhm resistor replacing C3.  The hardware is not in hand yet;
-today's work is scaffold only.
+Cortex-M55 @ 800 MHz, 4.2 MB RAM, flashless-- boots via a signed first-stage
+boot loader (FSBL) from external NOR, Neural-ART NPU), an Adafruit MAX9744
+20 W class-D amp driving a Dayton Audio EX25VT2-4 exciter (25 mm, 4 ohm) as
+the acoustic source, and a SparkFun SPH8878LR5H-1 MEMS mic breakout (BOB-19389)
+modified with a TI OPA345NA op-amp and a 30 kOhm resistor replacing C3.  The
+hardware is not in hand yet; today's work is scaffold only.
 
 **Decision:** Add the ARS toolhead sensor as a second project track
 in this repository: a `boards/nucleo-n657x0` crate, excluded from

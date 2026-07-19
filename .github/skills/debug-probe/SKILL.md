@@ -80,23 +80,25 @@ interactive numbered prompt; in a non-interactive agent shell this
 fails outright rather than picking a safe default (validated: see
 "Gotchas" below).  Never rely on positional/interactive selection.
 
-### Embed.toml Presets and `PROBE_RS_CONFIG_PRESET`
+### Embed.toml Layout and the Retired Preset Mechanism
 
-The repo ships two `Embed.toml` files:
+The repo ships per-board `Embed.toml` files plus a root default:
 
-- `Embed.toml` (root)-- defines named tables `default`, `feather`,
-  `microbit`, and `stm32f3`, each with a `chip` and RTT/gdb config.
-  Its header comments document a `PROBE_RS_CONFIG_PRESET=<name>`
-  environment variable (e.g. `PROBE_RS_CONFIG_PRESET=feather cargo
-  run --release`) as the way to pick a board.
-- `boards/feather-stm32f405/Embed.toml`-- a board-local override
-  with only a `default` table (chip `STM32F405RGTx`, SWD forced,
-  RTT channel 0 named `defmt`).
+- `Embed.toml` (root)-- a single `default` table for the workspace
+  default member (feather: chip `STM32F405RGTx`, SWD, RTT channel 0
+  named `defmt`).  No probe pin; multi-probe benches pin via
+  `Embed.local.toml` or `PROBE_RS_PROBE`.
+- `boards/feather-stm32f405/Embed.toml`-- board-local config, same
+  shape as the root default.
+- `boards/nucleo-h753zi/Embed.toml`-- chip `STM32H753ZITx` with the
+  on-board ST-LINK pinned (`usb_vid`/`usb_pid` 0483:374e) so a
+  multi-probe bench never grabs the J-Link.
 
-**Validated discrepancy:** with `probe-rs-tools` 0.31.0 as pinned in
-`.mise.toml`, `PROBE_RS_CONFIG_PRESET=feather` (and the equivalent
-`--preset feather` flag) does **not** select the `[feather]` table
-from `Embed.toml`--it fails outright:
+**History (validated 2026-07-19):** the root `Embed.toml` used to
+define named preset tables (`feather`, `microbit`, ...) and its
+header advertised `PROBE_RS_CONFIG_PRESET=<name>` for board
+selection.  With `probe-rs-tools` 0.31.0 as pinned in `.mise.toml`,
+that mechanism fails outright:
 
 ```console
 $ PROBE_RS_CONFIG_PRESET=feather probe-rs run --dry-run \
@@ -107,8 +109,8 @@ Error: Config preset 'feather' not found.
 `probe-rs`'s own `--preset`/`PROBE_RS_CONFIG_PRESET` mechanism reads
 a separate preset config that this repo does not define; it is not
 the same thing as `cargo-embed`'s `Embed.toml` profile tables.  The
-`Embed.toml` header comments describing `PROBE_RS_CONFIG_PRESET` are
-stale for this probe-rs-tools version-- do not trust them as-is.
+preset tables and header comments were removed 2026-07-19; if you
+see `PROBE_RS_CONFIG_PRESET` referenced anywhere, treat it as stale.
 
 **What actually works (validated):** set `PROBE_RS_CHIP` (or pass
 `--chip` directly).  This is what `.mise/tasks/test/device` and
@@ -131,9 +133,8 @@ Chip names per board, for direct `--chip`/`PROBE_RS_CHIP` use:
 | Board | Chip |
 |-------|------|
 | `boards/feather-stm32f405` | `STM32F405RGTx` |
+| `boards/nucleo-h753zi` | `STM32H753ZITx` |
 | `boards/nucleo-n657x0` (scaffold, no hardware) | `STM32N657X0` |
-| micro:bit v2 (root `Embed.toml` preset, not a workspace board) | `nRF52833_xxAA` |
-| STM32F3 Discovery (root `Embed.toml` preset, not a workspace board) | `STM32F303VCTx` |
 
 ## 2. Flows
 
@@ -193,7 +194,7 @@ with the running firmware.  Pick the more recently built ELF under
 unsure which was last flashed.
 
 `attach`'s own `--help` text is misleadingly copy-pasted from `run`
-("the binary will be flashed and run normally")--in practice it does
+("the binary will be flashed and run normally")-- in practice it does
 **not** reflash; it only opens RTT on the currently running target.
 
 ### Reset
@@ -274,7 +275,7 @@ $ DEFMT_LOG=debug cargo run -p feather-stm32f405 --release -- \
 ```
 
 Valid levels (least to most verbose): `off`, `error`, `warn`,
-`info`, `debug`, `trace`. The repo default is `info`, set in both
+`info`, `debug`, `trace`.  The repo default is `info`, set in both
 `.cargo/config.toml` and `.mise.toml`'s `[env]` table-- this matches
 the `[INFO ]`/`[WARN ]`/`[ERROR]` levels seen in the validated
 `attach` output above (no `DEBUG`/`TRACE` lines because the flashed
@@ -366,7 +367,7 @@ Caused by:
 
 `probe-rs list` (pure enumeration) worked fine sandboxed in this
 session, but `info`/`attach`/`run`/`reset`/`gdb` all need
-`dangerouslyDisableSandbox: true`. Try the plain command first; only
+`dangerouslyDisableSandbox: true`.  Try the plain command first; only
 disable the sandbox after seeing this exact USB error, and still
 follow the safety rules above (explicit `--probe`/`--chip`, never
 the ST-LINK).

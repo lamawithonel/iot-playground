@@ -63,7 +63,10 @@ the reference project, demonstrating:
 - [x] Migrated `feather-stm32f405` to `boards/feather-stm32f405/`
 - [x] Single root `.cargo/config.toml` with probe-rs runner
 - [x] Centralized board configurations in root `Embed.toml`
+  (retired 2026-07-19: per-board `Embed.toml` files now)
 - [x] Native probe-rs board selection via `PROBE_RS_CONFIG_PRESET`
+  (retired 2026-07-19: broken in probe-rs 0.31; explicit
+  `--chip`/`--probe` or env vars instead)
 - [x] Skeleton crates: `core/` and `hal-abstractions/`
 - [x] Build system fixes for `memory.x` linker script handling
 - [x] Documentation updates (README, AGENTS.md, ADRs)
@@ -111,10 +114,10 @@ dccd96634679d52a7eac7a0ed216b9c24dbfb122)
 
 **Known Limitations:**
 
-- **No RSA support** — servers must use ECDSA certificates
-- **No SHA-512/SHA-3** — only SHA-256/SHA-384 available
-- **ECDSA only** — supports secp256r1 and secp384r1 curves
-- **Single cipher suite** — TLS_AES_128_GCM_SHA256
+- **No RSA support**-- servers must use ECDSA certificates
+- **No SHA-512/SHA-3**-- only SHA-256/SHA-384 available
+- **ECDSA only**-- supports secp256r1 and secp384r1 curves
+- **Single cipher suite**-- TLS_AES_128_GCM_SHA256
 
 **Alternatives Evaluated:**
 
@@ -132,7 +135,7 @@ dccd96634679d52a7eac7a0ed216b9c24dbfb122)
 
 ### 2.3 Serialization & Architecture Research ✅ Complete
 
-**Status:** ✅ Research complete — ready for implementation
+**Status:** ✅ Research complete-- ready for implementation
 
 Three parallel research tracks evaluated serialization,
 inter-task communication, cloud integration, and API contract
@@ -141,20 +144,20 @@ specification across ~9,000 lines of research.
 **Serialization (Protobuf):**
 
 - **micropb 0.6** selected as the Protobuf library
-  (no_std/no_alloc, ~8–12 KB flash, <1 KB RAM)
-- **CloudEvents cloud-side only** — devices send raw
+  (no_std/no_alloc, ~8-12 KB flash, <1 KB RAM)
+- **CloudEvents cloud-side only**-- devices send raw
   Protobuf (32 B); AWS IoT Rules Engine adds CloudEvents
   envelope before EventBridge
-- **Encoding in sensor task** — 7–11 µs at 168 MHz;
-  negligible vs. 2–5 ms I2C read
-- **AWS double-decode** confirmed — Rules Engine supports
+- **Encoding in sensor task**-- 7-11 µs at 168 MHz;
+  negligible vs. 2-5 ms I2C read
+- **AWS double-decode** confirmed-- Rules Engine supports
   two `decode()` calls per SQL expression, Basic Ingest
   compatible
 
 **API Contract (AsyncAPI):**
 
 - **AsyncAPI v3.1.0** adopted as documentation and contract
-  specification — zero MCU code, CI-verifiable
+  specification-- zero MCU code, CI-verifiable
 - Complements Protobuf (payload schema) and CloudEvents
   (envelope standard)
 - Describes MQTT topics, QoS settings, server endpoints,
@@ -221,8 +224,9 @@ for formal decisions.
 - [x] Move feather-stm32f405 to boards/ directory
 - [x] Create skeleton crates: core/ and hal-abstractions/
 - [x] Single root .cargo/config.toml with common settings
-- [x] Root Embed.toml with board presets
-- [x] Board selection via PROBE_RS_CONFIG_PRESET
+- [x] Root Embed.toml with board presets (retired 2026-07-19)
+- [x] Board selection via PROBE_RS_CONFIG_PRESET (retired
+  2026-07-19: broken in probe-rs 0.31)
 - [x] Build script (build.rs) for memory.x linker script
 - [x] Remove legacy board directories
 - [x] Update documentation (README, AGENTS.md, ADRs, roadmap)
@@ -269,7 +273,7 @@ for formal decisions.
 - [x] SEN66 I2C driver (via `sen6x` crate with CRC)
 - [x] Periodic sensor readings (configurable interval)
 - [x] Sensor conditioning guards (SEN66 warmup tracking)
-- [x] Publish sensor data via MQTT (JSON — migrating to
+- [x] Publish sensor data via MQTT (JSON-- migrating to
   Protobuf in Phase 5)
 - [x] Platform-agnostic sensor types and conditioning
   in `core/`
@@ -322,7 +326,7 @@ and [ADR-008](./architecture/decisions.md#adr-008-micropb-for-protobuf-encoding)
 - [ ] Create `proto/` directory with buf.yaml configuration
 - [ ] Vendor Google well-known types (timestamp.proto)
 - [ ] Write `proto/iot/v1/telemetry.proto` (SEN66 with
-  deci-scaled integers, field numbers 1–10)
+  deci-scaled integers, field numbers 1-10)
 - [ ] Write `proto/iot/v1/common.proto` (shared types)
 - [ ] Write TOML capacity configs for micropb-gen
 - [ ] Add `buf` to mise tool dependencies
@@ -375,8 +379,8 @@ and [ADR-008](./architecture/decisions.md#adr-008-micropb-for-protobuf-encoding)
 |--------|-----------------|---------------------|
 | Payload size | ~220 B | ~32 B |
 | Encoding time | ~25 µs | ~8 µs |
-| Flash overhead | — | ~8–12 KB |
-| RAM overhead | — | <1 KB |
+| Flash overhead | n/a | ~8-12 KB |
+| RAM overhead | n/a | <1 KB |
 
 ### Phase 6: Display ⏳ Not Started
 
@@ -408,7 +412,7 @@ without signed firmware and secure boot chain.
 
 ### Phase 8: Fleet Operations ⏳ Not Started
 
-Leverage AWS IoT Device Management where possible; build
+Use AWS IoT Device Management where possible; build
 only what requires custom firmware logic.
 
 - [ ] AWS IoT Fleet Provisioning (claim certificates)
@@ -431,8 +435,8 @@ telemetry MVP.
 
 - [ ] Verify CAN pin assignments with logic analyzer
 - [ ] CAN bus configuration at 1 Mbps
-- [ ] CAN → MQTT forwarding
-- [ ] MQTT → CAN transmission
+- [ ] CAN -> MQTT forwarding
+- [ ] MQTT -> CAN transmission
 
 ---
 
@@ -490,7 +494,7 @@ verification.
 - [ ] `test_support` shared module for `#[app]` test
   boilerplate
 - [ ] Per-board `#[app]` integration test matrix
-- [ ] TLA+ model of sensor → channel → network pipeline
+- [ ] TLA+ model of sensor -> channel -> network pipeline
 - [ ] Self-hosted runner with nightly `#[app]` execution
 - [ ] Stack high-water-mark instrumentation in TLS test
   binary
@@ -528,9 +532,9 @@ self-hosted GitHub Actions runner will be configured:
 
 | Gate | Phase | Requirement |
 |------|-------|-------------|
-| Dev → Staging | 4 | Software certificate verification |
-| Staging → Production | 7 | Signed firmware + secure boot |
-| Production → Regulated | 8 | Audit logging + fleet management |
+| Dev -> Staging | 4 | Software certificate verification |
+| Staging -> Production | 7 | Signed firmware + secure boot |
+| Production -> Regulated | 8 | Audit logging + fleet management |
 
 ---
 
@@ -556,7 +560,7 @@ Total MCU resources: 192 KB SRAM (128 KB main + 64 KB CCM),
 | Component | Region | Size |
 |-----------|--------|------|
 | Protobuf encode scratch | Stack | 256 B |
-| micropb runtime + types | Flash | ~8–12 KB |
+| micropb runtime + types | Flash | ~8-12 KB |
 | **Subtotal (Phase 5)** | | **~0.3 KB RAM** |
 
 ### 6.3 Projected Total (after Phase 5)
@@ -575,12 +579,12 @@ Flash:     ~287 KB / 1 MB   = 28% utilization
 
 Items intentionally deferred:
 
-1. **Alternative TLS Libraries** — requires hardware with
+1. **Alternative TLS Libraries**-- requires hardware with
    allocator support or C toolchain integration
-2. **Additional Board Profiles** — future profiles added as
+2. **Additional Board Profiles**-- future profiles added as
    `boards/<profile-name>/`
-3. **Multi-MCU Support** — ATSAM, STM32F7/H7, nRF52, ESP32
-4. **Hardware-in-the-Loop (HIL) Test Automation** — use a
+3. **Multi-MCU Support**-- ATSAM, STM32F7/H7, nRF52, ESP32
+4. **Hardware-in-the-Loop (HIL) Test Automation**-- use a
    Saleae Logic Pro 16 (or similar MSO) with the Logic 2
    gRPC automation API to validate bus-level behavior:
    I2C transactions (SEN66), SPI timing (W5500, ePaper,
@@ -591,22 +595,22 @@ Items intentionally deferred:
    hardware investment (~$1,500 for Logic Pro 16).
    Accessed via `mise run test:hil` with selectable test
    suites (e.g., `test:hil:i2c`, `test:hil:spi`)
-5. **FIPS 140-3 Support** — desired for strong cryptographic
+5. **FIPS 140-3 Support**-- desired for strong cryptographic
    assurance, not a development priority
-6. **Wireless Connectivity** — WiFi/BLE modules (current
+6. **Wireless Connectivity**-- WiFi/BLE modules (current
    primary design is Ethernet)
-7. **BBQueue Zero-Copy Pipeline** — lock-free SPSC inter-task
+7. **BBQueue Zero-Copy Pipeline**-- lock-free SPSC inter-task
    communication; research complete (see session archives),
    implementation deferred to dedicated feature branch
-8. **Buf Schema Registry (BSR)** — hosted schema registry for
+8. **Buf Schema Registry (BSR)**-- hosted schema registry for
    cross-team sharing; simple S3 + git tags suffice initially
-9. **On-Device CloudEvents Envelope** — currently cloud-side
+9. **On-Device CloudEvents Envelope**-- currently cloud-side
    only via Rules Engine; on-device encoding adds ~48 B per
    message but enables offline CloudEvents compliance.
    Implement when a second consumer demands the envelope.
-10. **Azure IoT Hub / GCP IoT** — secondary cloud support via
+10. **Azure IoT Hub / GCP IoT**-- secondary cloud support via
     trait-based abstraction; implemented after AWS is proven
-11. **CAN Bus Gateway** — deferred to backlog; separate effort
+11. **CAN Bus Gateway**-- deferred to backlog; separate effort
     from sensor telemetry
 12. **ARS Toolhead-Sensor Project**-- the second framework
     consumer (see
@@ -623,8 +627,8 @@ Items intentionally deferred:
 
 ## References
 
-- IEEE 16326:2019 — Systems and software engineering — Life
-  cycle processes — Project management
+- IEEE 16326:2019-- Systems and software engineering-- Life
+  cycle processes-- Project management
 - [System Requirements Specification](./system_requirements.md)
 - [Risk Register](./risk_register.md)
 - [Architecture Decisions](./architecture/decisions.md)
