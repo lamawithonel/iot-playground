@@ -33,7 +33,7 @@ validate the hardware foundation beneath the application
 runtime, not the runtime itself.  RTIC adds task scheduling,
 priority-based preemption, and shared-resource management above
 this foundation.  Testing without RTIC isolates hardware
-behavior — clock trees, bus timing, peripheral registers — from
+behavior-- clock trees, bus timing, peripheral registers-- from
 framework behavior.  If a bring-up test fails, the problem is
 in the hardware configuration or wiring, never in an RTIC task
 interaction.  This makes failures unambiguous and drastically
@@ -43,9 +43,9 @@ simplifies debugging.
 
 ### Layer 1: Host Unit Tests
 
-**What it tests:** Pure logic in `core/` and `hal-abstractions/`
-— state machines, data formatting, time math, sensor value
-conversions, and protocol encoding.
+**What it tests:** Pure logic in `core/` and
+`hal-abstractions/`-- state machines, data formatting, time math,
+sensor value conversions, and protocol encoding.
 
 **Where it runs:** `cargo test` on the host (x86_64).  No
 embedded target, no hardware.
@@ -53,7 +53,7 @@ embedded target, no hardware.
 **Key test categories:**
 
 - Data integrity across transformation boundaries (e.g.,
-  sensor value → formatted payload)
+  sensor value -> formatted payload)
 - Payload size budgets (worst-case values must fit in bounded
   buffers)
 - NaN/Inf handling (must propagate as `None`, not `0.0`)
@@ -66,7 +66,7 @@ When in doubt, write a host test.
 
 ### Layer 2: Peripheral Bring-Up
 
-**What it tests:** Hardware initialization — clocks, buses,
+**What it tests:** Hardware initialization-- clocks, buses,
 and peripherals respond as expected.
 
 **Where it runs:** On the MCU via `embedded-test` 0.7.x and
@@ -99,7 +99,7 @@ the test and production `init`.
 
 **What it will test:** Inter-task communication via
 `rtic_sync` channels, monotonic timer behavior under load,
-and vertical data slices (sensor → channel → network task).
+and vertical data slices (sensor -> channel -> network task).
 
 **Why deferred:** Building custom `#[app]` test binaries
 requires per-binary linker scripts, RTT-based pass/fail
@@ -147,7 +147,7 @@ orchestrates the entire pipeline:
   topic structure, JSON schema, required fields, QoS level,
   and retain flag.
 - **Sensor conditioning**
-  (`rtt/sensor_conditioning.feature`): Verify CO₂
+  (`rtt/sensor_conditioning.feature`): Verify CO2
   conditioning (needs >=60s) and VOC/NOx conditioning
   (needs longer).  Uses `@extended` and `@full` tags to
   control which tiers run these scenarios.
@@ -240,7 +240,7 @@ Tier selection controls which Cucumber-RS scenarios run:
 | Tier | Command | Duration | Interval | What it adds |
 |------|---------|----------|----------|--------------|
 | Standard | `mise run test:integration` | 165s | 5s | Boot, MQTT, WFI, errors, correlation |
-| Extended | `mise run test:integration-extended` | 300s | 15s | + CO₂ conditioning (`@extended`) |
+| Extended | `mise run test:integration-extended` | 300s | 15s | + CO2 conditioning (`@extended`) |
 | Full | `mise run test:integration-full` | 780s | 60s | + VOC/NOx conditioning (`@full`) |
 
 **Tag-based filtering:** The Cucumber-RS validator skips
@@ -249,13 +249,15 @@ tier is high enough.  This lets you run `test:integration`
 for quick feedback and save the longer tiers for thorough
 validation or pre-release testing.
 
-To run just the smoke test portion at a specific tier:
+To run just the smoke test portion at a specific tier, use the
+matching task name-- tier selection is a separate task per tier, not
+a flag:
 
-```sh
-mise run test:smoke                    # standard
-mise run test:smoke -- --tier extended # extended
-mise run test:smoke -- --tier full     # full
-```
+| Tier | Command | Duration | Interval |
+|------|---------|----------|----------|
+| Standard | `mise run test:smoke` | 165s | 5s |
+| Extended | `mise run test:smoke-extended` | 300s | 15s |
+| Full | `mise run test:smoke-full` | 780s | 60s |
 
 ### Full Pipeline
 
@@ -287,7 +289,7 @@ cargo clippy --workspace \
 Use this decision matrix to decide which layer needs a new
 test:
 
-| You changed… | Add a test in… |
+| You changed... | Add a test in... |
 |:-------------|:---------------|
 | `core/` logic or data types | Layer 1 (host unit test) |
 | BSP peripheral init or pin mapping | Layer 2 (bring-up test) |
@@ -299,7 +301,7 @@ test:
 | `defmt` log messages used as milestones | Layer 4 (boot sequence feature) |
 
 When in doubt: if the code can be tested without hardware,
-write a host test.  Hardware test cycles are expensive — save
+write a host test.  Hardware test cycles are expensive-- save
 them for questions only hardware can answer.
 
 ## CI/CD Strategy
@@ -347,7 +349,7 @@ corresponding mise task.
 ## Future: HIL Testing
 
 Hardware-in-the-loop (HIL) testing will use a Saleae Logic
-Pro 16 for automated protocol validation — capturing SPI,
+Pro 16 for automated protocol validation-- capturing SPI,
 I2C, and UART traffic during test runs and asserting timing
 and data correctness programmatically.  This is planned for
 when the self-hosted runner infrastructure is in place.
