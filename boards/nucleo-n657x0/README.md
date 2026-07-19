@@ -12,61 +12,73 @@ Per the `boards/` rule ([`boards/AGENTS.md`](../AGENTS.md)), new
 profiles stay in the root `[workspace]` exclude list until they
 compile in CI (target installed, clippy clean).  This crate
 additionally gates on the bring-up spike: the probe-rs flow for
-the flashless signed-FSBL external-NOR boot chain is unverified,
-so no dependencies are pinned yet.
+the flashless external-NOR boot chain via a signed first-stage boot loader
+(FSBL) is unverified, so no dependencies are pinned yet.
 
 ## Pinout
 
-**Status: provisional.**  No hardware has arrived; every assignment below
-is gated on Spike Gates G0-G5 in
+**Status: provisional.**  No hardware has arrived; every ARS assignment
+below is gated on Spike Gates G0-G5 in
 [`pinout.md`](../../docs/src/projects/ars-toolhead-sensor/pinout.md) and
 may still change-- see G2 (mic capture quality) and G3 (PWM audio
-fidelity) in particular.  This diagram renders that document for quick
-reference; it is not a second source of truth, and `pinout.md` wins on
-any disagreement.
+fidelity) in particular.  This diagram renders that document against the
+full board header pinout; `pinout.md` wins on any disagreement.
+
+The full Arduino Uno V3 header pinout is shown below (data from UM3417
+Rev 3, Table 12).  Every header pin carries its Mark, MCU function, and
+MCU pin; the five ARS-used signals are flagged with `*`.
 
 ```
-LEFT SIDE (Arduino Uno V3)              BOARD         RIGHT SIDE (ST Morpho)
-==========================        Physical Layout     ======================
-                                        .....
-Signal      Func       Pin  Mark  .--|          |--.  Mark  Pin  Func       Signal
-----------  ---------  ---  ----     |  N657X0  |     ----  ---  ---------  ------
-                                     |          |
-MIC_AUD     ADC1_INP5  PA8  A0    o--|          |
-                                     |          |
-AUDIO_PWM   TIM1_CH1   PE9  D3    o--|          |
-                                     |          |--o  3     PH9  I2C1_SCL   AMP_I2C_SCL
-                                     |          |--o  5     PC1  I2C1_SDA   AMP_I2C_SDA
-AMP_MUTE_N  GPIO       PD0  D2    o--|          |
-                                     '----------'
+LEFT  Arduino Power (CN5) + Analog (CN4)                  RIGHT  Arduino Digital (CN14 + CN13)
+Device     Func         Pin   Mark                       Mark  Pin   Func           Device
+------     ----         ---   ----                       ----  ----  -------------  ------
+                                        .----------.
+           5V_IN test   --    NC     o--|          |--o  D15   PH9   I2C1_SCL       ARS amp SCL *
+           3V3 ref      --    IOREF  o--|          |--o  D14   PC1   I2C1_SDA       ARS amp SDA *
+           Reset        NRST  RST    o--|          |--o  AREF  --    AVDD
+           3.3V out     --    3V3    o--|          |--o  GND   --    Ground
+           5V out       --    5V     o--|          |--o  D13   PE15  SPI5_SCK
+           Ground       --    GND    o--|          |--o  D12   PG1   SPI5_MISO
+           Ground       --    GND    o--|          |--o  D11   PG2   SPI5_MOSI/T14
+           Power in     --    VIN    o--|          |--o  D10   PA3   SPI5_CS/T16
+ARS mic *  ADC12_INP5   PA8   A0     o--| N657X0-Q |--o  D9    PD7   TIM1_CH2
+           ADC12_INP10  PA9   A1     o--|  MB1940  |--o  D8    PD12  --
+           ADC12_INP11  PA10  A2     o--|          |--o  D7    PE11  --
+           ADC12_INP13  PA12  A3     o--|          |--o  D6    PD5   TIM1_CH4N
+           ADC1_INP16   PF3   A4     o--|          |--o  D5    PE10  TIM1_CH2N
+           ADC12_INP7   PG15  A5     o--|          |--o  D4    PE0   --
+                                        |          |--o  D3    PE9   TIM1_CH1       ARS audio PWM *
+                                        |          |--o  D2    PD0   GPIO           ARS amp mute *
+                                        |          |--o  D1    PD8   USART3_TX
+                                        |          |--o  D0    PD9   USART3_RX
+                                        '----------'
 ```
 
-Signals the diagram cannot show (also assigned in `pinout.md`):
+Notes:
 
-- `AUDIO_PWM` (PE9) and `AMP_MUTE_N` (PD0) also route to ST Morpho CN15
-  pins 31 and 33-- the Arduino and Morpho headers share the same net on
-  this board.
-- `USER_BTN` (PC13, EXTI13) is the on-board blue button B1, also present
-  on morpho CN3 pin 23.  Zero external wiring.
-- `VCP_TX`/`VCP_RX` (PE5/PE6, USART1) are internal to the STLINK-V3EC
-  debug probe, reserved for the ST-LINK virtual COM port, and exposed
-  only via the CN10 USB connector-- never available for I2C1 or TIM.
-
-| Signal | AF / Function | GPDMA Request | Notes |
-|--------|---------------|----------------|-------|
-| `MIC_AUD` | ADC1_INP5 (analog, no AF) | GPDMA1 REQSEL 7 (`adc1_dma`) | Linked-list circular capture. |
-| `AUDIO_PWM` | TIM1_CH1 (AF1) | GPDMA1 REQSEL 18 (`tim1_upd_dma`) | Duty-cycle stream into CCR1; external RC low-pass feeds MAX9744 LEFTIN. |
-| `AMP_I2C_SCL` | I2C1_SCL (AF4) | -- | Interrupt-driven event/error; private bus (not the VCP, not I2C2). |
-| `AMP_I2C_SDA` | I2C1_SDA (AF4) | -- | Interrupt-driven event/error. |
-| `AMP_MUTE_N` | GPIO, open-drain recommended | -- | Drive LOW to engage mute-- the MAX9744 board inverts MUTE. |
-| `USER_BTN` | EXTI13 | -- | On-board B1; bring-up interaction and EXTI-path verification. |
-| `VCP_TX` | USART1_TX (AF7) | -- | Reserved for the ST-LINK VCP. |
-| `VCP_RX` | USART1_RX (AF7) | -- | Reserved for the ST-LINK VCP. |
+- `*` marks the five ARS signals: mic input (A0/PA8), audio PWM
+  (D3/PE9), amp mute (D2/PD0), and the amp I2C1 bus (D15/PH9 SCL,
+  D14/PC1 SDA).  `pinout.md` is the authority for which physical tap
+  each uses; PH9/PC1 and PE9/PD0 are also exposed on the ST morpho
+  headers (CN15), which is where `pinout.md` routes the amp bus and
+  mute to avoid the Arduino I2C solder bridges.
+- A0-A5 each route both a 3.3 V digital pin and a 1.8 V ADC pin through
+  an on-board voltage-adaptation amplifier (UM3417 Figure 14); the
+  ADC-side MCU pin is shown, since the mic uses the analog path (the N6
+  ADC lives in the 1.8 V VDDA domain).
+- A4/A5 can alternatively carry I2C1 (PC1/PH9) instead of ADC, but only
+  with solder-bridge changes (SB2/SB4 ON, SB3/SB5 OFF); D15/D14 expose
+  the same I2C1 pins with no bridges.
+- The ST morpho headers (CN2/CN3/CN15/CN16) break out most remaining
+  STM32 I/Os and are not reproduced here; see UM3417 Tables 13-14.  The
+  on-board blue user button B1 (PC13/EXTI13) needs no external wiring,
+  and the ST-LINK VCP (PE5/PE6, USART1) is reserved and reachable only
+  over the CN10 USB connector.
 
 Authoritative source:
 [`pinout.md`](../../docs/src/projects/ars-toolhead-sensor/pinout.md)-- read
 it for the full rationale, decisions, open questions, and gate criteria
-behind every assignment above.
+behind every ARS assignment above.
 
 ## Where the Real Content Lives
 
