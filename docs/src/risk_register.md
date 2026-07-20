@@ -33,7 +33,8 @@ significant flash and RAM, potentially exceeding STM32F405 resources.
 
 **Mitigation:** 
 - Selected `embedded-tls` which requires no allocator
-- TLS buffers (34KB) fit in main SRAM
+- TLS buffers (34KB) placed in CCM RAM, freeing main SRAM for the
+  handshake stack (see `system_requirements.md` section 3.5)
 - Flash usage currently well under 900KB limit
 
 **Status:** ✅ Mitigated-- TLS 1.3 handshake working

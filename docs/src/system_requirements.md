@@ -155,25 +155,33 @@ TODO: Decide on timer requirements
 
 ```txt
  Main SRAM (128KB) - DMA-accessible:
- ├─ Stack:                    16KB (at top, grows down)
- ├─ TLS session state:        40KB
- ├─ TCP/IP buffers:           20KB
- ├─ Application heap:         20KB
- ├─ W5500 DMA buffers:        12KB
- ├─ Sensor data buffers:       8KB
- ├─ Protobuf encoding:         8KB
- └─ Firmware update buffer:    4KB
+ ├─ Stack (at top, grows down)
+ ├─ TCP RX/TX buffers (StaticCell, ~8KB)
+ ├─ MQTT buffer (StaticCell, 2KB)
+ ├─ W5500 DMA buffers
+ └─ Sensor data buffers
 
- CCM RAM (64KB) - CPU-only, zero wait states:
- ├─ Critical variables:        <1KB
- │   └─ TIME_SYNCED flag
- └─ Reserved for future:       63KB+
-     └─ Available for timing-critical data
-
- Note: TLS buffers (34KB: 18KB read + 16KB write) now in main SRAM.
- Stack in main RAM allows more flexibility and prevents
-       linker conflicts between stack and .ccmram section.
+ CCM RAM (64KB) - CPU-only, zero wait states, no DMA:
+ ├─ TLS buffers:              34KB
+ │   ├─ TLS_READ_BUF:  18KB
+ │   └─ TLS_WRITE_BUF: 16KB
+ ├─ Critical variables:       <1KB
+ │   └─ TIME_SYNCED + wall-clock base atomics
+ └─ Reserved for future:     ~30KB
 ```
+
+No heap: the firmware does not link `alloc`; every buffer is
+static or on the stack.  `boards/feather-stm32f405/src/ccmram.rs`
+is the source of truth for CCM allocations, and the stack stays in
+main SRAM to avoid a linker conflict with the `.ccmram` section.
+
+On this board the TLS buffers MUST live in CCM RAM: the 128 KB
+main-SRAM budget does not fit them, and the zero-wait-state reads
+also help the handshake.  Larger-RAM targets do not share the fit
+constraint (STM32H753ZI: 1 MB RAM; STM32N657X0: 4.2 MB contiguous
+SRAM), and their TCM/CCM-class memory may be needed for more
+important speed-critical work, so TLS buffer placement there is
+TBD-- `iot-net` accepts the buffers from the caller either way.
 
 ---
 
