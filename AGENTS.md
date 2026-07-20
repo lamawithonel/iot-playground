@@ -41,9 +41,9 @@ These apply to every change; violations fail review.
 
 ## Device Tiers
 
-- **Tier 1 (Minimal):** ≤128KB RAM, no TLS, basic I/O only
-- **Tier 2 (Connected):** ≥192KB RAM, TLS/MQTT capable, primary target
-- **Tier 3 (Gateway):** ≥512KB RAM, multi-protocol, edge compute
+- **Tier 1 (Minimal):** <=128KB RAM, no TLS, basic I/O only
+- **Tier 2 (Connected):** >=192KB RAM, TLS/MQTT capable, primary target
+- **Tier 3 (Gateway):** >=512KB RAM, multi-protocol, edge compute
 
 ## Directory Index
 
@@ -71,4 +71,5 @@ wiring).
 | [`testing_gates.md`](.agents/rules/testing_gates.md) | Before any commit; choosing which checks to run |
 | [`git_commit_style.md`](.agents/rules/git_commit_style.md) | Writing commit messages |
 | [`markdown_style.md`](.agents/rules/markdown_style.md) | Editing any Markdown |
+| [`prose_style.md`](.agents/rules/prose_style.md) | Writing or editing docs prose, comments, or doc-comments; register and craft |
 | [`shell_style.md`](.agents/rules/shell_style.md) | Editing shell scripts (`.mise/tasks/`, `test/scripts/`) |

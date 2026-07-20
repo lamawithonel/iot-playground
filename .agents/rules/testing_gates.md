@@ -143,3 +143,17 @@ When hardware was available:
 ```
 Tested-on: host (x86_64-unknown-linux-gnu), clippy, device (STM32F405)
 ```
+
+## Editorial Gate
+
+Prose and comments have their own gate, parallel to the code
+gates above and governed by [`prose_style.md`](prose_style.md)
+and [`markdown_style.md`](markdown_style.md).
+
+- **Per commit.** Before any commit that changes Markdown files
+  or code comments, run the `deputy-editor` subagent (model:
+  sonnet) over the changed files and apply its edits.
+- **Per push, PR, or phase boundary.** A Compositor-class
+  editorial gate review (model: opus) covers the whole batch--
+  including commit messages-- against
+  [`prose_style.md`](prose_style.md).
