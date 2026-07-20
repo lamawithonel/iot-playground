@@ -1,7 +1,7 @@
 //! Time Synchronization Module with Hardware RTC
 //!
 //! Implements time synchronization using SNTP (Simple Network Time
-//! Protocol) per RFC 5905, fulfilling requirements SR-NET-006 and
+//! Protocol) per RFC 4330, fulfilling requirements SR-NET-006 and
 //! SR-NET-007.
 //!
 //! ## Architecture

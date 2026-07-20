@@ -194,7 +194,7 @@ TBD-- `iot-net` accepts the buffers from the caller either way.
 **SR-NET-003:** System SHALL maintain MQTT connection with 60s keep-alive and automatic reconnect  
 **SR-NET-004:** System SHALL enter sleep mode between transmissions, waking on EXTI2 or timer  
 **SR-NET-005:** System SHALL process network interrupts within 500 μs  
-**SR-NET-006:** System SHALL synchronize time using SNTP (RFC 5905)  
+**SR-NET-006:** System SHALL synchronize time using SNTP (RFC 4330)  
 **SR-NET-007:** System SHALL timestamp all MQTT messages with an `event_timestamp` when the event is first captured and a `send_timestamp` when the MQTT message is sent  
 **SR-NET-008:** System SHALL retry failed MQTT QoS level 0 messages up to 5 times with exponential back-off, then log error and discard the message  
 **SR-NET-009:** System SHALL retry failed MQTT QoS level 1 and 2 messages up to 5 times with exponential back-off, then log error and place the message in one of two DLQs on the microSD card: one for network failures and one for rejected messages  
