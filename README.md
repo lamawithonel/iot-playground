@@ -14,9 +14,8 @@ This project provides a multi-device capable embedded firmware framework using:
 
 ## Supported Boards
 
-- **Adafruit Feather STM32F405** (Tier 2: Connected device with TLS/MQTT)
-- BBC micro:bit v2 (planned)
-- STM32F3 Discovery (planned)
+The board roster and per-board documentation live in
+[docs/src/boards/](docs/src/boards/README.md).
 
 ## Prerequisites
 
@@ -156,24 +155,16 @@ The root `.cargo/config.toml` provides common settings for all boards:
 
 ### Flash Only
 
-```bash
-# Flash the release build
-cargo flash --release --chip STM32F405RGTx
-```
+Board-specific flash commands live in each board's page under
+[docs/src/boards/](docs/src/boards/README.md).
 
 ## Debugging
 
 ### View Logs with RTT
 
-The firmware uses `defmt` for efficient logging over RTT (Real-Time Transfer):
-
-```bash
-# Build, flash, and view logs
-cargo embed --release
-
-# Or just attach to an already-running device
-probe-rs attach --chip STM32F405RGTx
-```
+The firmware uses `defmt` for efficient logging over RTT (Real-Time Transfer).
+Board-specific attach commands live in each board's page under
+[docs/src/boards/](docs/src/boards/README.md).
 
 ### Set Log Level
 
@@ -187,16 +178,8 @@ cargo embed --release
 
 ### Interactive Debugging with probe-rs
 
-```bash
-# Start GDB server
-probe-rs gdb --chip STM32F405RGTx target/thumbv7em-none-eabihf/release/feather-stm32f405
-
-# In another terminal, connect with GDB
-# (Requires arm-none-eabi-gdb or gdb-multiarch installed separately)
-arm-none-eabi-gdb target/thumbv7em-none-eabihf/release/feather-stm32f405
-(gdb) target remote :1337
-(gdb) continue
-```
+probe-rs provides a GDB server; the board-specific invocations live in
+each board's page under [docs/src/boards/](docs/src/boards/README.md).
 
 ## Project Structure
 
@@ -235,17 +218,8 @@ iot-playground/
 
 ### Board Profiles vs. Boards
 
-A **board profile** is a specific configuration combining:
-- A board type (e.g., Feather STM32F405)
-- Peripheral components (e.g., Ethernet chip, sensors)
-- Application purpose (e.g., sensor gateway, PTP server)
-
-Examples of board profiles in `boards/`:
-- `feather-eth-sensor/` - Feather STM32F405 + Ethernet + SEN66 sensor + CAN gateway
-- `feather-ptp-server/` - Feather STM32F405 + Ethernet + GPS clock (IEEE 1588 PTP)
-- `feather-m4-can/` - Feather M4 CAN Express + sensors (CAN-only device)
-
-Each profile shares common code (like network stack) but has unique configuration and glue code.
+The board-profile concept and the profile roster are documented in
+[docs/src/boards/](docs/src/boards/README.md).
 
 ## Development Workflow
 
@@ -329,10 +303,8 @@ enabled = false
 
 ### Network Configuration
 
-Edit `boards/feather-stm32f405/src/network/config.rs` for:
-- MQTT broker settings
-- TLS certificates
-- Network timeouts
+Board-specific network configuration is documented in each board's
+page under [docs/src/boards/](docs/src/boards/README.md).
 
 ### Build Profiles
 
@@ -471,20 +443,9 @@ probe-rs chip list | grep STM32F405
 
 ### Alternative Flashing Methods
 
-If you don't have a debug probe, the Feather STM32F405 has a built-in DFU bootloader:
-
-1. **Enter DFU mode:**
-   - Press and hold BOOT0 button
-   - Press and release RESET button
-   - Release BOOT0 button
-
-2. **Flash via DFU** (requires dfu-util installed separately):
-   ```bash
-   cargo build --release --target thumbv7em-none-eabihf
-   # Then use dfu-util (installation varies by OS)
-   ```
-
-**Note:** probe-rs is the recommended workflow. DFU mode is a fallback for boards without debug probe access.
+Probe-free fallbacks (e.g., the Feather's DFU bootloader) are
+documented in each board's page under
+[docs/src/boards/](docs/src/boards/README.md).
 
 ## Documentation
 
