@@ -19,8 +19,8 @@ use super::error::NetworkError;
 /// # Example
 ///
 /// ```no_run
-/// let mut socket = AsyncTcpSocket::new(rx_buffer, tx_buffer);
-/// socket.connect(stack, endpoint).await?;
+/// let mut socket = AsyncTcpSocket::new(stack, rx_buffer, tx_buffer);
+/// socket.connect(endpoint).await?;
 /// // Now socket can be used with embedded-tls
 /// ```
 pub struct AsyncTcpSocket<'a> {

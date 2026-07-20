@@ -6,24 +6,24 @@
 //!
 //! ## Architecture
 //!
-//! - SNTP client syncs with NTP servers every 15 minutes
-//! - Time is written to STM32 hardware internal RTC
-//! - Between syncs, timestamps are read from internal RTC hardware
-//! - Sync status stored atomically in CCM RAM
+//! - The SNTP client syncs once at network bring-up (periodic
+//!   resync is a planned follow-up)
+//! - Time is written to the STM32 internal hardware RTC
+//! - Between syncs, timestamps are read from the internal RTC
+//! - Sync status is stored atomically in CCM RAM
 //!
 //! ## Usage
 //!
 //! ```no_run
-//! // Initialize internal RTC
 //! time::initialize_rtc(rtc, rtc_time);
 //!
-//! // SNTP client is in network::SntpClient
-//! let mut sntp = network::SntpClient::new();
-//! if let Ok(ts) = sntp.run(&stack).await {
-//!     info!("Time synced: {}.{:06}", ts.unix_secs, ts.micros);
-//! }
+//! // The SNTP client lives in the shared iot-net crate; its
+//! // on_sync callback applies each validated timestamp.
+//! let mut sntp = iot_net::SntpClient::new(|ts| {
+//!     time::write_rtc(&ts).map_err(|_| NetworkError::SntpFailed)
+//! });
+//! sntp.run(stack, &mut rng).await?;
 //!
-//! // Get timestamp from internal RTC for sensor data
 //! let timestamp = time::get_timestamp();
 //! ```
 

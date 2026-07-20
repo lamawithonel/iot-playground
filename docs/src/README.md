@@ -84,7 +84,9 @@ development.
 
 ### Prerequisites
 
-- Rust 1.75+ with `thumbv7em-none-eabihf` target and `rust-src` component
+- Rust 1.88+ (workspace MSRV: `rust-toolchain.toml` pins the exact
+  toolchain) with the `thumbv7em-none-eabihf` target and `rust-src`
+  component
 - probe-rs tools: `cargo install probe-rs-tools cargo-embed cargo-flash`
 - Debug probe compatible with probe-rs (e.g., J-Link, ST-Link)
 
