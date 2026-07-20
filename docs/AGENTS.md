@@ -15,12 +15,16 @@ Deployed to GitHub Pages on push to `main` via
 | `src/risk_register.md` | Canonical risk list (R1..) |
 | `src/architecture/decisions.md` | Canonical ADR log (ADR-001..) |
 | `src/development/testing.md` | Five-layer test pyramid detail |
+| `src/boards/` | Per-board pages (roster index + one page per board) |
 | `src/projects/` | Per-project docs (ARS toolhead sensor, ...) |
 
 ## Local Rules
 
 - Prose follows
-  [`markdown_style.md`](../.agents/rules/markdown_style.md).
+  [`markdown_style.md`](../.agents/rules/markdown_style.md)
+  (mechanics) and
+  [`prose_style.md`](../.agents/rules/prose_style.md) (register
+  and structure).
 - `decisions.md` and `risk_register.md` are the single sources of
   truth for ADRs and risks; other documents link to them instead
   of copying content.  New ADRs append sequentially (next free

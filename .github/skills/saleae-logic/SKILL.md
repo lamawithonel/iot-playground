@@ -339,79 +339,18 @@ timed/triggered modes and blocks until the configured duration or
 trigger condition completes.  Source:
 [Automation API](https://saleae.github.io/logic2-automation/automation.html).
 
-## ARS Audio-Path Measurements (gate G3)
+## Board and Project Bench Plans
 
-Grounded in
-[`docs/src/projects/ars-toolhead-sensor/pinout.md`](../../../docs/src/projects/ars-toolhead-sensor/pinout.md)
-and
-[`docs/src/roadmap.md`](../../../docs/src/roadmap.md) section 7 item
-4 (HIL test automation via the Logic 2 gRPC automation API).
+Board-specific bench setups and project measurement specifications
+live in the documentation, not in this skill:
 
-| Measurement | What it validates | Recipe |
-|---|---|---|
-| PWM carrier residue | TIM1_CH1 PWM (~200 kHz carrier, ~10-bit duty ceiling) before the RC low-pass, versus the filtered line signal into the MAX9744-- the SNR/THD comparison that gate G3 exists to answer. | Recipe 3 (analog, dual-channel: raw PWM in, RC-filtered out) |
-| Loopback sine fidelity | End-to-end sweep/tone playback through the audio path (SAI1 fallback or TIM1-PWM path), captured on the RC-filtered analog channel and compared against the source sweep for THD/flatness. | Recipe 3 or Recipe 4 (analog capture, offline FFT/THD analysis on the exported CSV) |
-| I2C volume transactions | MAX9744 volume/mute register writes over I2C1 (SCL on PH9, SDA on PC1, device address `0x4B`; mute on PD0, per `spike-audio-board.md`). Confirms the amplifier receives the expected register writes during a measurement run. | Recipe 1 (I2C decode-- verify the exact analyzer settings dict keys against the live UI first; marked UNVERIFIED above) |
+- NUCLEO-H753ZI probe hookup (channel plans, pin identities,
+  trigger points):
+  [`docs/src/boards/nucleo-h753zi.md`](../../../docs/src/boards/nucleo-h753zi.md)
+- ARS gate G3 audio-path and loopback measurement specifications:
+  [`docs/src/projects/ars-toolhead-sensor/hil-measurements.md`](../../../docs/src/projects/ars-toolhead-sensor/hil-measurements.md)
 
-Roadmap section 7 item 4 also lists SPI timing (W5500, ePaper, SD
-card), CAN bus signaling, and interrupt latency as future HIL
-targets outside the audio path-- Recipe 2 (SPI) covers the SPI
-case; CAN and interrupt-latency recipes are out of scope for this
-skill revision.
-
-## NUCLEO-H753ZI probe hookup
-
-Probe plan for the STM32H753ZI Nucleo-144 board's NETWORK bring-up
-(the ADR-009 Layer-3 trigger board; see
-`boards/nucleo-h753zi/AGENTS.md`), using the Logic MSO 2x100 (2
-analog channels, 8 digital channels expandable to 20).  Facts below
-are cited to the datasheet (`logic_mso_data_sheet.pdf`) and user
-manual (`logic_mso_user_manual.pdf`) at
-`~/downloads/datasheets/saleae/`.
-
-This board has no W5500 (that part is on `feather-stm32f405`); the
-STM32H753ZI drives an on-chip Ethernet MAC through an on-board
-LAN8742 PHY over RMII instead, so the probe points below are RMII
-management/clock lines, not an SPI bus.  The repo's `net/` module
-that will configure those pins is still planned, not written
-(`boards/nucleo-h753zi/AGENTS.md` Module Map).  So every board-side
-pin identity below is the standard NUCLEO-H753ZI (UM2407, MB1364
-baseboard) reference pinout that ST's own Ethernet HAL examples use
-for this board family, not something read back from this repo's
-code or re-verified against the UM2407 PDF in this session.  Two
-exceptions are cited to the exact UM2407 location already
-established elsewhere in this repo: LD1 (green, PB0, UM2407 Rev 6
-p.27 Sec 7.6.1) and the USART3 ST-LINK VCP (UM2407 Rev 6 p.28 Sec
-7.6.5).  Confirm every other pin against UM2407's pinout tables
-before probing.
-
-### Digital channel plan (NETWORK bring-up)
-
-| Channel | Signal | Purpose |
-|---|---|---|
-| D0 | USART3 console TX (PD8, typical Nucleo-144 VCP pin, UM2407 Rev 6 p.28 Sec 7.6.5) | The debug-UART console falls back to this pin once `net/` lands; confirms firmware is alive and logging. |
-| D1 | RMII_REF_CLK (PA1, typical) | 50 MHz PHY reference clock; presence confirms the clock tree feeding the LAN8742 is up before any SMI traffic is expected. |
-| D2 | RMII_MDC (PC1, typical) | SMI management clock; toggling confirms the MAC is driving PHY register reads/writes. |
-| D3 | RMII_MDIO (PA2, typical) | SMI management data; correlate with D2 to read back PHY register transactions (link status, autonegotiation state) by eye or with a custom decoder. |
-| D4 | RMII_CRS_DV (PA7, typical) | Carrier-sense/data-valid-- the simplest single-line "is there RMII receive activity" probe point, i.e. the RMII activity channel. |
-| D5 | LD1 (green, PB0, UM2407 Rev 6 p.27 Sec 7.6.1) | Heartbeat/general liveness, already wired in `main.rs`. |
-| D6 | LD2 (blue, PE1, typical) | Free for a link-status indicator once `net/` lands. |
-| D7 | LD3 (red, PB14, typical) | Free for an error/activity indicator once `net/` lands. |
-
-That fills the 8-channel base kit.  NRST (board reset) is a 9th
-signal of interest-- swap it into D0's slot for a dedicated
-power-on-reset/warm-reset timing capture (the UART console has
-nothing to say during reset anyway), or add a third digital probe
-cable: the digital channel count expands to 20 across up to 5 probe
-cables, 4 channels each (`logic_mso_user_manual.pdf`, Digital
-Measurements).
-
-### Analog channel plan (power/reference integrity)
-
-| Channel | Signal | Purpose |
-|---|---|---|
-| Analog 1 | 3V3 rail | Confirms the regulator holds 3.3 V under RMII/PHY current transients (autonegotiation, TX bursts); AC-couple to inspect switching-regulator ripple, DC-couple to check absolute droop. |
-| Analog 2 | VREF | Confirms the ADC/DAC reference rail is stable and matches 3V3 (typical Nucleo-144 default, tied via a solder bridge-- verify against UM2407 before assuming continuity). |
+## Analog Channel Capabilities
 
 Both channels are 100 MHz bandwidth, 1 GS/s, 1 MOhm || 16 pF input
 impedance, AC/DC-selectable coupling, +/-30 V max at the SMB input
@@ -423,7 +362,7 @@ Vertical sensitivity down to 200 uV lets AC-coupled ripple captures
 resolve well below the rail's own noise floor
 (`logic_mso_data_sheet.pdf`, Analog Vertical Specifications).
 
-### Grounding
+## Grounding
 
 - The Logic MSO's ground reference floats until established by the
   circuit under test; do not energize the ground measurement
@@ -441,72 +380,30 @@ resolve well below the rail's own noise floor
 - "Always connect ground first and remove it last" on every probe,
   digital and analog alike (`logic_mso_user_manual.pdf`, Connect the
   Probe to the Circuit).
-- For the RMII lines (100 MHz max digital input frequency, 5 ns
-  minimum pulse width), use the analog probe's spring-ground
-  accessory or the digital probe's shortest ground wire-- the manual
-  documents this as the accessory providing a "short ground path for
-  high frequency measurements" (`logic_mso_user_manual.pdf`, Analog
-  Measurements accessory list, item 4).
+- For high-frequency lines (the instrument's 100 MHz max digital
+  input frequency, 5 ns minimum pulse width), use the analog probe's
+  spring-ground accessory or the digital probe's shortest ground
+  wire-- the manual documents this as the accessory providing a
+  "short ground path for high frequency measurements"
+  (`logic_mso_user_manual.pdf`, Analog Measurements accessory list,
+  item 4).
 
-### Digital threshold voltage
+## Digital Threshold Voltage
 
 Set the digital probe threshold to 1.65 V, the manual's documented
 preset for 3.3 V logic (`logic_mso_user_manual.pdf`, Set the
 Threshold Voltage): "3.3V logic: Set threshold to 1.65V."  The
-STM32H753's GPIO domain runs at VDD (~3.3 V) for every signal in the
-table above, so 1.65 V-- not the 0.9 V 1.8V-logic preset-- is the
-correct choice here; 0.9 V only applies if a future signal lives on
-a separate 1.8 V I/O rail.  The threshold is per-probe, adjustable
-from 0.6 V to 3.1 V if a mixed-voltage signal ever needs a custom
-value (`logic_mso_data_sheet.pdf`, Digital Vertical Specifications).
+0.9 V preset applies only to signals on a 1.8 V I/O rail.  The
+threshold is per-probe, adjustable from 0.6 V to 3.1 V if a
+mixed-voltage signal ever needs a custom value
+(`logic_mso_data_sheet.pdf`, Digital Vertical Specifications).
 
-### Trigger recommendations
+## Trigger Types
 
 Trigger sources can be any analog or digital channel, with Edge,
 Pulse, or Slope trigger types (`logic_mso_data_sheet.pdf`, Trigger
-Specifications).  For a NETWORK bring-up capture, an edge trigger on
-NRST's rising edge (end of reset) or on D0's UART console TX (first
-falling edge, i.e. the first UART start bit) anchors the capture to
-the start of firmware execution; from there, the REF_CLK/MDC/MDIO/
-CRS_DV channels show whether the PHY clock, SMI transactions, and
-link activity come up in the expected order.
-
-### Future ARS loopback reuse
-
-Once the ARS `audio_loopback` module lands
-(`boards/nucleo-h753zi/AGENTS.md` Module Map: DAC1_OUT1 on PA4,
-jumpered to the ADC on PA3), the same pod covers that HIL loop with
-a different channel assignment:
-
-- Analog 1: DAC1_OUT1 (PA4), the synthesized sweep/tone source.
-- Analog 2: ADC input (PA3), the looped-back signal.
-- A digital channel: the TIM trigger (a timer output-compare or
-  TRGO pin, once `audio_loopback` defines one) that starts each
-  DAC/ADC conversion pair.
-- A digital channel: a firmware capture-strobe GPIO, toggled at the
-  start of each capture window, so an Edge trigger on that strobe
-  aligns the analog capture to the exact sample the firmware
-  believes it started on.
-
-The Logic MSO's analog-to-digital delay is <=1 ns +/-1 sample
-(`logic_mso_data_sheet.pdf`, Performance Characteristics), small
-enough relative to typical audio-sweep sample periods to treat the
-digital TIM-trigger/strobe edges and the analog DAC/ADC waveforms as
-effectively simultaneous-- the basis for proving phase-locked
-capture.  This reuse plan is speculative until `audio_loopback`
-exists; no pin beyond PA3/PA4 is fixed yet.
-
-### Verification status
-
-Nothing above has been probed against real hardware.  Logic 2 is
-not installed on this machine (see
-[Bench Status](#bench-status-read-this-first)), the NUCLEO-H753ZI's
-`net/` module has not been written, and this session did not
-re-open the UM2407 PDF to confirm RMII/LED/reset pin numbers-- they
-are stated from the standard Nucleo-144 reference design and
-flagged "typical" throughout.  Treat every channel index and pin
-identity in this section as on-paper until it is run against the
-actual board and confirmed in the Logic 2 UI.
+Specifications).  Board-specific trigger recommendations live with
+each board's bench plan (see Board and Project Bench Plans above).
 
 ## Limits and What Was Actually Validated
 
@@ -534,11 +431,6 @@ checked, and nothing more:
   writing this skill.  The J-Link (`1366:1020`) and ST-LINK
   (`0483:374e`) enumerate on this bench for unrelated firmware
   workstreams and were not opened, attached, or flashed.
-- The [NUCLEO-H753ZI probe hookup](#nucleo-h753zi-probe-hookup)
-  section carries the same caveats plus one more: its RMII/LED/reset
-  pin identities are the standard Nucleo-144 reference pinout, not
-  something re-verified against the UM2407 PDF or this repo's
-  (not-yet-written) `net/` module in this session.
 
 ## References
 

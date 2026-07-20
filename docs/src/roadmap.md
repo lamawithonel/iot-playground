@@ -2,7 +2,7 @@
 ## Embedded Rust IoT Firmware
 
 **Version:** 3.1
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-07-19
 **Project Phase:** Phase 3 Complete / Framework Track Active
 
 ---
@@ -43,7 +43,7 @@ the reference project, demonstrating:
 
 - AWS IoT Core infrastructure provisioning (Terraform/IaC)
 - On-device CloudEvents envelope encoding (cloud-side only;
-  see §7 item 9)
+  see section 7 item 9)
 - CAN bus gateway (deferred to backlog; see
   [Backlog: CAN Gateway](#backlog-can-gateway))
 - Hardware PCB design
@@ -63,10 +63,9 @@ the reference project, demonstrating:
 - [x] Migrated `feather-stm32f405` to `boards/feather-stm32f405/`
 - [x] Single root `.cargo/config.toml` with probe-rs runner
 - [x] Centralized board configurations in root `Embed.toml`
-  (retired 2026-07-19: per-board `Embed.toml` files now)
+  (retired 2026-07-19; see ADR-006)
 - [x] Native probe-rs board selection via `PROBE_RS_CONFIG_PRESET`
-  (retired 2026-07-19: broken in probe-rs 0.31; explicit
-  `--chip`/`--probe` or env vars instead)
+  (retired 2026-07-19; see ADR-006)
 - [x] Skeleton crates: `core/` and `hal-abstractions/`
 - [x] Build system fixes for `memory.x` linker script handling
 - [x] Documentation updates (README, AGENTS.md, ADRs)
@@ -148,7 +147,7 @@ specification across ~9,000 lines of research.
 - **CloudEvents cloud-side only**-- devices send raw
   Protobuf (32 B); AWS IoT Rules Engine adds CloudEvents
   envelope before EventBridge
-- **Encoding in sensor task**-- 7-11 µs at 168 MHz;
+- **Encoding in sensor task**-- 7-11 us at 168 MHz;
   negligible vs. 2-5 ms I2C read
 - **AWS double-decode** confirmed-- Rules Engine supports
   two `decode()` calls per SQL expression, Basic Ingest
@@ -187,9 +186,8 @@ for formal decisions.
 - [x] Second live board: `boards/nucleo-h753zi` bring-up
   (hardware-verified blinky + defmt over RTT) and promotion to
   workspace member-- the ADR-009 Layer 3 trigger ("a second
-  board enters the workspace") has fired; per-board cargo
-  invocations added to CI (metapac chip features are
-  mutually exclusive across boards)
+  board enters the workspace") has fired; CI follows the
+  per-board invocation rules in `testing_gates.md`
 - [x] `hal-abstractions` Rtc and Rng traits plus the
   `MessagePort` channel abstraction with deterministic host
   mocks (TLS-stall backpressure now host-testable)
@@ -226,7 +224,7 @@ for formal decisions.
 - [x] Single root .cargo/config.toml with common settings
 - [x] Root Embed.toml with board presets (retired 2026-07-19)
 - [x] Board selection via PROBE_RS_CONFIG_PRESET (retired
-  2026-07-19: broken in probe-rs 0.31)
+  2026-07-19; see ADR-006)
 - [x] Build script (build.rs) for memory.x linker script
 - [x] Remove legacy board directories
 - [x] Update documentation (README, AGENTS.md, ADRs, roadmap)
@@ -318,7 +316,7 @@ Buffers.  Devices send raw Protobuf on the wire; CloudEvents
 enrichment occurs cloud-side via AWS IoT Rules Engine.
 
 Defined by research completed in
-[§2.3](#23-serialization--architecture-research--complete)
+[section 2.3](#23-serialization--architecture-research--complete)
 and [ADR-008](./architecture/decisions.md#adr-008-micropb-for-protobuf-encoding).
 
 **Schema Infrastructure:**
@@ -378,7 +376,7 @@ and [ADR-008](./architecture/decisions.md#adr-008-micropb-for-protobuf-encoding)
 | Metric | JSON (current) | Protobuf (Phase 5) |
 |--------|-----------------|---------------------|
 | Payload size | ~220 B | ~32 B |
-| Encoding time | ~25 µs | ~8 µs |
+| Encoding time | ~25 us | ~8 us |
 | Flash overhead | n/a | ~8-12 KB |
 | RAM overhead | n/a | <1 KB |
 
@@ -545,6 +543,10 @@ Total MCU resources: 192 KB SRAM (128 KB main + 64 KB CCM),
 
 ### 6.1 Current Allocations
 
+CCM allocation sizes mirror `boards/feather-stm32f405/src/ccmram.rs`,
+the source of truth for CCM placement; on any disagreement ccmram.rs
+wins.
+
 | Component | Region | Size |
 |-----------|--------|------|
 | TLS read buffer | CCM RAM | 18 KB |
@@ -569,7 +571,7 @@ Total MCU resources: 192 KB SRAM (128 KB main + 64 KB CCM),
 Main SRAM:  ~70 KB / 128 KB = 55% utilization
 CCM RAM:    ~35 KB /  64 KB = 55% utilization
 Total:     ~105 KB / 192 KB = 55% utilization
-Budget:     154 KB ceiling  → 49 KB headroom ✅
+Budget:     154 KB ceiling  -> 49 KB headroom ✅
 Flash:     ~287 KB / 1 MB   = 28% utilization
 ```
 

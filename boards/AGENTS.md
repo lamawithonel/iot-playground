@@ -7,6 +7,10 @@ the board (see
 
 ## Profiles
 
+Roster authority:
+[`docs/src/boards/README.md`](../docs/src/boards/README.md)-- it
+wins on any disagreement with this table.
+
 | Directory | Board | Status |
 |-----------|-------|--------|
 | [`feather-stm32f405/`](feather-stm32f405/AGENTS.md) | Adafruit Feather STM32F405 + W5500 + SEN66 | Active (workspace member) |
@@ -15,6 +19,11 @@ the board (see
 
 ## Local Rules
 
+- Board documentation lives in the mdBook at
+  [`docs/src/boards/`](../docs/src/boards/README.md), one page per
+  board; a board directory here keeps only `AGENTS.md` and a short
+  README pointing at its page (see
+  [`prose_style.md`](../.agents/rules/prose_style.md)).
 - New profiles start as `workspace.exclude` entries until they
   compile in CI (target installed, clippy clean); only then move
   to `members`.

@@ -99,7 +99,7 @@ This will:
 
 ### Board Selection
 
-Each board directory carries its own `Embed.toml` with the right
+Each active board directory carries its own `Embed.toml` with the right
 chip (and, where safe, probe) settings.  To work on a non-default
 board, run from its directory:
 

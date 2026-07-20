@@ -24,7 +24,7 @@
 //! - **Performance**: Zero wait states
 //! - **Use Cases**: Critical variables, frequently accessed data, stack-local buffers
 //!
-//! # Memory Budget (from design_goals_condensed.md)
+//! # Memory Budget
 //!
 //! ```text
 //! CCM RAM (64KB) - CPU-only, zero wait states:
