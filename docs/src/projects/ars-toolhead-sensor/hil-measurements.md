@@ -6,8 +6,8 @@ acoustic resonance spectroscopy (ARS) toolhead sensor, and the
 planned DAC/ADC loopback rig on the
 [NUCLEO-H753ZI bench](../../boards/nucleo-h753zi.md).  Captures use
 a Saleae Logic MSO 2x100 via the Logic 2 automation API
-(`.github/skills/saleae-logic/SKILL.md`); that skill covers how to
-drive the analyzer, this page covers what to measure and why.
+(`.agents/skills/saleae-logic/SKILL.md`); that skill covers how to
+drive the analyzer; this page covers what to measure and why.
 
 Status: provisional.  Nothing below has been probed against real
 hardware-- every capture plan here is on paper only, pending Logic 2

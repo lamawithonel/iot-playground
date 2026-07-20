@@ -43,7 +43,7 @@ Layer-3 trigger board), probed with the Logic MSO 2x100 (2 analog
 channels, 8 digital channels, expandable to 20).  General MSO
 operation-- the 1.65 V digital-threshold rule for 3.3 V logic,
 grounding practice, and trigger-type explanations-- lives in the
-[Saleae Logic skill](../../../.github/skills/saleae-logic/SKILL.md);
+[Saleae Logic skill](../../../.agents/skills/saleae-logic/SKILL.md);
 this page states only what is specific to this board.  Facts below
 are cited to the Saleae datasheet (`logic_mso_data_sheet.pdf`) and
 user manual (`logic_mso_user_manual.pdf`).
