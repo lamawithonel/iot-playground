@@ -1,10 +1,10 @@
 # System Requirements Specification
 ## Embedded Rust IoT Firmware
 
-**Version:** 1.3  
-**Date:** July 18, 2026  
-**Status:** Active Development  
-**Author:** Lucas Yamanishi
+- **Version:** 1.3
+- **Date:** July 18, 2026
+- **Status:** Active Development
+- **Author:** Lucas Yamanishi
 
 ---
 
@@ -12,21 +12,27 @@
 
 ### 1.1 Purpose
 
-This document specifies requirements for embedded Rust firmware implementing real-time IoT capabilities on STM32F405RG. The system provides secure MQTT connectivity, environmental monitoring, local display, and OTA updates.
+This document specifies requirements for embedded Rust firmware implementing
+real-time IoT capabilities on STM32F405RG.  The system provides secure MQTT
+connectivity, environmental monitoring, local display, and OTA updates.
 
-**Target Audience:** Firmware developers, hardware engineers, future maintainers, and AI assistants helping with implementation.
+**Target Audience:** Firmware developers, hardware engineers, future
+maintainers, and AI assistants helping with implementation.
 
 ### 1.2 Scope
 
-**System:** Embedded Rust IoT Firmware on an Adafruit Feather STM32F405 Express development board
+**System:** Embedded Rust IoT Firmware on an Adafruit Feather STM32F405
+Express development board
 
-This repository is a modular multi-project framework.  This SRS
-covers the framework itself plus the Feather STM32F405 reference
-project.  The ARS toolhead-sensor project is documented separately
-under [./projects/ars-toolhead-sensor/](./projects/ars-toolhead-sensor/).
+This repository is a modular multi-project framework.  This SRS covers the
+framework itself plus the Feather STM32F405 reference project.  The ARS
+toolhead-sensor project is documented separately under
+[./projects/ars-toolhead-sensor/](./projects/ars-toolhead-sensor/).
 
-**In Scope:** Firmware, device drivers, network protocols, security, OTA mechanism  
-**Out of Scope:** Cloud infrastructure, AWS configuration, hardware design, manufacturing
+- **In Scope:** Firmware, device drivers, network protocols, security, OTA
+  mechanism
+- **Out of Scope:** Cloud infrastructure, AWS configuration, hardware design,
+  manufacturing
 
 ### 1.3 References
 
@@ -44,9 +50,9 @@ under [./projects/ars-toolhead-sensor/](./projects/ars-toolhead-sensor/).
 
 ### 2.1 Operating Environment
 
-**Hardware Platform:** Adafruit Feather STM32F405 Express  
-**MCU:** STM32F405RG (ARM Cortex-M4F, 168 MHz, 1 MB Flash, 192 KB SRAM)  
-**Debug:** Segger J-Link via SWD
+- **Hardware Platform:** Adafruit Feather STM32F405 Express
+- **MCU:** STM32F405RG (ARM Cortex-M4F, 168 MHz, 1 MB Flash, 192 KB SRAM)
+- **Debug:** Segger J-Link via SWD
 
 **Peripherals:**
 - W5500 Ethernet controller (SPI2)
@@ -68,7 +74,8 @@ under [./projects/ars-toolhead-sensor/](./projects/ars-toolhead-sensor/).
 ### 2.3 Design Philosophy
 
 1. **Safety First:** Memory-safe Rust with minimal unsafe code
-2. **Real-Time:** RTIC framework with formal verification (Stack Resource Policy)
+2. **Real-Time:** RTIC framework with formal verification (Stack Resource
+   Policy)
 3. **Security:** Defense-in-depth with TLS 1.3, authenticated updates
 4. **Maintainability:** Idiomatic Rust, comprehensive docs, 80%+ test coverage
 5. **Incremental:** Layer 2 -> DHCP -> TCP -> TLS -> MQTT progression
@@ -121,7 +128,6 @@ eInk microSD   SDCS  PB10 TX    o--|           |--o  SDA   PB7   SDA    I2C (SEN
                                    '-----------'
 ```
 
-
 ### 3.2 Peripheral Pin Map
 
 | Peripheral | Pins | Interface | Notes |
@@ -142,10 +148,13 @@ eInk microSD   SDCS  PB10 TX    o--|           |--o  SDA   PB7   SDA    I2C (SEN
 
 ### 3.3 EXTI Configuration
 
-- **EXTI2 (PC2, W5500 IRQ):** Priority 1 (highest), dedicated vector, ~200ns latency, active-low with pull-up
-- **EXTI4 (PA4, E-ink BUSY):** Priority 2 (medium), dedicated vector, ~200ns latency, active-high
+- **EXTI2 (PC2, W5500 IRQ):** Priority 1 (highest), dedicated vector, ~200ns
+  latency, active-low with pull-up
+- **EXTI4 (PA4, E-ink BUSY):** Priority 2 (medium), dedicated vector, ~200ns
+  latency, active-high
 
-**Rationale:** Network interrupts require highest priority for minimal packet loss; display can tolerate brief delays.
+**Rationale:** Network interrupts require highest priority for minimal packet
+loss; display can tolerate brief delays.
 
 ### 3.4 Timer Configuration
 
@@ -170,18 +179,17 @@ TODO: Decide on timer requirements
  └─ Reserved for future:     ~30KB
 ```
 
-No heap: the firmware does not link `alloc`; every buffer is
-static or on the stack.  `boards/feather-stm32f405/src/ccmram.rs`
-is the source of truth for CCM allocations, and the stack stays in
-main SRAM to avoid a linker conflict with the `.ccmram` section.
+No heap: the firmware does not link `alloc`; every buffer is static or on the
+stack.  `boards/feather-stm32f405/src/ccmram.rs` is the source of truth for CCM
+allocations, and the stack stays in main SRAM to avoid a linker conflict with
+the `.ccmram` section.
 
-On this board the TLS buffers MUST live in CCM RAM: the 128 KB
-main-SRAM budget does not fit them, and the zero-wait-state reads
-also help the handshake.  Larger-RAM targets do not share the fit
-constraint (STM32H753ZI: 1 MB RAM; STM32N657X0: 4.2 MB contiguous
-SRAM), and their TCM/CCM-class memory may be needed for more
-important speed-critical work, so TLS buffer placement there is
-TBD-- `iot-net` accepts the buffers from the caller either way.
+On this board the TLS buffers MUST live in CCM RAM: the 128 KB main-SRAM
+budget does not fit them, and the zero-wait-state reads also help the
+handshake.  Larger-RAM targets do not share the fit constraint (STM32H753ZI:
+1 MB RAM; STM32N657X0: 4.2 MB contiguous SRAM), and their TCM/CCM-class memory
+may be needed for more important speed-critical work, so TLS buffer placement
+there is TBD-- `iot-net` accepts the buffers from the caller either way.
 
 ---
 
@@ -189,90 +197,160 @@ TBD-- `iot-net` accepts the buffers from the caller either way.
 
 ### 4.1 Network Communication
 
-**SR-NET-001:** System SHALL establish TLS 1.3 connection to AWS IoT Core on startup (MQTT v5.0)
-**SR-NET-002:** System SHALL authenticate using X.509 client certificates stored in flash  
-**SR-NET-003:** System SHALL maintain MQTT connection with 60s keep-alive and automatic reconnect  
-**SR-NET-004:** System SHALL enter sleep mode between transmissions, waking on EXTI2 or timer  
-**SR-NET-005:** System SHALL process network interrupts within 500 μs  
-**SR-NET-006:** System SHALL synchronize time using SNTP (RFC 4330)  
-**SR-NET-007:** System SHALL timestamp all MQTT messages with an `event_timestamp` when the event is first captured and a `send_timestamp` when the MQTT message is sent  
-**SR-NET-008:** System SHALL retry failed MQTT QoS level 0 messages up to 5 times with exponential back-off, then log error and discard the message  
-**SR-NET-009:** System SHALL retry failed MQTT QoS level 1 and 2 messages up to 5 times with exponential back-off, then log error and place the message in one of two DLQs on the microSD card: one for network failures and one for rejected messages  
-**SR-NET-010:** System SHALL place all outgoing MQTT QoS level 1 and 2 messages in the network failure DLQ if the DLQ is not empty  
-**SR-NET-011:** System SHALL retry the oldest message in the network failure DLQ whenever a new message is placed in the queue, and retry all subsequent messages in FIFO order when one message succeeds, stopping if there are any additional failures and waiting for the next new message  
-**SR-NET-012:** System SHALL log an error and stop queuing new MQTT messages to the network failure DLQ when microSD card utilization exceeds 80%  
-**SR-NET-013:** The MQTT implementation SHALL be fully event-driven, processing incoming messages asynchronously without blocking publish operations  
-**SR-NET-014:** The system MAY test MQTT functionality with lower QoS levels (0 or 1) during development if higher QoS levels are not yet fully implemented  
-**SR-NET-015:** All MQTT QoS levels (0, 1, and 2) SHALL be tested once they are implemented to verify reliable message delivery under various network conditions  
-**SR-NET-016:** [Phase 3+] System SHALL maintain a single MQTT connection per broker, shared across all publishing tasks via RTIC Shared resource  
-**SR-NET-017:** [Phase 3+] System SHALL only establish MQTT connection at startup or after network/broker fault
+- **SR-NET-001:** System SHALL establish TLS 1.3 connection to AWS IoT Core on
+  startup (MQTT v5.0)
+- **SR-NET-002:** System SHALL authenticate using X.509 client certificates
+  stored in flash
+- **SR-NET-003:** System SHALL maintain MQTT connection with 60s keep-alive and
+  automatic reconnect
+- **SR-NET-004:** System SHALL enter sleep mode between transmissions, waking on
+  EXTI2 or timer
+- **SR-NET-005:** System SHALL process network interrupts within 500 us
+- **SR-NET-006:** System SHALL synchronize time using SNTP (RFC 4330)
+- **SR-NET-007:** System SHALL timestamp all MQTT messages with an
+  `event_timestamp` when the event is first captured and a `send_timestamp`
+  when the MQTT message is sent
+- **SR-NET-008:** System SHALL retry failed MQTT QoS level 0 messages up to 5
+  times with exponential back-off, then log error and discard the message
+- **SR-NET-009:** System SHALL retry failed MQTT QoS level 1 and 2 messages up
+  to 5 times with exponential back-off, then log error and place the message in
+  one of two DLQs on the microSD card: one for network failures and one for
+  rejected messages
+- **SR-NET-010:** System SHALL place all outgoing MQTT QoS level 1 and 2
+  messages in the network failure DLQ if the DLQ is not empty
+- **SR-NET-011:** System SHALL retry the oldest message in the network failure
+  DLQ whenever a new message is placed in the queue, and retry all subsequent
+  messages in FIFO order when one message succeeds, stopping if there are any
+  additional failures and waiting for the next new message
+- **SR-NET-012:** System SHALL log an error and stop queuing new MQTT messages
+  to the network failure DLQ when microSD card utilization exceeds 80%
+- **SR-NET-013:** The MQTT implementation SHALL be fully event-driven,
+  processing incoming messages asynchronously without blocking publish
+  operations
+- **SR-NET-014:** The system MAY test MQTT functionality with lower QoS levels
+  (0 or 1) during development if higher QoS levels are not yet fully implemented
+- **SR-NET-015:** All MQTT QoS levels (0, 1, and 2) SHALL be tested once they
+  are implemented to verify reliable message delivery under various network
+  conditions
+- **SR-NET-016:** [Phase 3+] System SHALL maintain a single MQTT connection per
+  broker, shared across all publishing tasks via RTIC Shared resource
+- **SR-NET-017:** [Phase 3+] System SHALL only establish MQTT connection at
+  startup or after network/broker fault
 
-TODO: Decide on failed message DLQ maximum size and what to do about its contents
+TODO: Decide on failed message DLQ maximum size and what to do about its
+contents
 
-**Rationale for SR-NET-013 (Event-Driven MQTT):**  
-Event-driven message handling is essential for real-time IoT systems because it prevents blocking operations from interfering with time-critical tasks. In an RTIC-based system with hard real-time requirements, manually polling for acknowledgments violates the design philosophy of interrupt-driven, non-blocking I/O. An event-driven approach ensures that incoming MQTT messages (PUBACK, PUBREC, PUBLISH from subscriptions) are processed automatically via callbacks or async events, maintaining system responsiveness and preventing session buffer overflows. This aligns with the project's goals of formal verification and predictable timing behavior.
+**Rationale for SR-NET-013 (Event-Driven MQTT):** Event-driven message handling
+is essential for real-time IoT systems because it prevents blocking operations
+from interfering with time-critical tasks.  In an RTIC-based system with hard
+real-time requirements, manually polling for acknowledgments violates the design
+philosophy of interrupt-driven, non-blocking I/O.  An event-driven approach
+ensures that incoming MQTT messages (PUBACK, PUBREC, PUBLISH from subscriptions)
+are processed automatically via callbacks or async events, maintaining system
+responsiveness and preventing session buffer overflows.  This aligns with the
+project's goals of formal verification and predictable timing behavior.
 
-**Rationale for SR-NET-014 (Incremental QoS Testing):**  
-Supporting incremental development with lower QoS levels during testing acknowledges the complexity of implementing full MQTT protocol compliance. QoS 0 (at-most-once) provides fire-and-forget semantics suitable for early testing, while QoS 1 (at-least-once) requires acknowledgment handling. This requirement allows the team to validate basic connectivity and message formatting before implementing the more complex event-driven acknowledgment logic required for QoS 1 and 2. This incremental approach aligns with the project's "Incremental" design philosophy (Section 2.3).
+**Rationale for SR-NET-014 (Incremental QoS Testing):** Supporting incremental
+development with lower QoS levels during testing acknowledges the complexity of
+implementing full MQTT protocol compliance.  QoS 0 (at-most-once) provides
+fire-and-forget semantics suitable for early testing, while QoS 1
+(at-least-once) requires acknowledgment handling.  This requirement allows the
+team to validate basic connectivity and message formatting before implementing
+the more complex event-driven acknowledgment logic required for QoS 1 and 2.
+This incremental approach aligns with the project's "Incremental" design
+philosophy (Section 2.3).
 
-**Rationale for SR-NET-015 (Comprehensive QoS Testing):**  
-Once implemented, all QoS levels must be thoroughly tested because they provide different delivery guarantees critical for IoT reliability. QoS 0 is suitable for high-frequency telemetry where occasional loss is acceptable; QoS 1 ensures sensor data reaches the cloud at least once (required by SR-SENS-004); QoS 2 provides exactly-once delivery for critical commands. Testing all levels under various network conditions (packet loss, latency, connection drops) ensures the system meets its 30-day reliability requirement (Section 8) and validates the retry logic specified in SR-NET-008 and SR-NET-009.
+**Rationale for SR-NET-015 (Comprehensive QoS Testing):** Once implemented, all
+QoS levels must be thoroughly tested because they provide different delivery
+guarantees critical for IoT reliability.  QoS 0 is suitable for high-frequency
+telemetry where occasional loss is acceptable; QoS 1 ensures sensor data reaches
+the cloud at least once (required by SR-SENS-004); QoS 2 provides exactly-once
+delivery for critical commands.  Testing all levels under various network
+conditions (packet loss, latency, connection drops) ensures the system meets its
+30-day reliability requirement (Section 8) and validates the retry logic
+specified in SR-NET-008 and SR-NET-009.
 
 ### 4.2 Sensor Data
 
-**SR-SENS-001:** System SHALL read SEN66 sensor every 60 seconds (+/-5s)  
-**SR-SENS-002:** System SHALL retrieve PM1.0, PM2.5, PM4.0, PM10, CO2, VOC, NOx, temperature, humidity  
-**SR-SENS-003:** System SHALL validate readings using CRC-8 checksum, rejecting invalid data  
-**SR-SENS-004:** System SHALL publish sensor data as Protocol Buffers to `device/{id}/telemetry` with MQTT QoS level 1  
-**SR-SENS-005:** System SHALL add a monotonically increasing event ID to all sensor output MQTT messages, which MAY reset with a device power cycle  
-**SR-SENS-006:** System SHALL retry failed sensor reads up to 3 times, then log error and skip
+- **SR-SENS-001:** System SHALL read SEN66 sensor every 60 seconds (+/-5s)
+- **SR-SENS-002:** System SHALL retrieve PM1.0, PM2.5, PM4.0, PM10, CO2, VOC,
+  NOx, temperature, humidity
+- **SR-SENS-003:** System SHALL validate readings using CRC-8 checksum,
+  rejecting invalid data
+- **SR-SENS-004:** System SHALL publish sensor data as Protocol Buffers to
+  `device/{id}/telemetry` with MQTT QoS level 1
+- **SR-SENS-005:** System SHALL add a monotonically increasing event ID to
+  all sensor output MQTT messages, which MAY reset with a device power cycle
+- **SR-SENS-006:** System SHALL retry failed sensor reads up to 3 times, then
+  log error and skip
 
 ### 4.3 Display
 
-**SR-DISP-001:** System SHALL update the E-ink display after every sensor read grouping (initial read plus retries) showing PM2.5, CO2, VOC, temperature, humidity, network upload status, firmware version, and timestamp  
-**SR-DISP-002:** System SHOULD use partial refresh where supported to minimize display wear  
-**SR-DISP-003:** System SHALL monitor BUSY pin (PA4) and wait for LOW before sending commands  
-**SR-DISP-004:** System SHALL display error messages for critical faults (network offline, sensor failure)  
-**SR-DISP-005:** System SHALL update the display after every network state change (online/offline status, CIDR IP address, FQDN)
+- **SR-DISP-001:** System SHALL update the E-ink display after every sensor read
+  grouping (initial read plus retries) showing PM2.5, CO2, VOC, temperature,
+  humidity, network upload status, firmware version, and timestamp
+- **SR-DISP-002:** System SHOULD use partial refresh where supported to minimize
+  display wear
+- **SR-DISP-003:** System SHALL monitor BUSY pin (PA4) and wait for LOW before
+  sending commands
+- **SR-DISP-004:** System SHALL display error messages for critical faults
+  (network offline, sensor failure)
+- **SR-DISP-005:** System SHALL update the display after every network state
+  change (online/offline status, CIDR IP address, FQDN)
 
 ### 4.4 CAN Gateway
 
-*Note: CAN is deferred to the backlog per roadmap section 1.3.
-The SR-CAN requirements below are retained for when the backlog
-item is picked up.*
+*Note: CAN is deferred to the backlog per roadmap section 1.3.  The SR-CAN
+requirements below are retained for when the backlog item is picked up.*
 
-**SR-CAN-001:** System SHALL receive CAN 2.0B messages at 1 Mbps with standard/extended IDs  
-**SR-CAN-002:** System SHALL forward CAN messages to MQTT topic `device/{id}/can/{can_id}`  
-**SR-CAN-003:** System SHALL accept MQTT on `device/{id}/can/tx` and transmit to CAN bus  
-**SR-CAN-004:** System SHALL support configurable CAN ID filtering via MQTT
+- **SR-CAN-001:** System SHALL receive CAN 2.0B messages at 1 Mbps with
+  standard/extended IDs
+- **SR-CAN-002:** System SHALL forward CAN messages to MQTT topic
+  `device/{id}/can/{can_id}`
+- **SR-CAN-003:** System SHALL accept MQTT on `device/{id}/can/tx` and transmit
+  to CAN bus
+- **SR-CAN-004:** System SHALL support configurable CAN ID filtering via MQTT
 
 ### 4.5 Firmware Updates
 
-**SR-OTA-001:** System SHALL receive firmware via MQTT topic `device/{id}/ota` with chunked transfer  
-**SR-OTA-002:** System SHALL verify firmware signature using ECDSA/RSA before installation  
-**SR-OTA-003:** System SHALL store firmware images encrypted (AES-256-GCM) on microSD card  
-**SR-OTA-004:** System SHALL implement an atomic update scheme  
-**SR-OTA-005:** System SHALL use watchdog timer to rollback to the last known-good firmware after 3 failed boot attempts  
-**SR-OTA-006:** System SHALL publish update status to `device/{id}/ota/status`
+- **SR-OTA-001:** System SHALL receive firmware via MQTT topic `device/{id}/ota`
+  with chunked transfer
+- **SR-OTA-002:** System SHALL verify firmware signature using ECDSA/RSA before
+  installation
+- **SR-OTA-003:** System SHALL store firmware images encrypted (AES-256-GCM) on
+  microSD card
+- **SR-OTA-004:** System SHALL implement an atomic update scheme
+- **SR-OTA-005:** System SHALL use watchdog timer to rollback to the last
+  known-good firmware after 3 failed boot attempts
+- **SR-OTA-006:** System SHALL publish update status to `device/{id}/ota/status`
 
 ### 4.6 Error Handling
 
-**SR-ERR-001:** System SHALL log errors using `defmt` with ERROR severity including component, code, context  
-**SR-ERR-002:** System SHALL retry transient failures up to 5 times with exponential back-off  
-**SR-ERR-003:** System SHALL enter safe mode after persistent failures, attempting recovery every 60s  
-**SR-ERR-004:** System SHALL indicate errors via LED: slow blink (warning), fast blink (error), solid (critical)
+- **SR-ERR-001:** System SHALL log errors using `defmt` with ERROR severity
+  including component, code, context
+- **SR-ERR-002:** System SHALL retry transient failures up to 5 times with
+  exponential back-off
+- **SR-ERR-003:** System SHALL enter safe mode after persistent failures,
+  attempting recovery every 60s
+- **SR-ERR-004:** System SHALL indicate errors via LED: slow blink (warning),
+  fast blink (error), solid (critical)
 
 ---
 
 ## 5. Performance Requirements
 
-**SR-PERF-001:** EXTI2 interrupt latency SHALL be <500 μs from assertion to ISR entry  
-**SR-PERF-002:** Sensor read SHALL complete within 2 seconds  
-**SR-PERF-003:** Display update SHALL complete within 10 seconds for full refresh  
-**SR-PERF-004:** MQTT publish SHALL occur within 100 ms from data ready to transmission  
-**SR-PERF-005:** Average power consumption SHALL be <100 mA (excluding display updates)  
-**SR-PERF-006:** Incoming MQTT messages SHALL be processed within 50 ms  
-**SR-PERF-007:** Flash utilization SHALL be <=90% (900 KB), SRAM <=80% (154 KB)
+- **SR-PERF-001:** EXTI2 interrupt latency SHALL be <500 us from assertion to
+  ISR entry
+- **SR-PERF-002:** Sensor read SHALL complete within 2 seconds
+- **SR-PERF-003:** Display update SHALL complete within 10 seconds for full
+  refresh
+- **SR-PERF-004:** MQTT publish SHALL occur within 100 ms from data ready to
+  transmission
+- **SR-PERF-005:** Average power consumption SHALL be <100 mA (excluding
+  display updates)
+- **SR-PERF-006:** Incoming MQTT messages SHALL be processed within 50 ms
+- **SR-PERF-007:** Flash utilization SHALL be <=90% (900 KB), SRAM <=80% (154
+  KB)
 
 ---
 
@@ -280,34 +358,45 @@ item is picked up.*
 
 ### 6.1 Reliability
 
-**SR-REL-001:** System SHALL achieve 99% uptime over 30-day period  
-**SR-REL-002:** System SHALL recover from single faults (network drop, sensor timeout) within 5 minutes  
-**SR-REL-003:** System SHALL detect corrupted data with >99.99% probability
+- **SR-REL-001:** System SHALL achieve 99% uptime over 30-day period
+- **SR-REL-002:** System SHALL recover from single faults (network drop, sensor
+  timeout) within 5 minutes
+- **SR-REL-003:** System SHALL detect corrupted data with >99.99% probability
 
 ### 6.2 Security
 
-**SR-SEC-001:** All network communication SHALL use TLS 1.3 with approved cipher suites  
-**SR-SEC-002:** Cryptographic operations SHOULD use FIPS 140-3 algorithms where available  
-**SR-SEC-003:** Random numbers SHALL be generated from hardware RNG (STM32 RNG peripheral)  
-**SR-SEC-004:** Private keys SHALL be stored in read-protected flash, never transmitted  
-**SR-SEC-005:** Production builds SHALL disable debug interfaces (SWD, RTT)
+- **SR-SEC-001:** All network communication SHALL use TLS 1.3 with approved
+  cipher suites
+- **SR-SEC-002:** Cryptographic operations SHOULD use FIPS 140-3 algorithms
+  where available
+- **SR-SEC-003:** Random numbers SHALL be generated from hardware RNG (STM32 RNG
+  peripheral)
+- **SR-SEC-004:** Private keys SHALL be stored in read-protected flash, never
+  transmitted
+- **SR-SEC-005:** Production builds SHALL disable debug interfaces (SWD, RTT)
 
 ### 6.3 Maintainability
 
-**SR-MAINT-001:** Code SHALL follow Rust style guide, formatted with `rustfmt`, pass `clippy` with zero warnings  
-**SR-MAINT-002:** Public functions/modules SHALL have documentation comments  
-**SR-MAINT-003:** Code SHALL be organized in layers: drivers, application logic, protocols  
-**SR-MAINT-004:** Code coverage SHALL be >=80%  
-**SR-MAINT-005:** Rust file MUST use the `#![deny(warnings)]` macro
+- **SR-MAINT-001:** Code SHALL follow Rust style guide, formatted with
+  `rustfmt`, pass `clippy` with zero warnings
+- **SR-MAINT-002:** Public functions/modules SHALL have documentation comments
+- **SR-MAINT-003:** Code SHALL be organized in layers: drivers, application
+  logic, protocols
+- **SR-MAINT-004:** Code coverage SHALL be >=80%
+- **SR-MAINT-005:** Rust file MUST use the `#![deny(warnings)]` macro
 
 ### 6.4 Design Constraints
 
-**SR-CONST-001:** System SHALL be implemented in Rust `no_std` environment  
-**SR-CONST-002:** System SHALL use RTIC 2.x for task scheduling and formal verification  
-**SR-CONST-003:** System SHOULD use Embassy HAL where compatible with RTIC  
-**SR-CONST-004:** System MUST NOT use the Embassy executor (`embassy-executor` crate)  
-**SR-CONST-005:** Unsafe code SHALL be <5% of codebase, isolated and documented, and all Rust files SHOULD use the `#![deny(unsafe_code)]` macro  
-**SR-CONST-006:** Pin assignments SHALL match hardware layout exactly (see Section 3)
+- **SR-CONST-001:** System SHALL be implemented in Rust `no_std` environment
+- **SR-CONST-002:** System SHALL use RTIC 2.x for task scheduling and formal
+  verification
+- **SR-CONST-003:** System SHOULD use Embassy HAL where compatible with RTIC
+- **SR-CONST-004:** System MUST NOT use the Embassy executor (`embassy-executor`
+  crate)
+- **SR-CONST-005:** Unsafe code SHALL be <5% of codebase, isolated and
+  documented, and all Rust files SHOULD use the `#![deny(unsafe_code)]` macro
+- **SR-CONST-006:** Pin assignments SHALL match hardware layout exactly (see
+  Section 3)
 
 ---
 
@@ -325,8 +414,7 @@ item is picked up.*
 - [x] SNTP client (`sntpc`)
 - [x] TLS 1.3 handshake
 - [x] MQTT v5.0 client with TLS 1.3
-- [x] Event-driven MQTT message handling (channel-driven
-  publish with QoS 1)
+- [x] Event-driven MQTT message handling (channel-driven publish with QoS 1)
 - [x] Interrupt-driven packet reception (EXTI2/PC2)
 - [x] WFI/Sleep mode with DSB barrier and wake counter
 
@@ -339,8 +427,8 @@ item is picked up.*
 - [x] Publish sensor data via MQTT
 
 ### Phase 4: Security Foundation
-- [ ] AWS IoT Core endpoint and TLS certificate
-  verification (deferred from Phase 2)
+- [ ] AWS IoT Core endpoint and TLS certificate verification (deferred from
+  Phase 2)
 - [ ] Feature-gate `NoVerify` TLS
 - [ ] Software-only certificate verification
 - [ ] Threat model document
@@ -368,17 +456,19 @@ item is picked up.*
 - [ ] Device Shadow integration
 - [ ] IoT Jobs for command dispatch
 
-See [Roadmap](./roadmap.md) for full phase details and
-compliance gates.
+See [Roadmap](./roadmap.md) for full phase details and compliance gates.
 
 ---
 
 ## 8. Verification
 
 ### Test Methods
-- **Unit Tests:** All non-hardware functions, >=80% coverage, `embedded-test` framework
-- **Integration Tests:** `embedded-test` on real hardware via probe-rs; Cucumber-RS smoke tests with tiered durations
-- **Hardware Tests:** Logic analyzer for timing, oscilloscope for latency, packet capture for protocols
+- **Unit Tests:** All non-hardware functions, >=80% coverage, `embedded-test`
+  framework
+- **Integration Tests:** `embedded-test` on real hardware via probe-rs;
+  Cucumber-RS smoke tests with tiered durations
+- **Hardware Tests:** Logic analyzer for timing, oscilloscope for latency,
+  packet capture for protocols
 
 ### Acceptance Criteria
 - All Critical/High priority requirements verified
@@ -391,19 +481,17 @@ compliance gates.
 
 ## 9. Architecture Decisions
 
-Architecture decisions for this project are tracked in the
-canonical ADR log at
-[./architecture/decisions.md](./architecture/decisions.md).  Refer
-to that document for the full set of decisions, rationale, and
-trade-offs rather than duplicating summaries here.
+Architecture decisions for this project are tracked in the canonical ADR log at
+[./architecture/decisions.md](./architecture/decisions.md).  Refer to that
+document for the full set of decisions, rationale, and trade-offs rather than
+duplicating summaries here.
 
 ---
 
 ## 10. Reference Information
 
 **Development Tools:**
-- Rust stable (>=1.88.0 for micropb) with
-  `thumbv7em-none-eabihf` target
+- Rust stable (>=1.88.0 for micropb) with `thumbv7em-none-eabihf` target
 - `cargo-embed` or `probe-rs` for flashing/debugging
 - J-Link tools for RTT logging
 - Logic analyzer and oscilloscope for hardware validation
@@ -428,9 +516,10 @@ trade-offs rather than duplicating summaries here.
 
 **Known Risks:**
 
-See [./risk_register.md](./risk_register.md) for the canonical,
-up-to-date risk register (currently R1-R10).
+See [./risk_register.md](./risk_register.md) for the canonical, up-to-date risk
+register (currently R1-R10).
 
 ---
 
-*This document is maintained as a living reference. Update as requirements evolve or decisions change.*
+*This document is maintained as a living reference.  Update as requirements
+evolve or decisions change.*
