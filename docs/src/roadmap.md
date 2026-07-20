@@ -586,17 +586,18 @@ Items intentionally deferred:
 2. **Additional Board Profiles**-- future profiles added as
    `boards/<profile-name>/`
 3. **Multi-MCU Support**-- ATSAM, STM32F7/H7, nRF52, ESP32
-4. **Hardware-in-the-Loop (HIL) Test Automation**-- use a
-   Saleae Logic Pro 16 (or similar MSO) with the Logic 2
-   gRPC automation API to validate bus-level behavior:
-   I2C transactions (SEN66), SPI timing (W5500, ePaper,
-   SD card), CAN bus signaling, interrupt latency, and
-   analog power rail stability.  Python test harness
-   drives captures and protocol decoding; results asserted
-   programmatically.  Depends on project maturity and
-   hardware investment (~$1,500 for Logic Pro 16).
-   Accessed via `mise run test:hil` with selectable test
-   suites (e.g., `test:hil:i2c`, `test:hil:spi`)
+4. **Hardware-in-the-Loop (HIL) Test Automation**-- use the
+   bench's Saleae Logic MSO 2x100 with the Logic 2 gRPC
+   automation API to validate bus-level behavior: I2C
+   transactions (SEN66), SPI timing (W5500, ePaper, SD
+   card), CAN bus signaling, interrupt latency, and analog
+   power rail stability.  A Python test harness drives
+   captures and protocol decoding; results are asserted
+   programmatically.  The MSO 2x100 is the bench instrument
+   for the foreseeable future; no further analyzer purchase
+   is planned.  Accessed via `mise run test:hil` with
+   selectable test suites (e.g., `test:hil:i2c`,
+   `test:hil:spi`)
 5. **FIPS 140-3 Support**-- desired for strong cryptographic
    assurance, not a development priority
 6. **Wireless Connectivity**-- WiFi/BLE modules (current
