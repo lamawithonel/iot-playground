@@ -9,7 +9,7 @@
 
 | ID | Risk | Impact | Likelihood | Mitigation | Status |
 |----|------|--------|------------|------------|--------|
-| R1 | Flash size constraints with TLS stack | High | Low | Using `embedded-tls` (no allocator, ~40KB TLS state) | ✅ Mitigated |
+| R1 | Flash size constraints with TLS stack | High | Low | Using `embedded-tls` (no allocator; 34KB static buffers in CCM RAM) | ✅ Mitigated |
 | R2 | Embassy-RTIC compatibility gaps | Medium | Low | PAC fallback available for unsupported peripherals | 🔄 Monitoring |
 | R3 | Limited secure boot on STM32F4 | Medium | High | Plan hardware upgrade path to F7/H7 for production | 📋 Accepted |
 | R4 | `embedded-tls` lacks RSA support | Low | N/A | Use ECDSA certificates; document server requirements | ✅ Mitigated |
