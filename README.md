@@ -266,10 +266,10 @@ task scheduling:
 ### Embassy HAL (No Executor)
 
 Embassy crates are used for **hardware abstraction only**:
-- ✅ `embassy-stm32` - STM32 peripheral drivers
-- ✅ `embassy-net` - Network stack
-- ✅ `embassy-time` - Time management
-- ❌ `embassy-executor` - **NOT used** (RTIC handles scheduling)
+- `embassy-stm32` - STM32 peripheral drivers
+- `embassy-net` - Network stack
+- `embassy-time` - Time management
+- `embassy-executor` - **NOT used** (RTIC handles scheduling)
 
 ### Memory Model
 
