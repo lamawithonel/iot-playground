@@ -1,7 +1,9 @@
 # ST NUCLEO-N657X0-Q-- ARS Toolhead Sensor
 
-**Status: scaffold only.**  No hardware is present, and nothing
-builds; `src/main.rs` is a deliberate `compile_error!`.
+**Status: scaffold only.**  Hardware arrived on the bench
+2026-07-20, but nothing builds yet; `src/main.rs` is a deliberate
+`compile_error!`, and the bring-up spike (gate G0) has not
+started.
 
 Planned target: `thumbv8m.main-none-eabihf` (Cortex-M55; rustc
 has no thumbv8.1m triple-- Helium/MVE selects via target-cpu).
@@ -18,8 +20,9 @@ so no dependencies are pinned yet.
 
 ## Pinout
 
-**Status: provisional.**  No hardware has arrived; every ARS assignment
-below is gated on Spike Gates G0-G5 in
+**Status: provisional.**  Hardware has been on the bench since 2026-07-20, but
+nothing below is bench-verified; every ARS assignment is gated on Spike
+Gates G0-G5 in
 [`pinout.md`](../projects/ars-toolhead-sensor/pinout.md) and
 may still change-- see G2 (mic capture quality) and G3 (PWM audio
 fidelity) in particular.  This diagram renders that document against the
@@ -80,6 +83,67 @@ Authoritative source:
 [`pinout.md`](../projects/ars-toolhead-sensor/pinout.md)-- read it
 for the full rationale, decisions, open questions, and gate criteria
 behind every ARS assignment above.
+
+## HIL Bench: Saleae Probe Hookup
+
+The plan below covers the ARS toolhead sensor's five ARS signals
+plus two bring-up aids, probed with the Logic MSO 2x100 (2 analog
+channels, 8 digital channels, expandable to 20).  General MSO
+operation-- the 1.65 V digital-threshold rule for 3.3 V logic,
+grounding practice, and trigger-type explanations-- lives in the
+[Saleae Logic skill](../../../.agents/skills/saleae-logic/SKILL.md);
+this page states only what is specific to this board.
+[`pinout.md`](../projects/ars-toolhead-sensor/pinout.md) wins on
+every pin identity below; this page decides no pin assignments of
+its own.
+
+All six probed digital signals sit on the 3.3 V header domain, so
+every digital channel uses the 1.65 V threshold preset.  The debug
+console is not a probe point: USART1 VCP (PE5/PE6) is internal to
+the STLINK-V3EC and reachable only over the CN10 USB connector, so
+console liveness is watched over USB, never captured on a digital
+channel.
+
+### Digital channel plan
+
+| Channel | Signal | Purpose |
+|---|---|---|
+| D0 | AMP_I2C_SCL (PH9, morpho CN15 pin 3) | I2C1 clock to the MAX9744; pair with D1 to decode volume and mute register writes. |
+| D1 | AMP_I2C_SDA (PC1, morpho CN15 pin 5) | I2C1 data to the MAX9744 at address 0x4B; see `pinout.md` for bus rationale. |
+| D2 | AUDIO_PWM (PE9, Arduino D3, also morpho CN15 pin 31) | TIM1_CH1 PWM carrier into the RC low-pass ahead of the MAX9744 line input; a gate G3 fidelity input. |
+| D3 | AMP_MUTE_N (PD0, Arduino D2, also morpho CN15 pin 33) | Mute control into the amp's inverting stage-- drive LOW to mute; rising edge marks unmute/sweep start. |
+| D4 | USER_BTN (PC13, morpho CN3 pin 23) | On-board blue user button; bring-up interaction and EXTI-path liveness. |
+| D5 | NRST | Board reset; anchors bring-up captures to power-on/warm-reset timing. |
+
+D6 and D7 are free in the 8-channel base kit; the digital channel
+count expands to 20 across up to 5 probe cables
+(`logic_mso_user_manual.pdf`, Digital Measurements) if a later spike
+adds signals of interest.
+
+### Analog channel plan
+
+| Channel | Signal | Purpose |
+|---|---|---|
+| Analog 1 | MIC_AUD, Arduino A0 (CN4 pin 1), 3.3 V header side | Mic capture ahead of the on-board 3.3 V-to-1.8 V adaptation amplifier; probe the 3.3 V header pin, never the 1.8 V ADC-side pin-- the mic's ~1.65 V bias lives on the 3.3 V side.  A gate G2 input. |
+| Analog 2 | Audio line after the external RC low-pass, MAX9744 LEFTIN (JP2 pin 2)-- or moved to raw PE9 to inspect the 200 kHz PWM carrier directly | Gate G3 SNR/THD comparison between the filtered line signal and, when moved, the raw carrier. |
+
+### Trigger points
+
+An edge trigger on AMP_MUTE_N's rising edge (unmute, marking sweep
+start) or on I2C1's first start bit (the volume command to the
+MAX9744 at 0x4B) anchors an audio-path capture to the start of a
+measurement window.  Bring-up captures trigger on USER_BTN or NRST
+instead.  (Trigger types-- Edge, Pulse, Slope-- are explained in the
+skill linked above.)
+
+### Verification status
+
+Hardware has been on the bench since 2026-07-20, but no probe is
+attached yet and Logic 2 is not installed on the bench machine.
+Treat every channel assignment above as unverified until it runs
+against the board and is confirmed in the Logic 2 UI.  Gate G2/G3
+pass/fail measurement specs-- not channel assignments-- live in
+[HIL measurements](../projects/ars-toolhead-sensor/hil-measurements.md).
 
 ## Where the Real Content Lives
 

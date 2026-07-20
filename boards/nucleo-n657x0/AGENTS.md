@@ -3,7 +3,8 @@
 ST NUCLEO-N657X0-Q (STM32N657X0, Cortex-M55 @ 800 MHz, ~4.2 MB
 contiguous SRAM, flashless external-NOR boot via a signed first-stage boot
 loader (FSBL), Neural-ART NPU).  **Status: scaffold**-- workspace-excluded,
-no hardware, `main.rs` is a deliberate `compile_error!`.
+hardware on bench (bring-up not started), `main.rs` is a deliberate
+`compile_error!`.
 
 ## Module Plan
 

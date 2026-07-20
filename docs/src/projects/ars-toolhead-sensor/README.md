@@ -32,7 +32,7 @@ analysis:
 ```text
 sweep generation (MCU, swept sine)
         |
-        |  audio output path -- open spike:
+        |  audio output path-- open spike:
         |  filtered PWM vs external DAC/codec
         v
 MAX9744 class-D amplifier (line-level in, 20 W)
@@ -81,7 +81,7 @@ rules.
 The
 [`nucleo-h753zi`](../../../../boards/nucleo-h753zi/README.md)
 board hosts a planned DAC->ADC loopback rig used to de-risk the
-sweep/capture pipeline before N657 hardware arrives.
+sweep/capture pipeline ahead of N657 bring-up.
 
 ## Phased Delivery
 
@@ -114,7 +114,8 @@ Unverified claims stay here until a bring-up spike settles them.
   `time-driver-tim9` plus rtic 2.2.0 `thumbv8main-backend` and a
   SysTick monotonic compiles cleanly (`g1-spike` feature in
   `boards/nucleo-n657x0`).  Runtime peripheral coverage (ADC,
-  GPDMA, TIM1 PWM, I2C) remains unverified until hardware.
+  GPDMA, TIM1 PWM, I2C) remains unverified until the bring-up
+  spike.
 - **Audio output path.**  Provisionally filtered PWM (TIM1_CH1 on
   PE9 plus an external RC low-pass) into the MAX9744 line input;
   confirmed or overturned at gate G3, with SAI1 plus an external
@@ -127,4 +128,5 @@ Unverified claims stay here until a bring-up spike settles them.
   rate, trigger source, and anti-aliasing for the mic input
   remain open.
 - **Inference deployment.**  Neural-ART NPU vs CMSIS-NN on the
-  M55 vs host-side-only inference for the passive CNN.
+  M55 vs host-side-only inference for the passive CNN remains
+  open.

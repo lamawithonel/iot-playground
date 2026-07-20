@@ -347,6 +347,9 @@ live in the documentation, not in this skill:
 - NUCLEO-H753ZI probe hookup (channel plans, pin identities,
   trigger points):
   [`docs/src/boards/nucleo-h753zi.md`](../../../docs/src/boards/nucleo-h753zi.md)
+- NUCLEO-N657X0-Q probe hookup (ARS audio-path channel plans,
+  trigger points):
+  [`docs/src/boards/nucleo-n657x0.md`](../../../docs/src/boards/nucleo-n657x0.md)
 - ARS gate G3 audio-path and loopback measurement specifications:
   [`docs/src/projects/ars-toolhead-sensor/hil-measurements.md`](../../../docs/src/projects/ars-toolhead-sensor/hil-measurements.md)
 
