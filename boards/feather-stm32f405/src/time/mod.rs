@@ -14,7 +14,9 @@
 //!
 //! ## Usage
 //!
-//! ```no_run
+//! ```ignore
+//! // ignore: rtc, stack, and rng come from RTIC init; a bin crate
+//! // has no doc-tests to bind them.
 //! time::initialize_rtc(rtc, rtc_time);
 //!
 //! // The SNTP client lives in the shared iot-net crate; its

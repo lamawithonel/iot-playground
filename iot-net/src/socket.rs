@@ -18,7 +18,9 @@ use super::error::NetworkError;
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
+/// // ignore: needs a live embassy-net `Stack` to bind; this crate
+/// // has no host doc-tests (embassy-net does not build for host).
 /// let mut socket = AsyncTcpSocket::new(stack, rx_buffer, tx_buffer);
 /// socket.connect(endpoint).await?;
 /// // Now socket can be used with embedded-tls
@@ -38,7 +40,9 @@ impl<'a> AsyncTcpSocket<'a> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
+    /// // ignore: needs a live embassy-net `Stack` to bind; this crate
+    /// // has no host doc-tests (embassy-net does not build for host).
     /// let mut rx_buffer = [0u8; 4096];
     /// let mut tx_buffer = [0u8; 4096];
     /// let socket = AsyncTcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
