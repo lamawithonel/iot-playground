@@ -136,9 +136,9 @@ eInk microSD   SDCS  PB10 TX    o--|           |--o  SDA   PB7   SDA    I2C (SEN
 | **LED** | PC1 | GPIO output | Active-high |
 | **NeoPixel LED** | PC0 | GPIO | NeoPixel |
 | **Debug** | PA13(SWDIO), PA14(SWCLK) | SWD | J-Link RTT |
-| **12.000 MHz Crystal** | PH0(OSC_IN), PH1(OSC_IN) | 3.3V | External oscillator |
+| **12.000 MHz Crystal** | PH0(OSC_IN), PH1(OSC_OUT) | 3.3V | External oscillator |
 | **32.768 kHz Crystal** | PC14(OSC32_IN), PC15(OSC32_OUT) | 3.3V | RTC external crystal | 
-| **25Q16 (2 MiB) Flash Chip** | PV3(SCK), PB4(MOSI), PB5(MISO), PA15(CS) | SPI1 | Flash
+| **25Q16 (2 MiB) Flash Chip** | PB3(SCK), PB4(MISO), PB5(MOSI), PA15(CS) | SPI1 | Flash |
 
 ### 3.3 EXTI Configuration
 
