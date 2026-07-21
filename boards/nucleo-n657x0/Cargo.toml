@@ -54,7 +54,10 @@ panic-probe = { version = "1.0", features = ["print-defmt"], optional = true }
 [dependencies.embassy-stm32]
 version = "0.6.0"
 default-features = false
-features = ["defmt", "rt", "stm32n657x0", "time-driver-tim9"]
+# exti: phase-1's USER_BTN (PC13/EXTI13) uses embassy's async
+# ExtiInput, matching feather's own "exti" precedent for
+# counting_exti.rs.
+features = ["defmt", "exti", "rt", "stm32n657x0", "time-driver-tim9"]
 optional = true
 
 [dependencies.rtic]

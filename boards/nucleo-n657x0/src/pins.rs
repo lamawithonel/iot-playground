@@ -9,10 +9,18 @@
 //! citations and rationale, this module carries the constants
 //! firmware will bind to.
 //!
-//! Nothing here builds against real peripherals yet-- the crate
-//! stays a `compile_error!`-guarded scaffold until the bring-up
-//! spike (gate G0) passes.  See `boards/nucleo-n657x0/README.md`
-//! and `AGENTS.md`.
+//! Compiled unconditionally: these are plain `&str` constants with
+//! no embassy dependency, so nothing here needs the `g1-spike`
+//! feature gate.  `AMP_MUTE_N`, `USER_BTN`, `AMP_I2C_SCL`, and
+//! `AMP_I2C_SDA` are consumed by the phase-1 RTIC app in
+//! `main.rs`'s `app` module (behind `g1-spike`), for the
+//! peripherals that build today.  `MIC_AUD` and `AUDIO_PWM` stay
+//! unconsumed (`#[allow(dead_code)]`): ADC1 and TIM1 have no
+//! embassy-stm32 0.6.0 peripheral singleton for this chip-- see
+//! `main.rs`'s `capture`/`sweep_engine` doc comments.  `VCP_TX` and
+//! `VCP_RX` stay unconsumed too, permanently: primary logging is
+//! defmt-RTT, not the VCP UART.  See `boards/nucleo-n657x0/
+//! README.md` and `AGENTS.md`.
 
 #![deny(warnings)]
 #![deny(unsafe_code)]
@@ -24,6 +32,13 @@
 /// linked-list circular capture mode.  Arduino CN4 pin 1 (A0),
 /// routed through the Nucleo's on-board 3V3-to-1V8 adaptation
 /// amplifier.
+///
+/// Unconsumed: ADC1 has no embassy-stm32 0.6.0 peripheral
+/// singleton for `stm32n657x0` (`stm32-metapac` 21.0.0 has
+/// `registers: None` for both "ADC1" and "ADC12_COMMON" on this
+/// chip).  Referenced from `main.rs::app::init` once that gap
+/// closes upstream.
+#[allow(dead_code)]
 pub const MIC_AUD: &str = "PA8";
 
 /// Swept-sine audio output to the amplifier line input.
@@ -32,6 +47,12 @@ pub const MIC_AUD: &str = "PA8";
 /// (`tim1_upd_dma`).  Arduino CN13 pin 4 (D3); also morpho CN15
 /// pin 31.  Feeds an external RC low-pass into MAX9744 JP2 pin 2
 /// (LEFTIN).
+///
+/// Unconsumed: TIM1 has no embassy-stm32 0.6.0 peripheral
+/// singleton for `stm32n657x0` either (only TIM9 is generated for
+/// this chip).  Referenced from `main.rs::app::init` once that gap
+/// closes upstream.
+#[allow(dead_code)]
 pub const AUDIO_PWM: &str = "PE9";
 
 /// Amplifier I2C clock (MAX9744 volume control).
@@ -67,6 +88,12 @@ pub const USER_BTN: &str = "PC13";
 /// Pin PE5, AF7.  USART1_TX.  Internal to the STLINK-V3EC,
 /// exposed as a Virtual COM port on CN10 USB.  Reserved: never
 /// available for I2C1 or TIM despite its other AF options.
+///
+/// Permanently unconsumed: primary logging is defmt-RTT, not the
+/// VCP UART; USART1's NVIC vector is borrowed only as an RTIC
+/// dispatcher slot (see `main.rs`'s `app` module), never as an
+/// instantiated peripheral.
+#[allow(dead_code)]
 pub const VCP_TX: &str = "PE5";
 
 /// Virtual COM port receive (debug console in).
@@ -74,11 +101,18 @@ pub const VCP_TX: &str = "PE5";
 /// Pin PE6, AF7.  USART1_RX.  Internal to the STLINK-V3EC,
 /// exposed as a Virtual COM port on CN10 USB.  Reserved, paired
 /// with `VCP_TX`.
+///
+/// Permanently unconsumed; see `VCP_TX`.
+#[allow(dead_code)]
 pub const VCP_RX: &str = "PE6";
 
 // Future embassy-stm32 pin bindings (sketch only-- unverified
-// against real hardware; gate G1 confirms embassy-stm32 0.6
-// `stm32n657x0` peripheral coverage before any of this compiles).
+// against real hardware).  Gate G1 has already run: AMP_MUTE_N,
+// USER_BTN, and I2C1 (AMP_I2C_SCL/SDA) all compile and are claimed
+// for real in `main.rs`'s `app` module today.  `mic_adc` and
+// `audio_pwm` stay sketch-only because ADC1/TIM1 have no
+// embassy-stm32 0.6.0 peripheral singleton for `stm32n657x0`-- see
+// `MIC_AUD`/`AUDIO_PWM`'s doc comments above.
 //
 // use embassy_stm32::adc::Adc;
 // use embassy_stm32::gpio::{Level, Output, Speed};
@@ -98,6 +132,6 @@ pub const VCP_RX: &str = "PE6";
 //
 // impl SensorPins {
 //     pub fn init(p: embassy_stm32::Peripherals) -> Self {
-//         todo!("bind peripherals per the pin map above once G0/G1 pass")
+//         todo!("bind peripherals per the pin map above once ADC1/TIM1 land upstream")
 //     }
 // }
