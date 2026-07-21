@@ -30,6 +30,7 @@
 use core::num::NonZero;
 
 use defmt::{error, info, warn, Debug2Format};
+use embassy_futures::select::{select, Either};
 use embassy_net::{dns::DnsQueryType, IpEndpoint, Stack};
 use embassy_time::{with_deadline, Duration, Instant, TimeoutError, Timer};
 use embedded_tls::{
@@ -369,16 +370,55 @@ impl MqttClient {
         // Block on the sensor channel instead of polling a timer.
         // Between readings the executor yields to RTIC, which enters
         // WFI-- no spurious timer wakeups.
+        //
+        // Keepalive: a v5 broker closes the session after roughly
+        // 1.5x the negotiated keep-alive with no inbound packet
+        // (MQTT v5 3.1.2.10).  Publishes are channel-driven and may
+        // pause longer than that, and nothing else sends traffic, so
+        // when the channel stays idle past keep_alive_secs/2 we send
+        // a PINGREQ to hold the session open.  Half the interval
+        // keeps a margin under the 1.5x grace even with link latency.
+        // keep_alive_secs == 0 negotiates KeepAlive::Infinite, so no
+        // ping timer is armed and we block on the channel as before.
+        let ping_period = match self.config.keep_alive_secs {
+            0 => None,
+            // u64 seconds; .max(1) avoids a zero-second timer (a busy
+            // ping loop) when keep_alive_secs == 1.
+            ka => Some(Duration::from_secs(u64::from(ka / 2).max(1))),
+        };
+
         let mut msg_count = 0u32;
 
         loop {
-            let reading = match sensor_rx.recv().await {
-                Ok(r) => r,
-                Err(_) => {
-                    error!("Sensor channel closed — halting publish loop");
-                    return Err(MqttError::Disconnected.into());
-                }
-            };
+            // Wait for the next reading, but wake to ping if the
+            // channel stays idle past the keepalive period.  This
+            // select is cancel-safe: rtic-sync's recv() dequeues only
+            // on the poll that returns Ready, so losing the race to
+            // the timer drops the future without consuming a reading,
+            // and the timer is rebuilt each iteration-- every publish
+            // resets the keepalive window.
+            let reading = match ping_period {
+                Some(period) => match select(sensor_rx.recv(), Timer::after(period)).await {
+                    Either::First(recv) => recv,
+                    Either::Second(()) => {
+                        // Idle past keep_alive_secs/2.  A ping failure
+                        // means the link is gone; surface it so `run`
+                        // reconnects.  The matching PINGRESP is drained
+                        // by await_puback on the next publish.
+                        mqtt.ping().await.map_err(|e| {
+                            error!("PINGREQ failed: {:?}", Debug2Format(&e));
+                            MqttError::Disconnected
+                        })?;
+                        info!("PINGREQ sent (keepalive)");
+                        continue;
+                    }
+                },
+                None => sensor_rx.recv().await,
+            }
+            .map_err(|_| {
+                error!("Sensor channel closed -- halting publish loop");
+                MqttError::Disconnected
+            })?;
             msg_count += 1;
 
             // Per-cycle telemetry hook (board-injected so this
@@ -481,7 +521,6 @@ impl MqttClient {
         let mut deadline = core::pin::pin!(deadline);
 
         loop {
-            use embassy_futures::select::{select, Either};
             match select(&mut deadline, mqtt.poll()).await {
                 Either::First(_) => {
                     warn!(
