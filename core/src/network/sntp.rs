@@ -36,6 +36,27 @@ const MODE_SERVER: u8 = 4;
 /// Leap Indicator value meaning the source is not synchronized.
 const LI_UNSYNC: u8 = 3;
 
+/// NTP era length in seconds.
+///
+/// RFC 4330 sec. 3 defines NTP time as seconds since 1900-01-01 in
+/// a 32-bit wire field, which wraps every 2^32 seconds (~136
+/// years); the RFC leaves era disambiguation to the implementation.
+/// The next wrap-- era 0 to era 1-- falls on 2036-02-07T06:28:16Z.
+const NTP_ERA_SECS: u64 = 1 << 32;
+
+/// Build-epoch reference used to disambiguate the NTP era.
+///
+/// A raw wire seconds value smaller than this cannot be a genuine
+/// era-0 timestamp-- this firmware did not exist before it was
+/// built-- so [`validate_reply`] treats it as an era-1 timestamp
+/// that wrapped through zero at the 2036 rollover and adds
+/// [`NTP_ERA_SECS`] to unfold it back to era-0-relative seconds
+/// before [`crate::time::Timestamp::from_ntp`] converts it.
+///
+/// 2024-01-01T00:00:00Z in NTP seconds (Unix 1,704,067,200 plus the
+/// 2,208,988,800s 1900-1970 offset).
+const NTP_ERA0_BUILD_REFERENCE_SECS: u64 = 3_913_056_000;
+
 /// Build a 48-byte NTP client request.
 ///
 /// Byte 0 is `LI=0, VN=3, Mode=3` (client).  The 64-bit `transmit`
@@ -60,9 +81,11 @@ pub fn build_request(transmit: u64) -> [u8; 48] {
 ///
 /// On success returns the reply's Transmit Timestamp as
 /// `(ntp_seconds, ntp_fraction)` for conversion via
-/// `Timestamp::from_ntp`.  On any field mismatch returns the specific
-/// [`SntpReplyError`] so the reply is discarded instead of setting the
-/// clock to an indeterminate value.
+/// `Timestamp::from_ntp`.  `ntp_seconds` is already unfolded past
+/// the Feb 2036 era rollover (see [`NTP_ERA0_BUILD_REFERENCE_SECS`]),
+/// so callers do not need their own era handling.  On any field
+/// mismatch returns the specific [`SntpReplyError`] so the reply is
+/// discarded instead of setting the clock to an indeterminate value.
 pub fn validate_reply(
     response: &[u8],
     recv_len: usize,
@@ -99,7 +122,15 @@ pub fn validate_reply(
     if originate != sent_transmit {
         return Err(SntpReplyError::OriginateMismatch);
     }
-    let secs = u32::from_be_bytes([response[40], response[41], response[42], response[43]]) as u64;
+    let mut secs =
+        u32::from_be_bytes([response[40], response[41], response[42], response[43]]) as u64;
+    if secs < NTP_ERA0_BUILD_REFERENCE_SECS {
+        // Feb 2036 rollover: an era-1 reply's seconds field wrapped
+        // through zero on the wire.  Unfold it so the caller's
+        // `Timestamp::from_ntp` conversion sees era-0-relative
+        // seconds instead of saturating to the Unix epoch.
+        secs += NTP_ERA_SECS;
+    }
     let frac = u32::from_be_bytes([response[44], response[45], response[46], response[47]]);
     Ok((secs, frac))
 }
@@ -111,12 +142,19 @@ mod tests {
     const NONCE: u64 = 0x0123_4567_89AB_CDEF;
     const MAX_STRATUM: u8 = 3;
 
+    // 2025-01-01T00:00:00Z in NTP seconds (Unix 1,735,689,600 plus
+    // the 1900-1970 offset); safely above
+    // NTP_ERA0_BUILD_REFERENCE_SECS so this fixture exercises the
+    // ordinary (non-era-corrected) path.  Era correction itself is
+    // covered by the era_* tests below.
+    const PLAUSIBLE_TRANSMIT_SECS: u32 = 3_944_678_400;
+
     fn good_reply() -> [u8; 48] {
         let mut r = [0u8; 48];
         r[0] = 0x1C; // LI=0, VN=3, Mode=4 (server)
         r[1] = 2; // stratum 2
         r[24..32].copy_from_slice(&NONCE.to_be_bytes()); // Originate echoes request
-        r[40..44].copy_from_slice(&0x8000_0000u32.to_be_bytes()); // transmit secs
+        r[40..44].copy_from_slice(&PLAUSIBLE_TRANSMIT_SECS.to_be_bytes());
         r[44..48].copy_from_slice(&0x4000_0000u32.to_be_bytes()); // transmit frac
         r
     }
@@ -132,7 +170,7 @@ mod tests {
     fn valid_reply_accepted() {
         let r = good_reply();
         let (secs, frac) = validate_reply(&r, 48, true, NONCE, MAX_STRATUM).unwrap();
-        assert_eq!(secs, 0x8000_0000);
+        assert_eq!(secs, PLAUSIBLE_TRANSMIT_SECS as u64);
         assert_eq!(frac, 0x4000_0000);
     }
 
@@ -198,5 +236,54 @@ mod tests {
             validate_reply(&r, 48, true, NONCE ^ 0xFF, MAX_STRATUM),
             Err(SntpReplyError::OriginateMismatch)
         );
+    }
+
+    #[test]
+    fn era_pre_rollover_secs_pass_through() {
+        // A raw wire value at the top of era 0 (just before the
+        // 2036-02-07 rollover) is already above the build-epoch
+        // reference and must not be shifted.
+        let mut r = good_reply();
+        let secs = u32::MAX; // 2036-02-07T06:28:15Z, era-0-relative
+        r[40..44].copy_from_slice(&secs.to_be_bytes());
+        let (secs, _) = validate_reply(&r, 48, true, NONCE, MAX_STRATUM).unwrap();
+        assert_eq!(secs, u32::MAX as u64);
+    }
+
+    #[test]
+    fn era_post_rollover_secs_unfolded() {
+        // A small raw wire value represents an era-1 timestamp that
+        // wrapped through zero at the rollover; it must be unfolded
+        // by one full era before being handed to `Timestamp::from_ntp`.
+        let mut r = good_reply();
+        let secs: u32 = 100; // 100s after the 2036-02-07 rollover
+        r[40..44].copy_from_slice(&secs.to_be_bytes());
+        let (secs, _) = validate_reply(&r, 48, true, NONCE, MAX_STRATUM).unwrap();
+        assert_eq!(secs, 100u64 + NTP_ERA_SECS);
+
+        // Round-tripped through the real conversion, this lands
+        // shortly after the rollover instant, not at the Unix epoch.
+        let ts = crate::time::Timestamp::from_ntp(secs, 0);
+        const ROLLOVER_UNIX_SECS: u64 = 2_085_978_496; // 2036-02-07T06:28:16Z
+        assert_eq!(ts.unix_secs, ROLLOVER_UNIX_SECS + 100);
+    }
+
+    #[test]
+    fn era_reference_boundary() {
+        // At the reference itself, no correction is applied-- the
+        // value is treated as a plausible era-0 timestamp.
+        let mut r = good_reply();
+        let at_reference = NTP_ERA0_BUILD_REFERENCE_SECS as u32;
+        r[40..44].copy_from_slice(&at_reference.to_be_bytes());
+        let (secs, _) = validate_reply(&r, 48, true, NONCE, MAX_STRATUM).unwrap();
+        assert_eq!(secs, at_reference as u64);
+
+        // One second below the reference, the value is implausibly
+        // old for era 0 and is treated as a wrapped era-1 timestamp.
+        let mut r = good_reply();
+        let below_reference = at_reference - 1;
+        r[40..44].copy_from_slice(&below_reference.to_be_bytes());
+        let (secs, _) = validate_reply(&r, 48, true, NONCE, MAX_STRATUM).unwrap();
+        assert_eq!(secs, below_reference as u64 + NTP_ERA_SECS);
     }
 }
