@@ -9,10 +9,12 @@ host-testable, minimal dependencies (`embedded-io`/
 | Module | Purpose |
 |--------|---------|
 | `sensor.rs` | `EnvironmentalReading` trait (deci-scaled accessors) |
-| `adc_capture.rs` | `AdcCapture` trait (windowed Q15 sample capture) |
+| `adc_capture.rs` | `AdcCapture` trait (windowed Q15 sample capture); `TriggeredCapture` extension (trigger-synchronized window start) |
 | `excitation.rs` | `ExcitationSink` trait (Q15 excitation block output) |
+| `i2c_bus.rs` | `I2cBus` trait (minimal addressed register-bus write) |
 | `record_store.rs` | `RecordStore` trait (append-only serialized ARS record sink) |
 | `message_port.rs` | Bounded inter-task message channel traits |
+| `mute_control.rs` | `MuteControl` trait (amp mute digital output, polarity-hiding) |
 | `rng.rs` | Cryptographically secure random byte source trait |
 | `rtc.rs` | Battery-backed wall-clock (`Rtc`) trait |
 | `time.rs` | Wall-clock timestamp vocabulary for the `Rtc` trait |

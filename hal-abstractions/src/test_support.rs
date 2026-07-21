@@ -13,9 +13,11 @@ use core::future::{poll_fn, Future};
 use core::pin::pin;
 use core::task::{Context, Poll, Waker};
 
-use crate::adc_capture::AdcCapture;
+use crate::adc_capture::{AdcCapture, TriggeredCapture};
 use crate::excitation::ExcitationSink;
+use crate::i2c_bus::I2cBus;
 use crate::message_port::{MessageReceiver, MessageSender, RecvError, TrySendError};
+use crate::mute_control::MuteControl;
 use crate::record_store::RecordStore;
 use crate::rng::Rng;
 use crate::rtc::Rtc;
@@ -504,5 +506,182 @@ impl<const N: usize, const M: usize> RecordStore for MockRecordStore<N, M> {
         self.used += record.len();
         self.count += 1;
         Ok(())
+    }
+}
+
+/// Error type for [`MockI2cBus`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MockI2cBusError {
+    /// Recording capacity `M` exhausted, or a single write exceeded
+    /// the per-write byte capacity `L`; nothing from the write is
+    /// retained.
+    Full,
+}
+
+/// Recording [`I2cBus`] test double.
+///
+/// Stores up to `M` writes, each up to `L` bytes, in a fixed
+/// `[(u8, usize, [u8; L]); M]` array-- no heap, matching the
+/// crate's `no_std`-clean mock rule-- so tests can assert exactly
+/// which `(address, bytes)` pairs a driver issued, in order.
+pub struct MockI2cBus<const M: usize, const L: usize> {
+    writes: [(u8, usize, [u8; L]); M],
+    count: usize,
+}
+
+impl<const M: usize, const L: usize> MockI2cBus<M, L> {
+    /// Create an empty recording bus.
+    pub fn new() -> Self {
+        Self {
+            writes: core::array::from_fn(|_| (0u8, 0usize, [0u8; L])),
+            count: 0,
+        }
+    }
+
+    /// Number of writes recorded so far.
+    pub fn write_count(&self) -> usize {
+        self.count
+    }
+
+    /// The `(address, bytes)` pair for write `i` (issue order), or
+    /// `None` if `i` is out of range.
+    pub fn write(&self, i: usize) -> Option<(u8, &[u8])> {
+        if i >= self.count {
+            return None;
+        }
+        let (address, len, data) = &self.writes[i];
+        Some((*address, &data[..*len]))
+    }
+}
+
+impl<const M: usize, const L: usize> Default for MockI2cBus<M, L> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const M: usize, const L: usize> I2cBus for MockI2cBus<M, L> {
+    type Error = MockI2cBusError;
+
+    async fn write(&mut self, address: u8, bytes: &[u8]) -> Result<(), Self::Error> {
+        if self.count == M || bytes.len() > L {
+            return Err(MockI2cBusError::Full);
+        }
+        let mut data = [0u8; L];
+        data[..bytes.len()].copy_from_slice(bytes);
+        self.writes[self.count] = (address, bytes.len(), data);
+        self.count += 1;
+        Ok(())
+    }
+}
+
+/// In-memory [`MuteControl`] test double.
+///
+/// Tracks both the semantic mute state and the physical line level
+/// a real GPIO-backed implementation would drive, mirroring the
+/// Adafruit amp board's inverted MUTE_INV sense (drive the header
+/// pin LOW to engage mute-- the opposite of the bare MAX9744
+/// datasheet; see
+/// `docs/src/projects/ars-toolhead-sensor/pinout.md`).  Starts
+/// unmuted with the line high, matching the board's default-high
+/// pull-up (R15).
+pub struct MockMuteControl {
+    muted: bool,
+    line_driven_low: bool,
+}
+
+impl MockMuteControl {
+    /// Create a fresh, unmuted mock.
+    pub fn new() -> Self {
+        Self {
+            muted: false,
+            line_driven_low: false,
+        }
+    }
+
+    /// Whether the simulated physical line is currently driven LOW.
+    ///
+    /// Test-only inspection hook (not part of [`MuteControl`])
+    /// standing in for a logic-analyzer probe on the real GPIO pin--
+    /// this is what actually proves the documented inversion, since
+    /// [`MuteControl::is_muted`] alone would pass even with the
+    /// polarity backwards.
+    pub fn line_driven_low(&self) -> bool {
+        self.line_driven_low
+    }
+}
+
+impl Default for MockMuteControl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MuteControl for MockMuteControl {
+    type Error = core::convert::Infallible;
+
+    fn mute(&mut self) -> Result<(), Self::Error> {
+        self.muted = true;
+        // Adafruit board inversion: engaging mute means driving the
+        // header pin LOW (pinout.md, AMP_MUTE_N).
+        self.line_driven_low = true;
+        Ok(())
+    }
+
+    fn unmute(&mut self) -> Result<(), Self::Error> {
+        self.muted = false;
+        self.line_driven_low = false;
+        Ok(())
+    }
+
+    fn is_muted(&self) -> bool {
+        self.muted
+    }
+}
+
+/// Deterministic [`TriggeredCapture`] test double.
+///
+/// Extends [`MockAdcCapture`]'s pattern replay with a fixed,
+/// caller-declared trigger-to-first-sample latency, standing in for
+/// a real TIM-trigger/ADC synchronization measurement (see
+/// `docs/src/projects/ars-toolhead-sensor/hil-measurements.md`).
+pub struct MockTriggeredCapture<'a> {
+    inner: MockAdcCapture<'a>,
+    trigger_latency_samples: u32,
+}
+
+impl<'a> MockTriggeredCapture<'a> {
+    /// Create a mock replaying `pattern` at `sample_rate_hz`,
+    /// reporting a fixed `trigger_latency_samples` on every
+    /// [`TriggeredCapture::capture_after_trigger`] call.
+    pub fn new(pattern: &'a [i16], sample_rate_hz: u32, trigger_latency_samples: u32) -> Self {
+        Self {
+            inner: MockAdcCapture::new(pattern, sample_rate_hz),
+            trigger_latency_samples,
+        }
+    }
+}
+
+impl AdcCapture for MockTriggeredCapture<'_> {
+    type Error = MockAdcCaptureError;
+
+    // Mirrors `MockAdcCapture::MAX_WINDOW_LEN`; kept as a literal
+    // since an associated const cannot forward a lifetime-generic
+    // type's const in a `const` context.
+    const MAX_WINDOW_LEN: usize = 4096;
+
+    fn sample_rate_hz(&self) -> u32 {
+        self.inner.sample_rate_hz()
+    }
+
+    async fn capture(&mut self, window: &mut [i16]) -> Result<(), Self::Error> {
+        self.inner.capture(window).await
+    }
+}
+
+impl TriggeredCapture for MockTriggeredCapture<'_> {
+    async fn capture_after_trigger(&mut self, window: &mut [i16]) -> Result<u32, Self::Error> {
+        self.inner.capture(window).await?;
+        Ok(self.trigger_latency_samples)
     }
 }

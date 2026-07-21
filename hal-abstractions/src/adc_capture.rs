@@ -48,10 +48,37 @@ pub trait AdcCapture {
     async fn capture(&mut self, window: &mut [i16]) -> Result<(), Self::Error>;
 }
 
+/// [`AdcCapture`] extension for trigger-synchronized window starts.
+///
+/// Rationale: phase-locked bench measurements (e.g., the H753ZI
+/// DAC->ADC loopback rig's planned `audio_loopback` module; see
+/// `docs/src/projects/ars-toolhead-sensor/hil-measurements.md`)
+/// need to know not just *that* a window was captured but *when its
+/// first sample landed relative to a hardware trigger edge*-- a
+/// fact plain [`AdcCapture::capture`] has no vocabulary for.  This
+/// stays a separate, optional extension rather than growing the
+/// base trait, since most `AdcCapture` consumers (e.g., the N6
+/// toolhead's free-running mic path) never trigger-synchronize at
+/// all.
+pub trait TriggeredCapture: AdcCapture {
+    /// Arm on the next hardware trigger edge, then fill `window`
+    /// with the resulting capture.
+    ///
+    /// Returns the trigger-to-first-sample latency actually
+    /// observed, in samples at the rate [`AdcCapture::sample_rate_hz`]
+    /// reports-- implementations report this so callers can check
+    /// it against their own declared tolerance; it is not itself an
+    /// error condition.
+    #[allow(async_fn_in_trait)]
+    async fn capture_after_trigger(&mut self, window: &mut [i16]) -> Result<u32, Self::Error>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{now_or_never, MockAdcCapture, MockAdcCaptureError};
+    use crate::test_support::{
+        now_or_never, MockAdcCapture, MockAdcCaptureError, MockTriggeredCapture,
+    };
 
     #[test]
     fn capture_replays_pattern_continuously_across_windows() {
@@ -125,5 +152,42 @@ mod tests {
         let mut adc = MockAdcCapture::new(&pattern, 48_000);
         let mut window = [0i16; 2];
         assert_eq!(window_energy(&mut adc, &mut window), Some(25));
+    }
+
+    #[test]
+    fn test_triggered_capture_offset_is_within_declared_tolerance() {
+        let pattern: [i16; 4] = [10, -10, 20, -20];
+        let mut adc = MockTriggeredCapture::new(&pattern, 48_000, 3);
+        let mut window = [0i16; 4];
+
+        let offset = now_or_never(adc.capture_after_trigger(&mut window))
+            .expect("mock future completes synchronously")
+            .expect("mock capture does not fail");
+        assert_eq!(window, pattern);
+
+        // Proves the tolerance-check logic itself, independent of
+        // any real Saleae-measured latency spec.
+        let expected_offset_samples = 3;
+        let declared_tolerance_samples = 1;
+        assert!(
+            offset.abs_diff(expected_offset_samples) <= declared_tolerance_samples,
+            "trigger-to-first-sample offset {offset} exceeds the declared \
+             {declared_tolerance_samples}-sample tolerance around \
+             {expected_offset_samples}"
+        );
+    }
+
+    #[test]
+    #[ignore = "RED: needs the H753ZI audio_loopback module to exist at \
+                all (currently only 'planned' in \
+                boards/nucleo-h753zi/AGENTS.md) plus a Saleae capture \
+                correlating the TIM-trigger/capture-strobe digital edges \
+                to the analog DAC/ADC waveforms per hil-measurements.md"]
+    fn test_phase_locked_capture_window_matches_saleae_trigger_edge() {
+        todo!(
+            "requires the H753ZI audio_loopback module plus a bench \
+             Saleae capture; see \
+             docs/src/projects/ars-toolhead-sensor/hil-measurements.md"
+        )
     }
 }

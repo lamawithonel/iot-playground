@@ -9,7 +9,9 @@
 
 pub mod adc_capture;
 pub mod excitation;
+pub mod i2c_bus;
 pub mod message_port;
+pub mod mute_control;
 pub mod record_store;
 pub mod rng;
 pub mod rtc;
