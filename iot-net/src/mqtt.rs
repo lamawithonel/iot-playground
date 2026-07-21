@@ -31,7 +31,7 @@ use core::num::NonZero;
 
 use defmt::{error, info, warn, Debug2Format};
 use embassy_net::{dns::DnsQueryType, IpEndpoint, Stack};
-use embassy_time::{Duration, Timer};
+use embassy_time::{with_deadline, Duration, Instant, TimeoutError, Timer};
 use embedded_tls::{
     Aes128GcmSha256, CryptoProvider, NoVerify, TlsConfig, TlsConnection, TlsContext, TlsVerifier,
 };
@@ -59,6 +59,20 @@ use crate::tls;
 
 /// MQTT packet buffer size: 2 KB for packet assembly
 pub const MQTT_BUFFER_SIZE: usize = 2048;
+
+/// Upper bound in seconds for the whole connect sequence-- DNS
+/// resolution, TCP handshake, TLS 1.3 handshake, and the MQTT
+/// CONNECT/CONNACK exchange-- which share one deadline so a peer
+/// that stalls at any stage cannot wedge the session.
+///
+/// Sized for a distant broker over a high-latency link.  DNS, plus a
+/// TCP handshake, plus a TLS 1.3 handshake (one round trip in the
+/// common case, more on HelloRetryRequest), plus one MQTT round trip
+/// is a few RTTs; at up to ~1 s per RTT on a constrained cellular or
+/// Wi-Fi link, 10 s clears a healthy peer with margin while still
+/// surfacing a stalled one within one reconnect-backoff cycle (see
+/// [`tls::INITIAL_RECONNECT_BACKOFF_SECS`]).
+const CONNECT_TIMEOUT_SECS: u64 = 10;
 
 /// Simple crypto provider wrapping an RNG for embedded-tls
 struct SimpleCryptoProvider<'a, RNG> {
@@ -229,20 +243,32 @@ impl MqttClient {
         NOW: FnMut() -> Timestamp,
         HOOK: FnMut(),
     {
+        // One deadline covers DNS through CONNACK.  Each stage below
+        // awaits under `with_deadline(connect_deadline, ..)`, so the
+        // sum of DNS, TCP, TLS, and CONNECT is bounded-- not each
+        // stage individually-- and a peer that stalls at any point
+        // surfaces `NetworkError::Timeout`, which `run`'s backoff
+        // handles on the "connection never established" path.
+        let connect_deadline = Instant::now() + Duration::from_secs(CONNECT_TIMEOUT_SECS);
+
         // --- DNS resolution ---
-        let server_ip = stack
-            .dns_query(self.config.broker_host, DnsQueryType::A)
-            .await
-            .map_err(|e| {
-                error!("DNS query failed: {:?}", Debug2Format(&e));
-                NetworkError::DnsError
-            })?
-            .first()
-            .copied()
-            .ok_or_else(|| {
-                error!("DNS returned no results for {}", self.config.broker_host);
-                NetworkError::DnsError
-            })?;
+        let dns_results = with_deadline(
+            connect_deadline,
+            stack.dns_query(self.config.broker_host, DnsQueryType::A),
+        )
+        .await
+        .map_err(|_: TimeoutError| {
+            warn!("Connect timeout ({}s) during DNS", CONNECT_TIMEOUT_SECS);
+            NetworkError::Timeout
+        })?
+        .map_err(|e| {
+            error!("DNS query failed: {:?}", Debug2Format(&e));
+            NetworkError::DnsError
+        })?;
+        let server_ip = dns_results.first().copied().ok_or_else(|| {
+            error!("DNS returned no results for {}", self.config.broker_host);
+            NetworkError::DnsError
+        })?;
 
         let endpoint = IpEndpoint::new(server_ip, self.config.broker_port);
         info!(
@@ -253,7 +279,12 @@ impl MqttClient {
 
         // --- TCP connection ---
         let mut socket = AsyncTcpSocket::new(*stack, buffers.tcp_rx, buffers.tcp_tx);
-        socket.connect(endpoint).await?;
+        with_deadline(connect_deadline, socket.connect(endpoint))
+            .await
+            .map_err(|_: TimeoutError| {
+                warn!("Connect timeout ({}s) during TCP", CONNECT_TIMEOUT_SECS);
+                NetworkError::Timeout
+            })??;
         info!("TCP connected to {}", Debug2Format(&endpoint));
 
         // --- TLS 1.3 handshake ---
@@ -268,10 +299,19 @@ impl MqttClient {
         let provider = SimpleCryptoProvider::new(rng);
         let tls_context = TlsContext::new(&tls_config, provider);
 
-        tls_conn.open(tls_context).await.map_err(|e| {
-            error!("TLS handshake failed: {:?}", Debug2Format(&e));
-            TlsError::HandshakeFailed
-        })?;
+        with_deadline(connect_deadline, tls_conn.open(tls_context))
+            .await
+            .map_err(|_: TimeoutError| {
+                warn!(
+                    "Connect timeout ({}s) during TLS handshake",
+                    CONNECT_TIMEOUT_SECS
+                );
+                NetworkError::Timeout
+            })?
+            .map_err(|e| {
+                error!("TLS handshake failed: {:?}", Debug2Format(&e));
+                TlsError::HandshakeFailed
+            })?;
         info!("TLS 1.3 handshake OK");
 
         // --- MQTT CONNECT ---
@@ -305,12 +345,22 @@ impl MqttClient {
             MqttError::ProtocolError
         })?;
 
-        mqtt.connect(tls_conn, &connect_opts, Some(mqtt_client_id))
-            .await
-            .map_err(|e| {
-                error!("MQTT CONNECT failed: {:?}", Debug2Format(&e));
-                MqttError::ConnectionFailed
-            })?;
+        with_deadline(
+            connect_deadline,
+            mqtt.connect(tls_conn, &connect_opts, Some(mqtt_client_id)),
+        )
+        .await
+        .map_err(|_: TimeoutError| {
+            warn!(
+                "Connect timeout ({}s) during MQTT CONNECT",
+                CONNECT_TIMEOUT_SECS
+            );
+            NetworkError::Timeout
+        })?
+        .map_err(|e| {
+            error!("MQTT CONNECT failed: {:?}", Debug2Format(&e));
+            MqttError::ConnectionFailed
+        })?;
 
         info!("MQTT connected — entering publish loop");
 
