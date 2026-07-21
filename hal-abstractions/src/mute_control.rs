@@ -33,7 +33,7 @@ pub trait MuteControl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::MockMuteControl;
+    use crate::test_support::{MockMuteControl, MockMuteControlError};
 
     #[test]
     fn test_mute_control_drives_low_to_engage_mute() {
@@ -53,6 +53,23 @@ mod tests {
         assert_eq!(mute.unmute(), Ok(()));
         assert!(!mute.is_muted());
         assert!(!mute.line_driven_low());
+    }
+
+    #[test]
+    fn test_mute_control_injected_failure_recovers_after_one_call() {
+        let mut mute = MockMuteControl::new();
+        mute.fail_next(MockMuteControlError::GpioFault);
+
+        assert_eq!(mute.mute(), Err(MockMuteControlError::GpioFault));
+        // The failed call left both the semantic state and the
+        // simulated line level unchanged.
+        assert!(!mute.is_muted());
+        assert!(!mute.line_driven_low());
+
+        // Recovered: the next call succeeds normally.
+        assert_eq!(mute.mute(), Ok(()));
+        assert!(mute.is_muted());
+        assert!(mute.line_driven_low());
     }
 
     #[test]

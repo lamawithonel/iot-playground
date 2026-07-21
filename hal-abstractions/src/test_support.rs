@@ -576,6 +576,14 @@ impl<const M: usize, const L: usize> I2cBus for MockI2cBus<M, L> {
     }
 }
 
+/// Error type for [`MockMuteControl`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MockMuteControlError {
+    /// Injected via [`MockMuteControl::fail_next`], standing in for
+    /// a GPIO write fault on the amp's mute line.
+    GpioFault,
+}
+
 /// In-memory [`MuteControl`] test double.
 ///
 /// Tracks both the semantic mute state and the physical line level
@@ -589,6 +597,7 @@ impl<const M: usize, const L: usize> I2cBus for MockI2cBus<M, L> {
 pub struct MockMuteControl {
     muted: bool,
     line_driven_low: bool,
+    pending_failure: Option<MockMuteControlError>,
 }
 
 impl MockMuteControl {
@@ -597,6 +606,7 @@ impl MockMuteControl {
         Self {
             muted: false,
             line_driven_low: false,
+            pending_failure: None,
         }
     }
 
@@ -610,6 +620,16 @@ impl MockMuteControl {
     pub fn line_driven_low(&self) -> bool {
         self.line_driven_low
     }
+
+    /// Make exactly the next `mute`/`unmute` call fail with `err`,
+    /// then recover to normal behavior.
+    ///
+    /// The failed call leaves both the semantic mute state and the
+    /// simulated line level unchanged, matching a GPIO write that
+    /// never reached the pin.
+    pub fn fail_next(&mut self, err: MockMuteControlError) {
+        self.pending_failure = Some(err);
+    }
 }
 
 impl Default for MockMuteControl {
@@ -619,9 +639,12 @@ impl Default for MockMuteControl {
 }
 
 impl MuteControl for MockMuteControl {
-    type Error = core::convert::Infallible;
+    type Error = MockMuteControlError;
 
     fn mute(&mut self) -> Result<(), Self::Error> {
+        if let Some(err) = self.pending_failure.take() {
+            return Err(err);
+        }
         self.muted = true;
         // Adafruit board inversion: engaging mute means driving the
         // header pin LOW (pinout.md, AMP_MUTE_N).
@@ -630,6 +653,9 @@ impl MuteControl for MockMuteControl {
     }
 
     fn unmute(&mut self) -> Result<(), Self::Error> {
+        if let Some(err) = self.pending_failure.take() {
+            return Err(err);
+        }
         self.muted = false;
         self.line_driven_low = false;
         Ok(())
@@ -660,6 +686,17 @@ impl<'a> MockTriggeredCapture<'a> {
             inner: MockAdcCapture::new(pattern, sample_rate_hz),
             trigger_latency_samples,
         }
+    }
+
+    /// Make exactly the next `capture`/`capture_after_trigger` call
+    /// fail with `err`, then recover to normal behavior without
+    /// consuming pattern samples.
+    ///
+    /// Passes through to the wrapped [`MockAdcCapture`], so it
+    /// stands in for the same hardware faults (e.g., a DMA overrun)
+    /// [`MockAdcCapture::fail_next`] documents.
+    pub fn fail_next(&mut self, err: MockAdcCaptureError) {
+        self.inner.fail_next(err);
     }
 }
 

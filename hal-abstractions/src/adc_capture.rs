@@ -178,6 +178,26 @@ mod tests {
     }
 
     #[test]
+    fn test_triggered_capture_injected_failure_recovers_after_one_call() {
+        let pattern: [i16; 2] = [7, -7];
+        let mut adc = MockTriggeredCapture::new(&pattern, 48_000, 3);
+        adc.fail_next(MockAdcCaptureError::Overrun);
+
+        let mut window = [0i16; 2];
+        assert_eq!(
+            now_or_never(adc.capture_after_trigger(&mut window)),
+            Some(Err(MockAdcCaptureError::Overrun))
+        );
+        // Recovered: the next call succeeds and the failed call did
+        // not consume pattern samples.
+        assert_eq!(
+            now_or_never(adc.capture_after_trigger(&mut window)),
+            Some(Ok(3))
+        );
+        assert_eq!(window, pattern);
+    }
+
+    #[test]
     #[ignore = "RED: needs the H753ZI audio_loopback module to exist at \
                 all (currently only 'planned' in \
                 boards/nucleo-h753zi/AGENTS.md) plus a Saleae capture \

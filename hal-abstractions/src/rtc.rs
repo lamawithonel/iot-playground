@@ -8,6 +8,10 @@ use crate::time::{RtcError, Timestamp};
 /// host tests, an in-memory mock (see
 /// [`crate::test_support::MockRtc`]).
 ///
+/// `ignore`: this example calls `defmt` logging macros, which need the
+/// optional `defmt` feature-- not enabled for doc-tests-- so it cannot
+/// compile in this crate context.
+///
 /// ```rust,ignore
 /// fn log_boot_time<R: Rtc>(rtc: &mut R) {
 ///     match rtc.now() {

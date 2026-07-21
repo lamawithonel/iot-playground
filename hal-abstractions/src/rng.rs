@@ -9,7 +9,9 @@
 /// `rand_core::RngCore::fill_bytes` semantics exactly so any
 /// `RngCore` implementor delegates in one line.
 ///
-/// ```rust,ignore
+/// ```rust
+/// use hal_abstractions::rng::Rng;
+///
 /// fn client_id_salt<R: Rng>(rng: &mut R) -> [u8; 4] {
 ///     let mut salt = [0u8; 4];
 ///     rng.fill_bytes(&mut salt);
