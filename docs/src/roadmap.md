@@ -286,9 +286,9 @@ holds no copy of it.
 ### Phase 4: Security Foundation ⏳ Not Started
 
 Establish security posture before non-lab deployments.
-Extracted from a formerly monolithic security phase based
-on cross-functional consensus that security is a property
-threaded through all phases, not a late-stage bolt-on.
+It was extracted from a formerly monolithic security phase:
+security is a property threaded through all phases, not a
+late-stage bolt-on.
 
 **Compliance Gate 1:** No deployment beyond dev-lab without
 software certificate verification.
@@ -460,9 +460,9 @@ details.
 
 ### 4.2 Test Component Implementation Timeline
 
-Items are grouped by when they should be implemented,
-based on a cross-functional engineering review
-(see [ADR-009](./architecture/decisions.md#adr-009-test-strategy-and-the-embedded-test-pyramid)).
+Items are grouped by when they should be implemented, per the
+test-strategy review recorded in
+[ADR-009](./architecture/decisions.md#adr-009-test-strategy-and-the-embedded-test-pyramid).
 
 **Done:**
 

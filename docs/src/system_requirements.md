@@ -254,8 +254,8 @@ project's goals of formal verification and predictable timing behavior.
 development with lower QoS levels during testing acknowledges the complexity of
 implementing full MQTT protocol compliance.  QoS 0 (at-most-once) provides
 fire-and-forget semantics suitable for early testing, while QoS 1
-(at-least-once) requires acknowledgment handling.  This requirement allows the
-team to validate basic connectivity and message formatting before implementing
+(at-least-once) requires acknowledgment handling.  This requirement allows
+validation of basic connectivity and message formatting before implementing
 the more complex event-driven acknowledgment logic required for QoS 1 and 2.
 This incremental approach aligns with the project's "Incremental" design
 philosophy (Section 2.3).

@@ -464,17 +464,16 @@ reduce the test burden by making wrong states unrepresentable.
 
 **Rationale:**
 
-- A 10-persona cross-functional review (RTIC specialist, safety
-  architect, observability engineer, type-system advocate, CI/CD
-  engineer, hardware engineer, security reviewer, protocol
-  specialist, fleet operator, firmware QA) converged on the A+B
-  hybrid approach.  7 of 10 supported the strategy; consensus
-  covered both approach and timing-- bring-up now, RTIC
-  integration when trigger criteria fire.
-- Key insight (Holloway): "three tasks at identical priority,
-  empty Shared struct, single 2-slot channel-- there are no
-  priority inversions to test."  This justifies deferring Layer 3
-  until the firmware topology actually demands it.
+- A 10-persona agent review (RTIC specialist, safety architect,
+  observability engineer, type-system advocate, CI/CD engineer,
+  hardware engineer, security reviewer, protocol specialist,
+  fleet operator, firmware QA) converged on the A+B hybrid
+  approach, covering both approach and timing-- bring-up now,
+  RTIC integration when trigger criteria fire.
+- With three tasks at identical priority, an empty Shared
+  struct, and a single 2-slot channel, the current firmware has
+  no priority inversions to test.  This justifies deferring
+  Layer 3 until the firmware topology actually demands it.
 - The highest-risk untested scenario is the 2-slot `rtic_sync`
   channel under TLS stall: if the network task blocks for longer
   than 2x the sample interval, every subsequent sensor reading is
