@@ -61,17 +61,32 @@ g1-spike = [
 # ETH itself is not a Cargo feature of embassy-stm32 (the `eth_v2a`
 # driver is chip-metadata-driven, enabled automatically by
 # `stm32n657x0`); only the extra crates need pulling in.  Every
-# embassy crate stays on the SAME git rev as embassy-stm32 above so
-# the `embassy_net`/`embassy_time` types line up as one graph-- no
-# `[patch.crates-io]` is needed because this spike does not pull in
-# any crates.io-sourced embassy crate (e.g. via iot-net) to unify
-# against.
+# embassy crate stays on the SAME git rev as embassy-stm32 above.
+#
+# `net` now also carries the full DHCP -> SNTP -> MQTT-over-TLS
+# telemetry pipeline, reusing the shared `iot-net` clients (a path
+# dep) exactly as `feather-stm32f405` does.  `iot-net` is a workspace
+# member, so its embassy deps resolve to the workspace's crates.io
+# versions (embassy-net 0.9.1, embassy-time 0.5.1, ...).  Those would
+# be a *distinct* graph from this crate's git-rev embassy, so their
+# `Stack`/`Runner`/time-driver types would not unify and the link
+# would double up the time driver.  The `[patch.crates-io]` section
+# at the end of this manifest redirects exactly that crates.io
+# subgraph onto the SAME git rev; the rev's crate versions match the
+# workspace's byte for byte (0.9.1 / 0.5.1 / 0.1.2 / ...), so the
+# patch is semver-clean.  The patch is crate-local (this crate is
+# workspace-excluded with its own Cargo.lock), so the workspace is
+# untouched.
 net = [
   "g1-spike",
   "dep:embassy-futures",
   "dep:embassy-net",
   "dep:embassy-time",
   "dep:static_cell",
+  "dep:heapless",
+  "dep:iot-core",
+  "dep:iot-net",
+  "dep:rtic-sync",
 ]
 
 [dependencies]
@@ -136,6 +151,36 @@ optional = true
 version = "2"
 optional = true
 
+[dependencies.heapless]
+version = "0.9"
+optional = true
+
+# Shared, hardware-free network clients (MQTT/TLS/SNTP over
+# embassy-net).  Path dep on the workspace member; its crates.io
+# embassy deps are unified onto this crate's git rev by the
+# `[patch.crates-io]` at the end of this manifest.
+[dependencies.iot-net]
+path = "../../iot-net"
+optional = true
+
+# Pulled directly (not just transitively via iot-net) so this crate
+# can name `EnvironmentalReading` (the telemetry-payload trait) and
+# `Timestamp` (the SNTP/`now` wall-clock type) itself.
+[dependencies.iot-core]
+path = "../../core"
+default-features = false
+features = ["defmt"]
+optional = true
+
+# rtic-sync channel carries telemetry readings from the producer to
+# the MQTT publish loop (feather's sensor_rx precedent).  Same git
+# tag as rtic/rtic-monotonics below and as iot-net's own rtic-sync.
+[dependencies.rtic-sync]
+git = "https://github.com/rtic-rs/rtic.git"
+tag = "v2.2.0"
+features = ["defmt-03"]
+optional = true
+
 [dependencies.rtic]
 git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
@@ -160,3 +205,26 @@ optional = true
 [profile.dev]
 opt-level = 3
 debug = 2
+
+# ── embassy graph unification (net feature) ──────────────────────
+# `iot-net` (a workspace member, pulled in by the `net` feature)
+# resolves its embassy deps to the workspace's crates.io versions.
+# Redirect exactly that crates.io subgraph onto the SAME git rev this
+# crate pins for embassy-stm32/embassy-net above, so there is one
+# embassy graph (one `Stack`/`Runner` type, one linked time driver).
+# Every crate below is genuinely present via iot-net's subgraph
+# (embassy-net 0.9.1 -> embassy-{time,futures,sync,net-driver} and
+# embassy-time -> embassy-time-{driver,queue-utils}); the rev's
+# versions equal the crates.io ones, so each patch is semver-clean
+# and none is left unused.  Only active under `--features net`; a
+# bare `g1-spike` build never pulls iot-net, so the patch simply does
+# not apply.  Crate-local: this crate is workspace-excluded with its
+# own Cargo.lock.
+[patch.crates-io]
+embassy-net = { git = "https://github.com/embassy-rs/embassy", rev = "12e4b1adde4e01b23506822c621451f8e6199c81" }
+embassy-net-driver = { git = "https://github.com/embassy-rs/embassy", rev = "12e4b1adde4e01b23506822c621451f8e6199c81" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "12e4b1adde4e01b23506822c621451f8e6199c81" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "12e4b1adde4e01b23506822c621451f8e6199c81" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy", rev = "12e4b1adde4e01b23506822c621451f8e6199c81" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "12e4b1adde4e01b23506822c621451f8e6199c81" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "12e4b1adde4e01b23506822c621451f8e6199c81" }

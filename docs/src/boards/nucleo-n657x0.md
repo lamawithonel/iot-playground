@@ -88,14 +88,28 @@ is shipped with a QSPI flash device."  SWD-loaded RAM execution is
 therefore the entire G0 flow, not a fallback from something
 better: https://github.com/probe-rs/probe-rs/pull/3436
 
-`memory.x`'s `FLASH`/`RAM` regions are copied verbatim from
-embassy's own working example, rather than derived fresh, so a
-future memory-map change should track that file first:
+`memory.x` started from embassy's own working N6 example carve-- a
+256K `FLASH` / 128K `RAM` window at the top of AXISRAM2-- rather than
+being derived fresh:
 https://raw.githubusercontent.com/embassy-rs/embassy/main/examples/stm32n6/memory.x
-Both regions sit inside the AXISRAM123456 secure alias
-(0x34000000-0x343c0000), not the non-secure alias (0x24000000)--
-the boot ROM's TrustZone state at reset in dev-boot mode (BOOT1=1)
-is presumed to require the secure alias.
+The `net` feature's MQTT-over-TLS path outgrew that 128K, so the
+regions were regrown (a future memory-map change should still
+re-check the embassy example first).  TLS 1.3 record buffers (~34 KB)
+plus TCP/MQTT buffers, the embassy-net packet ring, and a deep
+handshake stack do not fit 128K, and this crate forbids `unsafe`, so
+feather's CCM-RAM buffer placement is unavailable-- the buffers live
+in ordinary RAM.  The two regions now fill AXISRAM2
+(0x34100000-0x34200000), the one bank the boot ROM guarantees enabled
+at reset: `FLASH` stays pinned at 0x341A0000 (384K)-- the RAM-boot
+loader reads the initial SP/PC from the vector table there, so its
+origin must not move-- and `RAM` takes the whole free lower 640K
+(0x34100000-0x341A0000), which the embassy example documents as free
+app RAM.  RAM sitting below FLASH numerically is fine; flip-link puts
+the stack at the RAM top (0x341A0000), exactly the loader's SP,
+growing down.  Both regions sit inside the AXISRAM123456 secure alias
+(0x34000000-0x343c0000), not the non-secure alias (0x24000000)-- the
+boot ROM's TrustZone state at reset in dev-boot mode (BOOT1=1) is
+presumed to require the secure alias.
 
 ## embassy-stm32 / stm32-metapac Coverage Gaps
 
