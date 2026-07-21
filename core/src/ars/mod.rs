@@ -17,6 +17,7 @@
 
 pub mod crc32;
 pub mod generators;
+pub mod quality;
 pub mod record;
 pub mod synth;
 pub mod types;

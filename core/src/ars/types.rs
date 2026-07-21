@@ -80,6 +80,23 @@ pub struct ExcitationDescriptor {
     pub seed: u32,
 }
 
+/// Provisional lower bound of the sweep frequency band the bench
+/// characterization currently supports, in deci-Hz (105.0 Hz)
+///
+/// From `docs/src/projects/ars-toolhead-sensor/pinout.md`'s "Open
+/// items": "firmware sweep bounds (provisionally ~Fs 105 Hz up to
+/// the 20 kHz chart edge) are bench-characterization inputs, not
+/// vendor guarantees"-- the EX25VT2-4 exciter's datasheet states no
+/// usable frequency range or Xmax at all (see gate G5), so this
+/// bound only guards sweep *construction*, not excursion safety.
+pub const PROVISIONAL_SWEEP_MIN_DHZ: u32 = 1_050;
+
+/// Provisional upper bound of the sweep frequency band (the 20 kHz
+/// bench-characterization chart edge), in deci-Hz
+///
+/// See [`PROVISIONAL_SWEEP_MIN_DHZ`] for the source and caveat.
+pub const PROVISIONAL_SWEEP_MAX_DHZ: u32 = 200_000;
+
 /// Bin-frequency bookkeeping for a stepped-sine sweep
 ///
 /// Bin `i`'s frequency is `f_start + i * step`, where `step` is
@@ -154,6 +171,33 @@ impl BinPlan {
         } else {
             let start = i as u32 * dwell;
             Some((start, start + dwell))
+        }
+    }
+
+    /// Build a bin plan from a `SteppedSine` descriptor, additionally
+    /// rejecting any sweep whose frequency range falls outside the
+    /// provisional bench-characterization safe band
+    /// ([`PROVISIONAL_SWEEP_MIN_DHZ`]..=[`PROVISIONAL_SWEEP_MAX_DHZ`])
+    ///
+    /// This only guards sweep *construction*-- it proves nothing
+    /// about exciter excursion safety, which has no bench-measured
+    /// limit yet (see gate G5 in `hil_gates.rs`).  Returns `None`
+    /// for everything [`BinPlan::from_descriptor`] already rejects,
+    /// plus any descriptor whose start or stop frequency lands
+    /// outside the provisional band.
+    pub const fn from_descriptor_within_safe_band(
+        descriptor: &ExcitationDescriptor,
+    ) -> Option<Self> {
+        let plan = match Self::from_descriptor(descriptor) {
+            Some(p) => p,
+            None => return None,
+        };
+        if plan.f_start_dhz < PROVISIONAL_SWEEP_MIN_DHZ
+            || plan.f_stop_dhz > PROVISIONAL_SWEEP_MAX_DHZ
+        {
+            None
+        } else {
+            Some(plan)
         }
     }
 }
@@ -237,5 +281,45 @@ mod tests {
         assert_eq!(plan.dwell_range(0, 256), Some((0, 256)));
         assert_eq!(plan.dwell_range(2, 256), Some((512, 768)));
         assert_eq!(plan.dwell_range(5, 256), None);
+    }
+
+    #[test]
+    fn test_bin_plan_rejects_frequencies_outside_provisional_safe_band() {
+        // Below PROVISIONAL_SWEEP_MIN_DHZ (105.0 Hz): starts at
+        // 100.0 Hz.
+        assert!(
+            BinPlan::from_descriptor_within_safe_band(&stepped_descriptor(1000, 5000, 5)).is_none()
+        );
+        // Above PROVISIONAL_SWEEP_MAX_DHZ (20 kHz): stops at 25 kHz.
+        assert!(
+            BinPlan::from_descriptor_within_safe_band(&stepped_descriptor(10_000, 250_000, 5))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_bin_plan_accepts_frequencies_within_provisional_safe_band() {
+        // 200.0 Hz to 10,000.0 Hz sits entirely within
+        // [PROVISIONAL_SWEEP_MIN_DHZ, PROVISIONAL_SWEEP_MAX_DHZ].
+        let plan = BinPlan::from_descriptor_within_safe_band(&stepped_descriptor(2000, 100_000, 5));
+        assert_eq!(
+            plan,
+            BinPlan::from_descriptor(&stepped_descriptor(2000, 100_000, 5))
+        );
+    }
+
+    #[test]
+    fn test_bin_plan_within_safe_band_still_rejects_non_stepped_sine() {
+        let sine = ExcitationDescriptor {
+            kind: ExcitationKind::Sine,
+            flags: 0,
+            level_q15: 16_000,
+            f_start_dhz: 12_000,
+            f_stop_dhz: 12_000,
+            steps_or_order: 0,
+            dwell: 4096,
+            seed: 0,
+        };
+        assert!(BinPlan::from_descriptor_within_safe_band(&sine).is_none());
     }
 }
