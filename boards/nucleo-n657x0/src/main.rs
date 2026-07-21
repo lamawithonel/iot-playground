@@ -286,19 +286,20 @@ mod app {
         // `PWR_EXTERNAL_SOURCE_SUPPLY`) and embassy's own DK example
         // (commit c2e43ba76, "mostly built for the DK"), and clears
         // the same ready-wait promptly on this hardware.  Everything
-        // else stays default-- see the sysclk placeholder note below.
+        // else stays default-- see the 64 MHz timebase note below.
         let mut config = embassy_stm32::Config::default();
         config.rcc.supply_config = embassy_stm32::rcc::SupplyConfig::External;
         let p = embassy_stm32::init(config);
 
-        // Sysclk value is a placeholder: beyond the supply-config
-        // fix above, `embassy_stm32::init` still runs with the
-        // otherwise-default RCC config here, not an explicit PLL/
-        // clock-tree config, so the true post-boot sysclk is
-        // unconfirmed.  Monotonic timing accuracy is not a phase-1
-        // concern (no on-device work tonight-- compile + clippy
-        // only).
-        Mono::start(cx.core.SYST, 200_000_000);
+        // 64 MHz: the pinned embassy rev's default N6 RCC config
+        // leaves the M55 on HSI (rcc/n6.rs `Config::new`,
+        // `CpuClk::Hsi`)-- no PLL is engaged by
+        // `embassy_stm32::init(Default::default())`.  This constant
+        // must move in the same change as any explicit RCC config, or
+        // every monotonic delay and telemetry timestamp drifts by the
+        // ratio (bench finding: the earlier 200 MHz placeholder ran
+        // 3.125x slow).
+        Mono::start(cx.core.SYST, 64_000_000);
 
         defmt::info!("g1: nucleo-n657x0 phase-1 alive");
 
@@ -620,8 +621,13 @@ mod app {
         // elapsed monotonic time.  Two closures share the state through
         // shared `&Cell` (single task, no reentrancy), avoiding both
         // 64-bit atomics (not lock-free on this core) and `unsafe`.
-        // `wc_unix == 0` means "not yet synced" (timestamp reads 0).
-        let wc_unix: Cell<u64> = Cell::new(0);
+        // `wc_unix_us == 0` means "not yet synced" (timestamp reads
+        // 0).  Microseconds since epoch: latching whole seconds only
+        // would bake up to ~1 s of constant truncation error into
+        // every published timestamp (panel finding, 2026-07-21).
+        // u64 microseconds overflow circa year 586912-- not a bench
+        // concern.
+        let wc_unix_us: Cell<u64> = Cell::new(0);
         let wc_mono_ms: Cell<u64> = Cell::new(0);
 
         // --- Best-effort SNTP time sync ---
@@ -635,7 +641,7 @@ mod app {
             // u64::from keeps this correct whether the systick Instant
             // reports u32 or u64 ticks.
             wc_mono_ms.set(u64::from(Mono::now().ticks()));
-            wc_unix.set(ts.unix_secs);
+            wc_unix_us.set(ts.unix_secs * 1_000_000 + u64::from(ts.micros));
             Ok(())
         });
         defmt::info!("sntp: attempting time sync (best-effort)");
@@ -682,15 +688,13 @@ mod app {
 
         // Wall-clock source, invoked once per publish.
         let now = || -> Timestamp {
-            let base = wc_unix.get();
-            if base == 0 {
+            let base_us = wc_unix_us.get();
+            if base_us == 0 {
                 return Timestamp::new(0, 0);
             }
             let elapsed_ms = u64::from(Mono::now().ticks()).saturating_sub(wc_mono_ms.get());
-            Timestamp::new(
-                base + elapsed_ms / 1000,
-                ((elapsed_ms % 1000) * 1000) as u32,
-            )
+            let total_us = base_us + elapsed_ms * 1_000;
+            Timestamp::new(total_us / 1_000_000, (total_us % 1_000_000) as u32)
         };
 
         // Never returns-- reconnects automatically on failure.

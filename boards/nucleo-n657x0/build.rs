@@ -53,7 +53,10 @@ fn generate_mqtt_endpoint(out: &Path) {
         .parse()
         .unwrap_or_else(|e| panic!("BROKER_PORT must be a u16: {e}"));
 
-    println!("cargo::warning=MQTT endpoint {host}:{port} (build-time env)");
+    // Confirm injection without echoing the endpoint: the host and
+    // port are bench topology and must not land in build logs.  The
+    // panic on missing vars above already reports the failure case.
+    println!("cargo::warning=MQTT endpoint set from BROKER_HOST/BROKER_PORT");
 
     fs::write(
         out.join("mqtt_endpoint.rs"),

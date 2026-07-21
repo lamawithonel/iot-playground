@@ -124,7 +124,10 @@ default-features = false
 # check) with no socket; it is in embassy-net's DEFAULT feature set,
 # so `default-features = false` drops it and must re-add it (bench
 # finding 2026-07-21: without it the board answered ARP but never
-# ping).  No tcp/udp/dns yet-- those land with the SNTP/MQTT phase.
+# ping).  tcp/udp/dns and medium-ethernet arrive transitively via
+# iot-net's embassy-net features, unified onto this same git rev by
+# the [patch.crates-io] section below; this block lists only the
+# board's own direct needs.
 features = ["defmt", "dhcpv4", "auto-icmp-echo-reply"]
 optional = true
 

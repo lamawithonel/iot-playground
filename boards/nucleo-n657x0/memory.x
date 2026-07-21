@@ -34,9 +34,11 @@
    384K of AXISRAM2 (0x341A0000-0x34200000, ample for the ~347K image),
    RAM takes the whole lower 640K of the bank (0x34100000-0x341A0000),
    which embassy's example documents as free app RAM.  RAM sits below
-   FLASH numerically-- the linker does not require otherwise-- and
-   flip-link puts the stack at the RAM top (0x341A0000), i.e. exactly
-   the loader's SP, growing down. */
+   FLASH numerically-- the linker does not require otherwise.  The
+   loader takes the initial SP from the vector table, so no fixed SP
+   value is assumed here; flip-link (see the note after the MEMORY
+   block) places .data/.bss at the RAM top and starts the stack just
+   below them, growing down toward the region base. */
 MEMORY
 {
   RAM   : ORIGIN = 0x34100000, LENGTH = 640K

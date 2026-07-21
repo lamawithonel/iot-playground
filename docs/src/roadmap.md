@@ -551,8 +551,16 @@ self-hosted GitHub Actions runner will be configured:
 
 ## 6. Memory Budget
 
+This section covers the `feather-stm32f405` reference target.
 Total MCU resources: 192 KB SRAM (128 KB main + 64 KB CCM),
 1 MB flash.  Target utilization ceiling: 80% (154 KB RAM).
+
+The NUCLEO-N657X0-Q is budgeted separately: its `net` feature carves
+a 640 KB `RAM` region out of AXISRAM2 and currently commits roughly
+75 KB of static networking state (TLS record buffers, the packet
+ring, TCP/MQTT buffers), leaving ample headroom for stack.  See the
+[board page](boards/nucleo-n657x0.md) for the region map and the
+per-feature footprint.
 
 ### 6.1 Current Allocations
 

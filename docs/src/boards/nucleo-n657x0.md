@@ -104,9 +104,10 @@ at reset: `FLASH` stays pinned at 0x341A0000 (384K)-- the RAM-boot
 loader reads the initial SP/PC from the vector table there, so its
 origin must not move-- and `RAM` takes the whole free lower 640K
 (0x34100000-0x341A0000), which the embassy example documents as free
-app RAM.  RAM sitting below FLASH numerically is fine; flip-link puts
-the stack at the RAM top (0x341A0000), exactly the loader's SP,
-growing down.  Both regions sit inside the AXISRAM123456 secure alias
+app RAM.  RAM sitting below FLASH numerically is fine; flip-link
+places `.data`/`.bss` at the RAM top and starts the stack just below
+them, growing down toward the region base.  Both regions sit inside
+the AXISRAM123456 secure alias
 (0x34000000-0x343c0000), not the non-secure alias (0x24000000)-- the
 boot ROM's TrustZone state at reset in dev-boot mode (BOOT1=1) is
 presumed to require the secure alias.

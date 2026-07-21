@@ -6,14 +6,18 @@
 //! stack and clients need but that have no other home: a link-layer
 //! MAC address, the embassy-net stack seed, and the MQTT client
 //! identifier.  All three derive from the STM32N657's
-//! factory-programmed 96-bit unique ID (`embassy_stm32::uid`) so each
-//! board is stable and distinct on the wire and on the broker without
-//! a hardcoded, collision-prone constant, and with no `unsafe`.
+//! factory-programmed 96-bit unique ID (`embassy_stm32::uid`) with no
+//! `unsafe`.
 //!
-//! These UID-derived values are exactly the ones that must stay
-//! *stable per board*, where a per-boot random value would be wrong.
+//! The MAC and the MQTT client ID must stay *stable per board*: a
+//! per-boot value would move the device on the wire and on the
+//! broker between reboots.  The stack seed is different-- it only
+//! diversifies TCP ISNs and local ports, so a per-boot random value
+//! would be strictly better here; it is UID-derived only to keep the
+//! whole module on one entropy source, and a hardware-RNG seed
+//! (mirroring `feather-stm32f405`) is the intended upgrade.
 //! Cryptographic entropy-- TLS 1.3 handshake randomness and the SNTP
-//! transmit nonce-- comes instead from the hardware RNG
+//! transmit nonce-- comes from the hardware RNG
 //! (`embassy_stm32::rng`), initialized in `main.rs`'s `network_task`.
 
 #![deny(unsafe_code)]
