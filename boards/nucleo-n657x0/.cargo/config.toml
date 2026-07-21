@@ -1,0 +1,17 @@
+# Crate-local override for `cargo run` convenience from inside this
+# directory.  Cargo's config-file search is CWD-based, not
+# --manifest-path-based, so this only applies when CWD is inside
+# boards/nucleo-n657x0/ (or a descendant); invocations from the repo
+# root bypass this file and pick up only the root .cargo/config.toml.
+#
+# --speed 100 works around the onboard STLINK-V3EC clocking bug in
+# probe-rs (it still clamps to 50 kHz; see the board page's bring-up
+# section).  No --probe selector here: probe selection is bench
+# state, not project config-- pass --probe explicitly on multi-probe
+# benches.  Base reference:
+# https://raw.githubusercontent.com/embassy-rs/embassy/main/examples/stm32n6/.cargo/config.toml
+[target.thumbv8m.main-none-eabihf]
+runner = "probe-rs run --chip STM32N657 --speed 100"
+
+[build]
+target = "thumbv8m.main-none-eabihf"

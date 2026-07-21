@@ -14,8 +14,11 @@
 //! Framework rules apply: RTIC 2.x scheduling, Embassy HAL only
 //! (no embassy-executor), `no_std`, no heap, defmt logging.
 //!
-//! Nothing here builds yet-- the toolchain and boot-chain
-//! decisions land at the bring-up spike.
+//! The default feature set is still a deliberate `compile_error!`
+//! scaffold guard.  Under the `g1-spike` feature the crate builds
+//! and boots: the gate G0 RAM-boot flow was bench-verified
+//! 2026-07-21 (see the board page's bring-up section for the load
+//! flow of record).
 //!
 //! See `pins.rs` for the pin map of record in code form.
 
@@ -57,6 +60,8 @@ mod g1_spike {
     #[init]
     fn init(_cx: init::Context) -> (Shared, Local) {
         let _p = embassy_stm32::init(Default::default());
+
+        defmt::info!("g0: nucleo-n657x0 alive");
 
         (Shared {}, Local {})
     }

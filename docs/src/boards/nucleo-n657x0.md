@@ -1,9 +1,13 @@
 # ST NUCLEO-N657X0-Q-- ARS Toolhead Sensor
 
-**Status: scaffold only.**  Hardware arrived on the bench
-2026-07-20, but nothing builds yet; `src/main.rs` is a deliberate
-`compile_error!`, and the bring-up spike (gate G0) has not
-started.
+**Status: bring-up spike in progress.**  Gate G0's RAM-boot half
+passed on the bench 2026-07-21: the `g1-spike` image builds, loads
+over SWD, and boots from AXISRAM with a defmt log line decoded over
+RTT (see [Bring-Up: RAM-Boot Dev Flow](#bring-up-ram-boot-dev-flow)
+below).  The default feature set remains a deliberate
+`compile_error!` scaffold guard, the external-NOR boot chain via a
+signed first-stage boot loader (FSBL) is still unverified, and the
+crate stays workspace-excluded.
 
 Planned target: `thumbv8m.main-none-eabihf` (Cortex-M55; rustc
 has no thumbv8.1m triple-- Helium/MVE selects via target-cpu).
@@ -14,9 +18,43 @@ Per the `boards/` rule
 ([`boards/AGENTS.md`](../../../boards/AGENTS.md)), new profiles stay
 in the root `[workspace]` exclude list until they compile in CI
 (target installed, clippy clean).  This crate additionally gates on
-the bring-up spike: the probe-rs flow for the flashless external-NOR
-boot chain via a signed first-stage boot loader (FSBL) is unverified,
-so no dependencies are pinned yet.
+the bring-up spike: the flow for the flashless external-NOR boot
+chain via a signed FSBL is unverified.  The `g1-spike` feature pins
+the dependency stack and is the G0 RAM-boot image.
+
+## Bring-Up: RAM-Boot Dev Flow
+
+**Status: bench-verified 2026-07-21** for the RAM-boot half of gate
+G0.  The N6 is flashless; this flow loads and runs an image entirely
+from AXISRAM over SWD.  The external-NOR/FSBL boot chain is a
+separate, still-unverified flow.
+
+Board precondition: JP2 (BOOT1) in position 2 (logical 1, dev
+boot)-- the boot ROM only exposes a debug-friendly state in dev
+boot, and BOOT pins latch at reset, so power-cycle after moving the
+jumper.  In flash-boot position the debug port enumerates but
+reports no access ports.
+
+1. Build: `cargo build --features g1-spike` in the crate directory
+   (`thumbv8m.main-none-eabihf`).
+2. Load: `STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -halt -w
+   <image>.elf --verify` (8 MHz SWD; the CLI requires a `.elf` file
+   extension).
+3. Start: read initial SP and entry from the ELF (vector table base
+   `0x341A0000`), then `-coreReg MSP=<vector0> PC=<entry> -run`.
+   Do not use `-s`: it soft-resets the chip, which re-enters the
+   boot ROM's dev-boot wait loop instead of the loaded image.
+4. Observe: `probe-rs attach --chip STM32N657 --speed 100 <elf>`
+   decodes defmt over RTT.
+
+Two toolchain caveats, both bench-reproduced: probe-rs `run`'s load
+path wedges the onboard STLINK-V3EC with USB bulk-transfer timeouts
+(upstream probe-rs issue; `attach` is unaffected), so the load step
+goes through STM32CubeProgrammer CLI (2.21.0+; 2.20.0 has a
+flash-erase bug on this board).  And the image must set VTOR
+itself-- the boot ROM's vector table stays live otherwise and the
+first exception hard-faults into ROM; the crate uses cortex-m-rt's
+`set-vtor` feature for this (see the comment in `Cargo.toml`).
 
 ## Pinout
 

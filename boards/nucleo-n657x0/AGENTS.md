@@ -2,9 +2,10 @@
 
 ST NUCLEO-N657X0-Q (STM32N657X0, Cortex-M55 @ 800 MHz, ~4.2 MB
 contiguous SRAM, flashless external-NOR boot via a signed first-stage boot
-loader (FSBL), Neural-ART NPU).  **Status: scaffold**-- workspace-excluded,
-hardware on bench (bring-up not started), `main.rs` is a deliberate
-`compile_error!`.
+loader (FSBL), Neural-ART NPU).  **Status: bring-up in progress**--
+workspace-excluded; gate G0's RAM-boot flow bench-verified 2026-07-21
+(see the [board page](../../docs/src/boards/nucleo-n657x0.md));
+`main.rs` default features remain a deliberate `compile_error!`.
 
 ## Module Plan
 
