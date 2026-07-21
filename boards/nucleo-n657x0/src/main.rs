@@ -25,6 +25,12 @@
 //! their own doc comments) pending ADC1/TIM1 landing in
 //! embassy-stm32 for this chip.
 //!
+//! The additive `net` feature (which pulls in `g1-spike`) layers on
+//! on-chip Ethernet: ETH1 over RMII to the on-board LAN8742A PHY,
+//! feeding an embassy-net DHCPv4 stack driven from one RTIC
+//! software task (`network_task`).  It adds nothing to the phase-1
+//! tasks, so `g1-spike` alone is unchanged.
+//!
 //! See `pins.rs` for the pin map of record in code form.
 
 #![no_std]
@@ -39,6 +45,12 @@ compile_error!("scaffold only -- see boards/nucleo-n657x0/README.md");
 // configuration.  See the module doc for which consts the `app`
 // module below actually consumes.
 mod pins;
+
+// MAC/seed helpers for the on-chip Ethernet stack; only under the
+// additive `net` feature (see `net.rs` and the `network_task` task
+// in the `app` module).
+#[cfg(feature = "net")]
+mod net;
 
 // ── Gate G1 / phase-1 RTIC app ───────────────────────────────────
 // Proves embassy-stm32 + rtic 2.x + rtic-monotonics +
@@ -94,6 +106,59 @@ mod app {
     embassy_stm32::bind_interrupts!(struct ExtiIrqs {
         EXTI13 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI13>;
     });
+
+    // ETH1 interrupt binding for the on-chip Ethernet MAC.  Installs
+    // a real vector-table handler (same mechanism as `ExtiIrqs`
+    // above), disjoint from RTIC's software-task dispatchers-- ETH1
+    // is deliberately NOT in the `dispatchers` list.  The handler
+    // wakes the embassy-net runner so `network_task` re-runs on each
+    // RX/TX event; the CPU is WFI-idle in between.
+    #[cfg(feature = "net")]
+    embassy_stm32::bind_interrupts!(struct EthIrqs {
+        ETH1 => embassy_stm32::eth::InterruptHandler;
+    });
+
+    /// ETH1 RMII peripheral bundle handed to [`network_task`] at
+    /// spawn time.
+    ///
+    /// Everything here is a `Peri<'static, _>` token, which is
+    /// `Send`, so it can cross the RTIC spawn boundary.  The
+    /// embassy-net `Stack`/`Runner` built from these are `!Send`
+    /// (they hold `&RefCell<_>`), so-- following the feather
+    /// precedent-- the whole stack is constructed and driven inside
+    /// the single `network_task` and never leaves it.
+    ///
+    /// The struct itself is defined in every feature configuration
+    /// (its fields are `net`-gated to an empty struct otherwise) so
+    /// that `network_task` can stay a normal, always-present RTIC
+    /// task.  RTIC 2.2's async dispatcher references every task's
+    /// executor unconditionally (`// TODO: Fix cfg` in its codegen),
+    /// so a `#[cfg]`-gated-away task would leave a dangling reference
+    /// and fail to build under `g1-spike` alone.
+    struct EthPeripherals {
+        #[cfg(feature = "net")]
+        eth1: Peri<'static, peripherals::ETH1>,
+        #[cfg(feature = "net")]
+        sma: Peri<'static, peripherals::ETH_SMA>,
+        #[cfg(feature = "net")]
+        ref_clk: Peri<'static, peripherals::PF7>,
+        #[cfg(feature = "net")]
+        crs: Peri<'static, peripherals::PF10>,
+        #[cfg(feature = "net")]
+        rxd0: Peri<'static, peripherals::PF14>,
+        #[cfg(feature = "net")]
+        rxd1: Peri<'static, peripherals::PF15>,
+        #[cfg(feature = "net")]
+        txd0: Peri<'static, peripherals::PF12>,
+        #[cfg(feature = "net")]
+        txd1: Peri<'static, peripherals::PF13>,
+        #[cfg(feature = "net")]
+        tx_en: Peri<'static, peripherals::PF11>,
+        #[cfg(feature = "net")]
+        mdio: Peri<'static, peripherals::PF4>,
+        #[cfg(feature = "net")]
+        mdc: Peri<'static, peripherals::PG11>,
+    }
 
     /// RTIC shared resources.
     ///
@@ -197,6 +262,34 @@ mod app {
         i2c_config.frequency = Hertz(100_000);
         let _amp_i2c = I2c::new_blocking(p.I2C1, p.PH9, p.PC1, i2c_config);
 
+        // ── ETH1 (RMII) claim -> network_task ──────────────────────
+        // Under `net`, claim ETH1, the SMA (MDIO/MDC controller), and
+        // the 7-wire RMII pin set and hand them to `network_task`,
+        // which owns the whole embassy-net stack (see its doc comment
+        // for the PHY identity/provenance and the single-task
+        // rationale).  Only `Send` peripheral tokens cross the spawn
+        // boundary.  Under `g1-spike` alone the bundle is empty and
+        // the task is a no-op-- `network_task` is always spawned so
+        // RTIC's dispatcher glue resolves in both feature sets (see
+        // `EthPeripherals`).
+        #[cfg(feature = "net")]
+        let eth_periph = EthPeripherals {
+            eth1: p.ETH1,
+            sma: p.ETH_SMA,
+            ref_clk: p.PF7,
+            crs: p.PF10,
+            rxd0: p.PF14,
+            rxd1: p.PF15,
+            txd0: p.PF12,
+            txd1: p.PF13,
+            tx_en: p.PF11,
+            mdio: p.PF4,
+            mdc: p.PG11,
+        };
+        #[cfg(not(feature = "net"))]
+        let eth_periph = EthPeripherals {};
+        network_task::spawn(eth_periph).ok();
+
         // GPDMA1_CH0/CH1 are claimed here and handed to `capture`/
         // `sweep_engine` below via `local`; neither has a transfer
         // configured yet (see their doc comments).
@@ -277,6 +370,128 @@ mod app {
     #[task(priority = 2)]
     async fn analysis(_cx: analysis::Context) {
         defmt::info!("analysis: started");
+    }
+
+    /// On-chip Ethernet + embassy-net DHCPv4 task.
+    ///
+    /// Builds ETH1 in RMII mode against the on-board Microchip
+    /// LAN8742A PHY, then a DHCPv4 embassy-net stack, and drives both
+    /// the stack runner and a link/lease monitor to completion (i.e.
+    /// forever) via `join`.  The stack is `!Send`, so-- following the
+    /// `feather-stm32f405` `network_task` precedent-- it is built and
+    /// driven entirely inside this one task; only the `Send`
+    /// peripheral tokens crossed the spawn boundary in
+    /// [`EthPeripherals`].
+    ///
+    /// PHY identity and the 7-wire RMII + MDIO/MDC pin map come from
+    /// ST's own CubeMX project for this exact board (STM32CubeN6,
+    /// NUCLEO-N657X0-Q `Nx_TCP_Echo_Server.ioc`:
+    /// `ETH1.MediaInterface=HAL_ETH_RMII_MODE`, `NETXDUO.LAN_8742=1`).
+    /// `GenericPhy::new_auto` (inside `Ethernet::new`) probes the SMI
+    /// bus and self-selects the PHY address, so none is hardcoded.
+    ///
+    /// No cache/MPU coherency code: the Cortex-M55 D-cache is off at
+    /// reset and nothing in this crate enables it, so the ETH DMA
+    /// descriptors and buffers are coherent by construction.  This
+    /// intentionally departs from embassy's DK speedtest example,
+    /// which keeps the D-cache on and carves a non-cacheable region
+    /// with `unsafe` MPU writes-- forbidden here by
+    /// `#![deny(unsafe_code)]`.  The trade is throughput headroom,
+    /// irrelevant to this low-rate telemetry node.
+    ///
+    /// Priority 2 (same tier as [`analysis`]) so the RX ring is
+    /// serviced promptly once the ETH1 interrupt (`EthIrqs`) wakes
+    /// the runner; the CPU is WFI-idle between packets.  Under `net`
+    /// it never returns; under `g1-spike` alone the body is a no-op
+    /// and the task simply completes (the task is always present so
+    /// RTIC's dispatcher glue resolves-- see [`EthPeripherals`]).
+    #[task(priority = 2)]
+    async fn network_task(_cx: network_task::Context, periph: EthPeripherals) {
+        // g1-spike alone: nothing to drive; consume the empty bundle.
+        #[cfg(not(feature = "net"))]
+        let _ = periph;
+
+        #[cfg(feature = "net")]
+        {
+            use embassy_futures::join::join;
+            use embassy_net::{Config as NetConfig, StackResources};
+            use embassy_stm32::eth::{Ethernet, PacketQueue};
+            use static_cell::StaticCell;
+
+            // Small rings suffice for DHCP + ICMP and keep RAM well
+            // clear of the 128K window's top edge (memory.x).
+            static PACKETS: StaticCell<PacketQueue<4, 4>> = StaticCell::new();
+            let packets = PACKETS.init(PacketQueue::new());
+
+            let mac = crate::net::mac_address();
+            defmt::info!(
+                "ETH1 RMII: LAN8742A, MAC {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0],
+                mac[1],
+                mac[2],
+                mac[3],
+                mac[4],
+                mac[5]
+            );
+
+            let device = Ethernet::new(
+                packets,
+                periph.eth1,
+                EthIrqs,
+                periph.ref_clk, // PF7  ETH1_RMII_REF_CLK
+                periph.crs,     // PF10 ETH1_RMII_CRS_DV
+                periph.rxd0,    // PF14 ETH1_RMII_RXD0
+                periph.rxd1,    // PF15 ETH1_RMII_RXD1
+                periph.txd0,    // PF12 ETH1_RMII_TXD0
+                periph.txd1,    // PF13 ETH1_RMII_TXD1
+                periph.tx_en,   // PF11 ETH1_RMII_TX_EN
+                mac,
+                periph.sma,
+                periph.mdio, // PF4  ETH1_MDIO
+                periph.mdc,  // PG11 ETH1_MDC
+            );
+
+            // Socket budget: DHCPv4(1) + margin(2).  ICMP echo replies
+            // are answered by smoltcp's interface (the embassy-net
+            // `auto-icmp-echo-reply` feature, on in Cargo.toml) with
+            // no socket slot.
+            static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+            let (stack, mut runner) = embassy_net::new(
+                device,
+                NetConfig::dhcpv4(Default::default()),
+                RESOURCES.init(StackResources::new()),
+                crate::net::stack_seed(),
+            );
+            defmt::info!("eth: DHCPv4 stack started, awaiting link + lease");
+
+            // Interrupt-driven monitor: each `wait_*` yields until the
+            // runner (woken by ETH1) advances the stack.  Logs link-up
+            // and the acquired IPv4 lease (address/prefix + gateway) so
+            // the bench can read the leased address from RTT and
+            // confirm reachability with a host-side ping.
+            let monitor = async {
+                loop {
+                    stack.wait_link_up().await;
+                    defmt::info!("eth: link up");
+
+                    stack.wait_config_up().await;
+                    match stack.config_v4() {
+                        Some(cfg) => {
+                            defmt::info!("dhcp: lease {} gateway {}", cfg.address, cfg.gateway)
+                        }
+                        None => defmt::warn!("dhcp: config up but no IPv4 config"),
+                    }
+
+                    stack.wait_link_down().await;
+                    defmt::warn!("eth: link down");
+                }
+            };
+
+            // Both futures diverge; `join` never resolves, so this
+            // statement never returns (mirrors feather's
+            // `join3(...).await;`).
+            join(runner.run(), monitor).await;
+        }
     }
 
     /// RTIC idle task-- WFI sleep when no task is runnable.

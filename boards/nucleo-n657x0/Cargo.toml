@@ -50,6 +50,30 @@ g1-spike = [
   "dep:rtic-monotonics",
 ]
 
+# ── Gate G1 networking spike (additive) ──────────────────────────
+# On-chip ETH1 (RMII to the on-board Microchip LAN8742A PHY) driving
+# an embassy-net DHCPv4 stack from an RTIC software task.  Strictly
+# additive: it builds on g1-spike's proven init/boot path and adds
+# no changes to the phase-1 tasks, so `--features g1-spike` alone is
+# unaffected.  See src/net.rs and main.rs's `network_task`, and
+# docs/src/boards/nucleo-n657x0.md.
+#
+# ETH itself is not a Cargo feature of embassy-stm32 (the `eth_v2a`
+# driver is chip-metadata-driven, enabled automatically by
+# `stm32n657x0`); only the extra crates need pulling in.  Every
+# embassy crate stays on the SAME git rev as embassy-stm32 above so
+# the `embassy_net`/`embassy_time` types line up as one graph-- no
+# `[patch.crates-io]` is needed because this spike does not pull in
+# any crates.io-sourced embassy crate (e.g. via iot-net) to unify
+# against.
+net = [
+  "g1-spike",
+  "dep:embassy-futures",
+  "dep:embassy-net",
+  "dep:embassy-time",
+  "dep:static_cell",
+]
+
 [dependencies]
 cortex-m = { version = "0.7", features = ["critical-section-single-core"], optional = true }
 # set-vtor: in dev boot (BOOT1=1) the N6 boot ROM leaves VTOR at its
@@ -71,6 +95,47 @@ default-features = false
 features = ["defmt", "exti", "rt", "stm32n657x0", "time-driver-tim9"]
 optional = true
 
+[dependencies.embassy-futures]
+git = "https://github.com/embassy-rs/embassy"
+rev = "12e4b1adde4e01b23506822c621451f8e6199c81"
+optional = true
+
+[dependencies.embassy-net]
+git = "https://github.com/embassy-rs/embassy"
+rev = "12e4b1adde4e01b23506822c621451f8e6199c81"
+default-features = false
+# dhcpv4 implies proto-ipv4 + medium-ethernet.  auto-icmp-echo-reply
+# makes smoltcp's interface answer ICMP echo (the host-side ping
+# check) with no socket; it is in embassy-net's DEFAULT feature set,
+# so `default-features = false` drops it and must re-add it (bench
+# finding 2026-07-21: without it the board answered ARP but never
+# ping).  No tcp/udp/dns yet-- those land with the SNTP/MQTT phase.
+features = ["defmt", "dhcpv4", "auto-icmp-echo-reply"]
+optional = true
+
+[dependencies.embassy-time]
+git = "https://github.com/embassy-rs/embassy"
+rev = "12e4b1adde4e01b23506822c621451f8e6199c81"
+# tick-hz-1_000_000 divides the Default-config HCLK (HSI, 64 MHz)
+# cleanly in the TIM9 gp16 time driver (psc = 64e6/1e6 - 1 = 63) and
+# gives 1 us resolution.  embassy-net needs embassy-time's timer
+# queue, and exactly one tick-hz-* must be selected somewhere in the
+# graph; the board is the only place that can choose it.
+#
+# generic-queue-16 is REQUIRED under RTIC: without a generic-queue-*
+# feature, embassy-time defaults to its `queue_integrated` mode,
+# whose timer queue is provided by embassy-executor via the
+# `__embassy_time_queue_item_from_waker` symbol-- undefined here
+# because embassy-executor is forbidden, so the link fails.  The
+# generic queue is self-contained and executor-agnostic; this
+# mirrors the feather-stm32f405 RTIC precedent.
+features = ["defmt", "generic-queue-16", "tick-hz-1_000_000"]
+optional = true
+
+[dependencies.static_cell]
+version = "2"
+optional = true
+
 [dependencies.rtic]
 git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
@@ -82,3 +147,16 @@ git = "https://github.com/rtic-rs/rtic.git"
 tag = "v2.2.0"
 features = ["cortex-m-systick", "defmt"]
 optional = true
+
+# Optimize the dev profile.  Two reasons, both load-bearing here:
+#   1. Fit: at opt-level 0 the embassy-net/smoltcp async state
+#      machines overflow the 256K FLASH region of memory.x (which is
+#      copied verbatim from embassy's own N6 example-- itself built
+#      at opt-level 3).  Optimizing keeps that region layout intact.
+#   2. embassy's async codegen is pathologically large and
+#      stack-hungry at opt-level 0; opt-level 3 is the upstream-
+#      recommended baseline.
+# `debug = 2` is kept so defmt/panic-probe backtraces stay useful.
+[profile.dev]
+opt-level = 3
+debug = 2
