@@ -58,8 +58,8 @@ The following debug probes were found:
 
 | Probe | VID:PID | Board | Chip | Ownership |
 |-------|---------|-------|------|-----------|
-| J-Link | `1366:1020` | Feather STM32F405 (`boards/feather-stm32f405`) | `STM32F405RGTx` | This skill's default. Safe to use. |
-| ST-LINK V3 | `0483:374e` | NUCLEO-H753ZI | `STM32H753ZITx` | Another workstream's. **Never touch.** |
+| J-Link | `1366:1020` | Feather STM32F405 (`boards/feather-stm32f405`) | `STM32F405RGTx` | This skill's default.  Safe to use. |
+| ST-LINK V3 | `0483:374e` | NUCLEO-H753ZI | `STM32H753ZITx` | Another workstream's.  **Never touch.** |
 
 Notes on the ST-LINK entry:
 
