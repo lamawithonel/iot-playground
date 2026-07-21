@@ -79,9 +79,14 @@ is presumed to require the secure alias.
 **Status: verified against embassy-stm32 0.6.0 / stm32-metapac 21.0.0,
 2026-07-21.**  Three peripherals the ARS toolhead-sensor design needs
 have no embassy-stm32 driver support for `stm32n657x0` in this crate's
-locked dependency versions: on-chip Ethernet (ETH), ADC1, and TIM1.
-The gaps sit in embassy-stm32's per-chip peripheral generation, not in
-this crate's code.
+locked *released* dependency versions: on-chip Ethernet (ETH), ADC1,
+and TIM1.  The gaps sit in the release's per-chip peripheral
+generation, not in this crate's code-- and, for ETH at least, they
+are release lag, not missing upstream work: embassy git main carries
+a working N6 Ethernet driver and an `eth_speedtest` example
+(`examples/stm32n6`, `ETH1` + station-management `Sma` types, run on
+the STM32N6570-DK), built against a newer git `stm32-metapac` than
+the 21.0.0 release.  ADC1/TIM1 status on git main is unverified.
 
 ### Evidence
 
@@ -106,9 +111,10 @@ this crate's code.
 
 ### What Each Gap Blocks
 
-- **ETH** blocks on-chip MAC network bring-up outright: no Ethernet
-  driver means no IP stack path over the N6's own MAC, independent of
-  cabling or PHY state.
+- **ETH** blocks on-chip MAC network bring-up *under the pinned
+  release*: no Ethernet driver means no IP stack path over the N6's
+  own MAC, independent of cabling or PHY state.  See Paths Forward
+  for the git-main escape hatch.
 - **ADC1 and TIM1** block the phase-1 `capture` and `sweep_engine`
   RTIC tasks.  Both are dormant hardware-task shells in
   [`main.rs`](../../../boards/nucleo-n657x0/src/main.rs) today--
@@ -122,9 +128,15 @@ this crate's code.
 
 ### Paths Forward
 
-- **On-chip ETH and ADC1/TIM1** both wait on upstream `stm32-metapac`
-  and embassy-stm32 work to add metadata and peripheral generation for
-  `stm32n657x0`.  No workaround exists within this crate's rules-- a
+- **On-chip ETH:** embassy git main already has the N6 driver (see
+  Status above), so the options are tracking git main for
+  embassy-stm32 (a dependency-policy decision, since the rest of the
+  workspace pins the 0.6.0 release) or waiting for the next
+  embassy-stm32 release to carry it.  The gap closes upstream either
+  way; no driver work is needed here.
+- **ADC1/TIM1** wait on `stm32-metapac` metadata and embassy-stm32
+  generation for `stm32n657x0`-- unverified on git main as of
+  2026-07-21.  No workaround exists within this crate's rules-- a
   hand-rolled PAC-level driver would need `unsafe`, and
   [`rust_style.md`](../../../.agents/rules/rust_style.md)'s
   unsafe-isolation policy requires explicit user approval before
