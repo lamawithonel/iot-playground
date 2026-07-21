@@ -18,6 +18,7 @@ use crate::excitation::ExcitationSink;
 use crate::i2c_bus::I2cBus;
 use crate::message_port::{MessageReceiver, MessageSender, RecvError, TrySendError};
 use crate::mute_control::MuteControl;
+use crate::network::NetworkReadiness;
 use crate::record_store::RecordStore;
 use crate::rng::Rng;
 use crate::rtc::Rtc;
@@ -683,5 +684,65 @@ impl TriggeredCapture for MockTriggeredCapture<'_> {
     async fn capture_after_trigger(&mut self, window: &mut [i16]) -> Result<u32, Self::Error> {
         self.inner.capture(window).await?;
         Ok(self.trigger_latency_samples)
+    }
+}
+
+/// In-memory [`NetworkReadiness`] test double.
+///
+/// Starts link-down and unconfigured, matching a board at power-up
+/// before its link driver reports a PHY link and `iot-net`'s DHCP
+/// wait completes.  Link and config state are set independently so
+/// tests can exercise the "link up, DHCP pending" case that a bare
+/// `embassy_net::Stack::wait_config_up` cannot distinguish from "no
+/// link at all".
+pub struct MockNetworkReadiness {
+    link_up: bool,
+    config_up: bool,
+}
+
+impl MockNetworkReadiness {
+    /// Create a fresh mock: link down, unconfigured.
+    pub fn new() -> Self {
+        Self {
+            link_up: false,
+            config_up: false,
+        }
+    }
+
+    /// Set the simulated physical link state.
+    pub fn set_link_up(&mut self, up: bool) {
+        self.link_up = up;
+    }
+
+    /// Set the simulated IP configuration state.
+    ///
+    /// A `false` -> `true` transition is what resolves a pending
+    /// [`NetworkReadiness::wait_config_up`] call.
+    pub fn set_config_up(&mut self, up: bool) {
+        self.config_up = up;
+    }
+}
+
+impl Default for MockNetworkReadiness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl NetworkReadiness for MockNetworkReadiness {
+    fn is_link_up(&self) -> bool {
+        self.link_up
+    }
+
+    async fn wait_config_up(&mut self) {
+        let config_up = &self.config_up;
+        poll_fn(|_cx| {
+            if *config_up {
+                Poll::Ready(())
+            } else {
+                Poll::Pending
+            }
+        })
+        .await
     }
 }

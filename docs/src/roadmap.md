@@ -199,9 +199,17 @@ for formal decisions.
   `saleae-logic`; G1's compile half closed via the `g1-spike`
   feature in `boards/nucleo-n657x0`
 
+**Completed 2026-07-21:**
+
+- [x] `hal-abstractions` network trait: `NetworkReadiness`
+  (link-up plus DHCP-config-up readiness gate), narrower than
+  the once-planned DNS/TCP/TLS/MQTT session abstraction that
+  `iot-net` still owns directly-- see
+  [`hal-abstractions/AGENTS.md`](../../hal-abstractions/AGENTS.md)
+  for why the full session shape stays out of scope
+
 **Pending:**
 
-- [ ] `hal-abstractions` network trait
 - [ ] Unify `Timestamp`/`RtcError` (core re-exports the
   hal-abstractions copy) before any board adopts `Rtc`
 - [ ] `tools/ars-synth` host CLI and checked-in golden corpus

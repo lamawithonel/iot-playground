@@ -15,18 +15,25 @@ host-testable, minimal dependencies (`embedded-io`/
 | `record_store.rs` | `RecordStore` trait (append-only serialized ARS record sink) |
 | `message_port.rs` | Bounded inter-task message channel traits |
 | `mute_control.rs` | `MuteControl` trait (amp mute digital output, polarity-hiding) |
+| `network.rs` | `NetworkReadiness` trait (board link/DHCP readiness gate) |
 | `rng.rs` | Cryptographically secure random byte source trait |
 | `rtc.rs` | Battery-backed wall-clock (`Rtc`) trait |
 | `time.rs` | Wall-clock timestamp vocabulary for the `Rtc` trait |
 | `test_support.rs` | Host-test doubles (`cfg(test)` / `mock` feature) |
 
-A `network` trait module (DNS/TCP/TLS/MQTT session abstraction) was
-once planned here (placeholder in `lib.rs`), but the framework took a
-different shape: the shared, transport-agnostic client implementation
-lives in the concrete [`iot-net/`](../iot-net/AGENTS.md) crate over
-`embassy-net`, with board couplings injected via buffers and
-closures.  Do not add a network trait module here without revisiting
-that decision in the roadmap's framework track.
+A full `network` trait module (DNS/TCP/TLS/MQTT session abstraction)
+was once planned here (placeholder in `lib.rs`) but never built: the
+framework took a different shape, and the shared, transport-agnostic
+client implementation lives in the concrete
+[`iot-net/`](../iot-net/AGENTS.md) crate over `embassy-net`, with
+board couplings injected via buffers and closures.  That decision
+still stands-- `network.rs` is not a session abstraction and holds no
+`embassy-net` types.  It covers only the narrower readiness gate
+`iot-net::manager::wait_for_config` needs (link-up vs. DHCP-pending),
+so board-level readiness logic is host-testable without an
+`embassy-net` dependency in this crate.  Do not grow it into a
+session abstraction without revisiting that decision in the roadmap's
+framework track.
 
 ## Local Rules
 
