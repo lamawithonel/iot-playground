@@ -71,7 +71,13 @@ impl Xoshiro128PlusPlus {
         }
         let span = (2 * amplitude as i32) + 1;
         let raw = (self.next_u32() >> 8) as i32; // 24 usable bits
-        (raw % span) as i16 - amplitude
+
+        // Subtract in i32 before narrowing: `raw % span` can exceed
+        // i16::MAX for amplitude >= 16384 (e.g. amplitude 16384 gives
+        // span 32769, so raw % span reaches 32768), so casting to i16
+        // before the subtraction wraps.  The final value always fits
+        // i16 because it is bounded to [-amplitude, amplitude].
+        ((raw % span) - amplitude as i32) as i16
     }
 }
 
@@ -120,6 +126,29 @@ mod tests {
         let mut rng = Xoshiro128PlusPlus::new(7);
         for _ in 0..8 {
             assert_eq!(rng.next_i16_bounded(0), 0);
+        }
+    }
+
+    #[test]
+    fn test_bounded_large_amplitude_stays_in_range() {
+        // amplitude >= 16384 pushes `raw % span` past i16::MAX before
+        // the subtraction; a cast-then-subtract implementation wraps
+        // and escapes [-amplitude, amplitude].
+        let mut rng = Xoshiro128PlusPlus::new(11);
+        for _ in 0..2000 {
+            let v = rng.next_i16_bounded(16384);
+            assert!((-16384..=16384).contains(&v));
+        }
+    }
+
+    #[test]
+    fn test_bounded_max_amplitude_stays_in_range() {
+        // i16::MAX amplitude is the widest legal span; confirms the
+        // final cast to i16 never overflows at the boundary.
+        let mut rng = Xoshiro128PlusPlus::new(13);
+        for _ in 0..2000 {
+            let v = rng.next_i16_bounded(i16::MAX);
+            assert!((-i16::MAX..=i16::MAX).contains(&v));
         }
     }
 }
