@@ -15,7 +15,7 @@ wins on any disagreement with this table.
 |-----------|-------|--------|
 | [`feather-stm32f405/`](feather-stm32f405/AGENTS.md) | Adafruit Feather STM32F405 + W5500 + SEN66 | Active (workspace member) |
 | [`nucleo-h753zi/`](nucleo-h753zi/AGENTS.md) | ST NUCLEO-H753ZI (ARS loopback rig / net trigger board) | Active (workspace member) |
-| [`nucleo-n657x0/`](nucleo-n657x0/AGENTS.md) | ST NUCLEO-N657X0-Q (ARS toolhead sensor) | Scaffold only (workspace-excluded) |
+| [`nucleo-n657x0/`](nucleo-n657x0/AGENTS.md) | ST NUCLEO-N657X0-Q (ARS toolhead sensor) | Bring-up spike in progress, hardware on bench (workspace-excluded); G0 RAM-boot bench-verified 2026-07-21 |
 
 ## Local Rules
 

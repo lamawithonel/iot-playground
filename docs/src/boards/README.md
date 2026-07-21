@@ -12,9 +12,9 @@ board-specific detail (flashing, debugging, configuration).
 - [**ST NUCLEO-H753ZI**](./nucleo-h753zi.md)-- active workspace member.
   Minimal RTIC heartbeat app today; planned home for an ARS DAC->ADC
   loopback rig and Ethernet bring-up.
-- [**ST NUCLEO-N657X0-Q**](./nucleo-n657x0.md)-- workspace-excluded
-  scaffold for the ARS toolhead sensor project.  Compile-spike only,
-  awaiting hardware.
+- [**ST NUCLEO-N657X0-Q**](./nucleo-n657x0.md)-- workspace-excluded,
+  ARS toolhead sensor project.  Bring-up spike in progress; hardware
+  on bench, gate G0 RAM-boot bench-verified 2026-07-21.
 
 ## Board Profiles vs. Boards
 

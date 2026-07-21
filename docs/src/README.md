@@ -24,8 +24,8 @@ The project uses a board profile architecture where each profile in
   rig, toolhead sensor)
 
 Shared code lives in workspace crates:
-- `core/` - Platform-agnostic business logic
-- `hal-abstractions/` - Hardware abstraction traits
+- `core/`-- Platform-agnostic business logic
+- `hal-abstractions/`-- Hardware abstraction traits
 
 ### Key Features
 
@@ -58,26 +58,26 @@ development.
 ## Quick Links
 
 ### Requirements
-- [System Requirements Specification](./system_requirements.md) -
+- [System Requirements Specification](./system_requirements.md)--
   Functional and non-functional requirements (IEEE 29148)
 
 ### Project Management
-- [Project Roadmap](./roadmap.md) - Implementation phases and
+- [Project Roadmap](./roadmap.md)-- Implementation phases and
   milestones (IEEE 16326)
-- [Risk Register](./risk_register.md) - Active and mitigated project risks
+- [Risk Register](./risk_register.md)-- Active and mitigated project risks
 
 ### Architecture
-- [Architecture Decisions](./architecture/decisions.md) - Key
+- [Architecture Decisions](./architecture/decisions.md)-- Key
   architectural decision records (ADRs)
 
 ### Development
-- [Testing Strategy](./development/testing.md) - Test methodology
+- [Testing Strategy](./development/testing.md)-- Test methodology
   and CI/CD pipeline
 
 ### Projects
-- [ARS Toolhead Sensor](./projects/ars-toolhead-sensor/README.md) -
+- [ARS Toolhead Sensor](./projects/ars-toolhead-sensor/README.md)--
   Project overview (scaffold)
-- [ARS Toolhead Sensor Hardware](./projects/ars-toolhead-sensor/hardware.md) -
+- [ARS Toolhead Sensor Hardware](./projects/ars-toolhead-sensor/hardware.md)--
   Hardware platform details (scaffold)
 
 ## Getting Started
@@ -117,36 +117,38 @@ cargo build -p nucleo-h753zi --release --target thumbv7em-none-eabihf
 
 ```bash
 # Host-side unit tests (for core/ and hal-abstractions/)
-cargo test --lib
-
-# Board-specific tests
-cargo test -p feather-stm32f405
+mise run test:host
 ```
+
+Plain `cargo test` fails here: the workspace's default target is the
+embedded `thumbv7em-none-eabihf`, which cannot link host tests.  See
+[`testing_gates.md`](../../.agents/rules/testing_gates.md) for the
+full pre-commit command set and gate criteria.
 
 ## Project Status
 
 **Firmware Track**
 
 **Recent Completion**: Phases 0-3 ✅
-- Phase 0 - Workspace Migration: multi-device Cargo workspace
+- Phase 0-- Workspace Migration: multi-device Cargo workspace
   with board profile architecture
-- Phase 1 - Core Platform: shared platform-agnostic crates
+- Phase 1-- Core Platform: shared platform-agnostic crates
   (`core/`, `hal-abstractions/`)
-- Phase 2 - Network Stack: W5500 Ethernet, TLS 1.3, and MQTT
+- Phase 2-- Network Stack: W5500 Ethernet, TLS 1.3, and MQTT
   v5.0 messaging
-- Phase 3 - Sensor Integration: SEN66 environmental sensor (PM,
+- Phase 3-- Sensor Integration: SEN66 environmental sensor (PM,
   CO2, VOC, NOx, temperature, and humidity)
 
-**Current Phase**: Phase 4 - Security Foundation (Not Started)
+**Current Phase**: Phase 4-- Security Foundation (Not Started)
 
 **Framework Track**: Active
-- Agentic AI scaffolding: ✅ Complete (2026-07-18) - project
+- Agentic AI scaffolding: ✅ Complete (2026-07-18)-- project
   rules, skills, and subagent definitions under `.agents/`
 - NUCLEO-H753ZI bring-up: ✅ Promoted to workspace member
   (2026-07-19) after hardware-verified bring-up
   (`boards/nucleo-h753zi/`); planned home for the ARS DAC->ADC
   loopback rig and Ethernet bring-up
-- ARS toolhead sensor project: Scaffolded - ST NUCLEO-N657X0-Q
+- ARS toolhead sensor project: Scaffolded-- ST NUCLEO-N657X0-Q
   board profile (`boards/nucleo-n657x0/`), workspace-excluded
 
 See the [Roadmap](./roadmap.md) for detailed status and upcoming milestones.

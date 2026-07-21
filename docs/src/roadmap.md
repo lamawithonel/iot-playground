@@ -198,6 +198,9 @@ for formal decisions.
 - [x] Agent skills: `debug-probe` (live-validated) and
   `saleae-logic`; G1's compile half closed via the `g1-spike`
   feature in `boards/nucleo-n657x0`
+- [x] `tools/ars-synth` host CLI (`gen`/`check`) and the
+  checked-in golden corpus it drives-- 10 fixtures under
+  `core/tests/golden/`, replayed via `core/tests/golden.rs`
 
 **Completed 2026-07-21:**
 
@@ -207,13 +210,15 @@ for formal decisions.
   `iot-net` still owns directly-- see
   [`hal-abstractions/AGENTS.md`](../../hal-abstractions/AGENTS.md)
   for why the full session shape stays out of scope
+- [x] `boards/nucleo-n657x0`: gate G0 RAM-boot bench-verified,
+  plus the `g1-spike`-gated phase-1 RTIC skeleton-- see the
+  [board page](./boards/nucleo-n657x0.md) for the bring-up flow
+  and task status
 
 **Pending:**
 
 - [ ] Unify `Timestamp`/`RtcError` (core re-exports the
   hal-abstractions copy) before any board adopts `Rtc`
-- [ ] `tools/ars-synth` host CLI and checked-in golden corpus
-  for file-level fixtures
 - [ ] Promote `boards/nucleo-n657x0` to a workspace member
   once it compiles in CI
 - [ ] Split the SRS into a framework-level document and

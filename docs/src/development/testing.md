@@ -198,13 +198,10 @@ Cucumber-RS validation.
 mise run test:host
 ```
 
-Or directly:
-
-```sh
-cargo test --workspace \
-  --exclude feather-stm32f405 \
-  --target "$(rustc -vV | sed -n 's/^host: //p')"
-```
+The raw `cargo test` invocations behind this task-- and every other
+pre-commit gate command-- are canonical in
+[`testing_gates.md`](../../../.agents/rules/testing_gates.md); this
+page does not duplicate them.
 
 ### Layer 2: On-Device Bring-Up Tests
 
@@ -277,10 +274,13 @@ Formatting:
 cargo fmt --all -- --check
 ```
 
-Linting:
+Linting (illustrative-- board crates select mutually-exclusive
+stm32-metapac chip features, so the full per-board invocation set
+lives in [`testing_gates.md`](../../../.agents/rules/testing_gates.md),
+which is canonical):
 
 ```sh
-cargo clippy --workspace \
+cargo clippy -p iot-core --all-features \
   --target thumbv7em-none-eabihf -- -D warnings
 ```
 
@@ -348,11 +348,14 @@ corresponding mise task.
 
 ## Future: HIL Testing
 
-Hardware-in-the-loop (HIL) testing will use a Saleae Logic
-Pro 16 for automated protocol validation-- capturing SPI,
+Hardware-in-the-loop (HIL) testing will use the bench's Saleae
+Logic MSO 2x100 for automated protocol validation-- capturing SPI,
 I2C, and UART traffic during test runs and asserting timing
 and data correctness programmatically.  This is planned for
 when the self-hosted runner infrastructure is in place.
+
+See [HIL Measurements](../projects/ars-toolhead-sensor/hil-measurements.md)
+for a worked example of what the analyzer captures and why.
 
 ---
 
