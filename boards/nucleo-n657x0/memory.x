@@ -1,8 +1,8 @@
-/* STM32N657X0-- Cortex-M55, flashless.  G0 is a RAM-only image (no
-   flash algorithm exists in probe-rs for the external NOR yet; see
-   .cache/agents/n6-g0-prep.md secs 1 and 9).  Regions and addresses
-   copied verbatim from embassy's own working example, rather than
-   derived fresh, per that dossier's recommendation:
+/* STM32N657X0-- Cortex-M55, flashless.  G0 is a RAM-only image; see
+   the board page's "Bring-Up: RAM-Boot Dev Flow" section
+   (docs/src/boards/nucleo-n657x0.md) for why.  Regions and
+   addresses are copied verbatim from embassy's own working
+   example, rather than derived fresh:
    https://raw.githubusercontent.com/embassy-rs/embassy/main/examples/stm32n6/memory.x
 
    Both regions sit inside the AXISRAM123456 *secure* alias

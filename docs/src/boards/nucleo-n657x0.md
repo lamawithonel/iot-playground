@@ -56,6 +56,24 @@ itself-- the boot ROM's vector table stays live otherwise and the
 first exception hard-faults into ROM; the crate uses cortex-m-rt's
 `set-vtor` feature for this (see the comment in `Cargo.toml`).
 
+The linker script (`memory.x`) reflects the same RAM-only
+constraint.  As of probe-rs v0.30.0, which added the STM32N657
+target, this chip's target definition ships with no flash
+algorithm for its external NOR (XSPI/OCTOSPI)-- the adding PR
+describes the chip as having "no internal flash.  Instead the EVK
+is shipped with a QSPI flash device."  SWD-loaded RAM execution is
+therefore the entire G0 flow, not a fallback from something
+better: https://github.com/probe-rs/probe-rs/pull/3436
+
+`memory.x`'s `FLASH`/`RAM` regions are copied verbatim from
+embassy's own working example, rather than derived fresh, so a
+future memory-map change should track that file first:
+https://raw.githubusercontent.com/embassy-rs/embassy/main/examples/stm32n6/memory.x
+Both regions sit inside the AXISRAM123456 secure alias
+(0x34000000-0x343c0000), not the non-secure alias (0x24000000)--
+the boot ROM's TrustZone state at reset in dev-boot mode (BOOT1=1)
+is presumed to require the secure alias.
+
 ## embassy-stm32 / stm32-metapac Coverage Gaps
 
 **Status: verified against embassy-stm32 0.6.0 / stm32-metapac 21.0.0,
