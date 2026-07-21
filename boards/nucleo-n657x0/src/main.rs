@@ -139,13 +139,31 @@ mod app {
     /// spawns [`analysis`] and [`button_task`].
     #[init]
     fn init(cx: init::Context) -> (Shared, Local) {
-        let p = embassy_stm32::init(Default::default());
+        // Embassy-stm32 API drift (bench finding, embassy git rev
+        // 12e4b1adde4e01b23506822c621451f8e6199c81 pin): the default
+        // `rcc::Config` now sets `supply_config: SupplyConfig::Smps`,
+        // and `embassy_stm32::init`'s power-sequencing code spins
+        // forever on `PWR.voscr().actvosrdy()` for that path-- this
+        // board's SMPS regulator never reports ready, hanging boot
+        // before the first defmt log line (bench-reproduced: core
+        // parked at `power_supply_config`'s ready-wait loop,
+        // `src/rcc/n6.rs`).  `SupplyConfig::External` matches both
+        // ST's own Nucleo FSBL reference (`SystemClock_Config`'s
+        // `PWR_EXTERNAL_SOURCE_SUPPLY`) and embassy's own DK example
+        // (commit c2e43ba76, "mostly built for the DK"), and clears
+        // the same ready-wait promptly on this hardware.  Everything
+        // else stays default-- see the sysclk placeholder note below.
+        let mut config = embassy_stm32::Config::default();
+        config.rcc.supply_config = embassy_stm32::rcc::SupplyConfig::External;
+        let p = embassy_stm32::init(config);
 
-        // Sysclk value is a placeholder: `embassy_stm32::init` is
-        // called with `Default::default()` here, not an explicit
-        // RCC config, so the true post-boot sysclk is unconfirmed.
-        // Monotonic timing accuracy is not a phase-1 concern (no
-        // on-device work tonight-- compile + clippy only).
+        // Sysclk value is a placeholder: beyond the supply-config
+        // fix above, `embassy_stm32::init` still runs with the
+        // otherwise-default RCC config here, not an explicit PLL/
+        // clock-tree config, so the true post-boot sysclk is
+        // unconfirmed.  Monotonic timing accuracy is not a phase-1
+        // concern (no on-device work tonight-- compile + clippy
+        // only).
         Mono::start(cx.core.SYST, 200_000_000);
 
         defmt::info!("g1: nucleo-n657x0 phase-1 alive");

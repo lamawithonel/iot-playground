@@ -23,9 +23,19 @@ test = false
 # Version note (G1 finding): stm32n6* support first appeared in
 # embassy-stm32 0.5.0.  The workspace (feather, nucleo-h753zi) was
 # bumped to embassy-stm32 0.6.0 as part of the Phase 2 dependency
-# migration, so this board's pin now matches the rest of the
-# workspace-- this crate stays workspace-excluded until its own
+# migration, so this board's pin matched the rest of the workspace
+# for a time-- this crate stays workspace-excluded until its own
 # hardware bring-up spike lands, not because of a version gap.
+#
+# Escape-hatch pin (crate-local only, does not affect the root
+# workspace): the released 0.6.0 has no N6 Ethernet driver-- see
+# docs/src/boards/nucleo-n657x0.md's "embassy-stm32 / stm32-metapac
+# Coverage Gaps" section.  embassy git main carries a working N6
+# ETH driver (PR #6305 "eth_v2a driver and example", merged via
+# #6557), so every embassy crate this crate depends on is pinned to
+# the SAME git revision below rather than the crates.io release.
+# This crate is workspace-excluded with its own Cargo.lock, so the
+# pin is fully isolated from the rest of the workspace.
 
 [features]
 g1-spike = [
@@ -52,7 +62,8 @@ defmt-rtt = { version = "1.1", optional = true }
 panic-probe = { version = "1.0", features = ["print-defmt"], optional = true }
 
 [dependencies.embassy-stm32]
-version = "0.6.0"
+git = "https://github.com/embassy-rs/embassy"
+rev = "12e4b1adde4e01b23506822c621451f8e6199c81"
 default-features = false
 # exti: phase-1's USER_BTN (PC13/EXTI13) uses embassy's async
 # ExtiInput, matching feather's own "exti" precedent for
