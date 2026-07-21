@@ -56,6 +56,74 @@ itself-- the boot ROM's vector table stays live otherwise and the
 first exception hard-faults into ROM; the crate uses cortex-m-rt's
 `set-vtor` feature for this (see the comment in `Cargo.toml`).
 
+## embassy-stm32 / stm32-metapac Coverage Gaps
+
+**Status: verified against embassy-stm32 0.6.0 / stm32-metapac 21.0.0,
+2026-07-21.**  Three peripherals the ARS toolhead-sensor design needs
+have no embassy-stm32 driver support for `stm32n657x0` in this crate's
+locked dependency versions: on-chip Ethernet (ETH), ADC1, and TIM1.
+The gaps sit in embassy-stm32's per-chip peripheral generation, not in
+this crate's code.
+
+### Evidence
+
+- **ETH.**  The N6's `stm32-metapac` `pac.rs` for `stm32n657x0` does
+  list an ETH1 peripheral (IRQ 179, base address `0x4803_6000`), but
+  the chip's metapac *metadata*-- the data embassy-stm32's build
+  script reads to decide which peripherals exist-- carries no ETH
+  entry for this chip.  Metadata absence, not `pac.rs` absence, drives
+  code generation: embassy-stm32's build script sets none of the
+  `eth_v1a`/`eth_v1b`/`eth_v1c`/`eth_v2` `cfg`s for `stm32n657x0`, so
+  `embassy_stm32::eth` compiles no driver and no pin-trait
+  implementations for this chip.  A peripheral can appear in the
+  register map and still be invisible to the HAL if the metadata
+  omits it.
+- **ADC1 and TIM1.**  Same failure mode, missing register-block
+  metadata: `stm32-metapac` 21.0.0 has `registers: None` for both the
+  "ADC1" and "ADC12_COMMON" peripheral entries on this chip, and TIM1
+  has no peripheral entry at all-- only TIM9, the time driver, is
+  generated for `stm32n657x0`.  `embassy_stm32::adc` cannot target
+  ADC1 in any mode, not even blocking calibration-only init, and there
+  is no PWM API surface to build a carrier against.
+
+### What Each Gap Blocks
+
+- **ETH** blocks on-chip MAC network bring-up outright: no Ethernet
+  driver means no IP stack path over the N6's own MAC, independent of
+  cabling or PHY state.
+- **ADC1 and TIM1** block the phase-1 `capture` and `sweep_engine`
+  RTIC tasks.  Both are dormant hardware-task shells in
+  [`main.rs`](../../../boards/nucleo-n657x0/src/main.rs) today--
+  empty bodies, GPDMA channels claimed but no transfer ever
+  configured-- because ADC1 has no addressable register block and
+  TIM1 has no singleton to build a PWM carrier against.  Gate G1
+  runtime (GPDMA linked-list/circular-capture mode), G2 (mic capture
+  quality), and G3 (PWM audio fidelity) in
+  [`pinout.md`](../projects/ars-toolhead-sensor/pinout.md) cannot
+  start until this lands.
+
+### Paths Forward
+
+- **On-chip ETH and ADC1/TIM1** both wait on upstream `stm32-metapac`
+  and embassy-stm32 work to add metadata and peripheral generation for
+  `stm32n657x0`.  No workaround exists within this crate's rules-- a
+  hand-rolled PAC-level driver would need `unsafe`, and
+  [`rust_style.md`](../../../.agents/rules/rust_style.md)'s
+  unsafe-isolation policy requires explicit user approval before
+  adding any new `#![allow(unsafe_code)]` file to this crate.
+- **Network, near-term:** an SPI W5500 module via
+  `embassy-net-wiznet`-- the pattern already proven on
+  `feather-stm32f405`-- is a viable path if a module is wired to the
+  N6 morpho SPI pins.  No such module is on the bench today; this is
+  an unexplored option, not a plan of record.  `iot-net` stays
+  transport-agnostic either way, so adopting W5500 here would not
+  require changes to the shared network stack.
+- **ADC1/TIM1 has no equivalent workaround.**  Unlike networking,
+  there is no off-chip substitute for the mic-capture ADC and
+  PWM-carrier timer wired into the ARS signal path (see
+  [Pinout](#pinout) below), so this half of the gap stays fully
+  blocked on upstream embassy-stm32 support.
+
 ## Pinout
 
 **Status: provisional.**  Hardware has been on the bench since 2026-07-20, but
