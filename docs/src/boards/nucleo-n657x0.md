@@ -37,14 +37,37 @@ reports no access ports.
 
 1. Build: `cargo build --features g1-spike` in the crate directory
    (`thumbv8m.main-none-eabihf`).
-2. Load: `STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -halt -w
+2. Reset: before loading, put the core through a genuine system
+   reset (SYSRESETREQ over the debug port; fall back to an NRST
+   pulse if the debug port itself is unresponsive)-- never skip
+   this and never substitute a fresh debugger reconnect for it.
+   Confirm the reset actually landed (the exception-active state
+   reads clear) before proceeding.  This step is load-bearing, not
+   defensive housekeeping: a load attempt that failed or was
+   interrupted on this chip can leave the core halted inside an
+   active exception handler, and that state survives a plain
+   reconnect.  An image then loaded on top of it runs at negative
+   execution priority-- every configurable-priority interrupt shows
+   enabled and pending in the NVIC but is never taken, silently,
+   with no fault reported (bench finding, phase-1 dispatch bring-up,
+   2026-07-21).  Debug-register-level recovery does not work around
+   it: the registers that hold exception-active state either ignore
+   debugger writes outright or require an already-halted core, and
+   a typical attach sequence resumes the core before such a write
+   would land.  Only a real reset clears it, so treat any load that
+   "looked wedged" as a hard signal to reset before retrying rather
+   than just reconnecting.
+3. Load: `STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -halt -w
    <image>.elf --verify` (8 MHz SWD; the CLI requires a `.elf` file
    extension).
-3. Start: read initial SP and entry from the ELF (vector table base
+4. Start: read initial SP and entry from the ELF (vector table base
    `0x341A0000`), then `-coreReg MSP=<vector0> PC=<entry> -run`.
    Do not use `-s`: it soft-resets the chip, which re-enters the
-   boot ROM's dev-boot wait loop instead of the loaded image.
-4. Observe: `probe-rs attach --chip STM32N657 --speed 100 <elf>`
+   boot ROM's dev-boot wait loop instead of the loaded image.  This
+   is a different reset than step 2's-- step 2 clears leftover
+   exception state before the new image is even in RAM; `-s` here
+   would instead throw away the image just loaded.
+5. Observe: `probe-rs attach --chip STM32N657 --speed 100 <elf>`
    decodes defmt over RTT.
 
 Two toolchain caveats, both bench-reproduced: probe-rs `run`'s load

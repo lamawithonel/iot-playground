@@ -240,7 +240,7 @@ mod app {
     }
 
     /// FFT / feature-extraction task.  Spawned once from [`init`];
-    /// empty in phase-1.
+    /// empty in phase-1 beyond the liveness log below.
     ///
     /// The planned hand-off is an `rtic_sync::channel::Receiver<
     /// CaptureWindow, 2>` fed by [`capture`], mirroring
@@ -249,8 +249,17 @@ mod app {
     /// its doc comment), and holding an unused `Sender` trips
     /// `#![deny(warnings)]`.  Lands together with the `rtic-sync`
     /// dependency once gate G1 runtime and G2 close.
+    ///
+    /// The `defmt::info!` below is a permanent liveness check, not
+    /// a diagnostic scaffold: it is the on-device proof that RTIC
+    /// software-task dispatch (spawn from [`init`], then the
+    /// priority-2 dispatcher taking over) actually ran, distinct
+    /// from `init`'s own log lines-- see the board page's bring-up
+    /// section for why that distinction mattered on this chip.
     #[task(priority = 2)]
-    async fn analysis(_cx: analysis::Context) {}
+    async fn analysis(_cx: analysis::Context) {
+        defmt::info!("analysis: started");
+    }
 
     /// RTIC idle task-- WFI sleep when no task is runnable.
     #[idle]
