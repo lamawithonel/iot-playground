@@ -366,8 +366,8 @@ def build(variant):
     emit(f'<line x1="80" y1="740" x2="80" y2="{a0_y}" stroke="#666666" '
          f'stroke-width="1.6"/>')
     arrow(80, a0_y, 108, a0_y)
-    emit(f'<text x="72" y="660" font-size="10.5" fill="{MUT}" '
-         f'text-anchor="middle" transform="rotate(-90 72 660)">AUD '
+    emit(f'<text x="72" y="690" font-size="10.5" fill="{MUT}" '
+         f'text-anchor="middle" transform="rotate(-90 72 690)">AUD '
          f'(analog)</text>')
 
     # HIL taps (hil-measurements.md, gate G3).  Circled letters
@@ -376,6 +376,24 @@ def build(variant):
     hil_tap(x0 - 54, d3_y - 6, 'A')
     hil_tap(x0 + 125, 680, 'B')
     hil_tap(BOARD_R + 170, 746, 'C')
+    hil_tap(80, 615, 'D')
+
+    # Acoustic loop closure: the stimulus is firmware-synthesized
+    # (TIM1 PWM sweep); the loop returns acoustically through the
+    # clamped toolhead into the mic.  Dashed and gray: it is the
+    # plant under test, not instrument wiring.  Routed around the
+    # board through the clear lane below it.
+    _loop = (f'M {x0 + 250} 862 H 1465 V 1168 H 100 V 830')
+    emit(f'<path d="{_loop}" fill="none" stroke="{MUT}" '
+         f'stroke-width="1.4" stroke-dasharray="7 5"/>')
+    emit(f'<line x1="100" y1="830" x2="128" y2="818" stroke="{MUT}" '
+         f'stroke-width="1.4"/>')
+    emit(f'<line x1="100" y1="830" x2="112" y2="842" stroke="{MUT}" '
+         f'stroke-width="1.4"/>')
+    emit(f'<text x="780" y="1162" font-size="10.5" fill="{MUT}" '
+         f'text-anchor="middle">acoustic path: exciter drives the '
+         f'clamped H2C toolhead; the mic captures its response '
+         f'(closed loop)</text>')
 
     # Legend
     emit(f'<rect x="310" y="1190" width="12" height="12" fill="{ARS}" '
@@ -387,8 +405,9 @@ def build(variant):
          f'analyzer taps, gate G3 (hil-measurements.md):</text>')
     for lx, letter, desc in (
         (640, 'A', 'PWM carrier, pre-RC'),
-        (860, 'B', 'filtered line, post-RC'),
-        (1090, 'C', 'I2C decode, SCL/SDA'),
+        (850, 'B', 'filtered line, post-RC'),
+        (1070, 'C', 'I2C decode, SCL/SDA'),
+        (1280, 'D', 'mic line, into A0'),
     ):
         emit(f'<circle cx="{lx}" cy="1218" r="9" fill="#ffffff" '
              f'stroke="{HIL}" stroke-width="2"/>')
