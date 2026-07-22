@@ -16,6 +16,10 @@ USER/RESET bottom corners, USB + Ethernet bottom, MCU center.
 Header data: UM3417 Rev 3, Table 12.  ARS assignments mirror
 docs/src/projects/ars-toolhead-sensor/pinout.md, which is the
 authority-- update both together.
+
+House rule: a board drawing always uses the documented board's
+real aspect ratio, from its manual-- here 133.34 x 70 mm (UM3417,
+Nucleo-144 form factor), so the board rect is 566 x 1080.
 """
 
 import os
@@ -76,13 +80,15 @@ CN4 = [
 ]
 
 PITCH = 26
-BOARD_X, BOARD_W = 310, 380
+BOARD_X, BOARD_W = 310, 566  # 566/1080 ~= 70/133.34 mm (UM3417)
+BOARD_R = BOARD_X + BOARD_W
+BOARD_CX = BOARD_X + BOARD_W // 2
 BOARD_Y, BOARD_H = 70, 1080
 
 
 def build(variant):
     ars_mode = variant == 'ars'
-    W = 1310 if ars_mode else 1000
+    W = (BOARD_R + 624) if ars_mode else (BOARD_R + 314)
     H = 1270
     out = []
     emit = out.append
@@ -96,7 +102,7 @@ def build(variant):
     emit(f'<rect x="{BOARD_X}" y="{BOARD_Y}" width="{BOARD_W}" '
          f'height="{BOARD_H}" rx="14" fill="{PCB}" stroke="{PCB_EDGE}" '
          f'stroke-width="3"/>')
-    for x, name in ((318, 'CN3'), (666, 'CN15')):
+    for x, name in ((318, 'CN3'), (BOARD_R - 24, 'CN15')):
         emit(f'<rect x="{x}" y="200" width="16" height="810" fill="#161616" '
              f'rx="3"/>')
         for i in range(31):
@@ -106,9 +112,9 @@ def build(variant):
         emit(f'<text x="{x + 8}" y="192" font-size="11" fill="{SILK}" '
              f'text-anchor="middle">{name}</text>')
 
-    emit(f'<text x="500" y="530" font-size="15" fill="{SILK}" '
+    emit(f'<text x="{BOARD_CX}" y="530" font-size="15" fill="{SILK}" '
          f'text-anchor="middle" font-weight="bold">NUCLEO-N657X0-Q</text>')
-    emit(f'<text x="500" y="548" font-size="11" fill="{SILK}" '
+    emit(f'<text x="{BOARD_CX}" y="548" font-size="11" fill="{SILK}" '
          f'text-anchor="middle">MB1940</text>')
 
     def header(rows, strip_x, y0, name, side):
@@ -131,7 +137,7 @@ def build(variant):
             else:
                 emit(f'<text x="{strip_x - 6}" y="{cy + 4}" font-size="11" '
                      f'fill="{SILK}" text-anchor="end">{mark}</text>')
-                tx, anchor, ta, tb = 704, 'start', BOARD_X + BOARD_W, 700
+                tx, anchor, ta, tb = BOARD_R + 14, 'start', BOARD_R, BOARD_R + 10
             emit(f'<line x1="{ta}" y1="{cy}" x2="{tb}" y2="{cy}" '
                  f'stroke="#b5b5b0" stroke-width="1"/>')
             core = f'{pin}  {func}' if pin else func
@@ -142,18 +148,18 @@ def build(variant):
                  f'fill="{fillc}"{weight} text-anchor="{anchor}">'
                  f'{core}{suffix}</text>')
 
-    header(CN14, 630, 220, 'CN14', 'right')
-    header(CN13, 630, 520, 'CN13', 'right')
+    header(CN14, BOARD_R - 60, 220, 'CN14', 'right')
+    header(CN13, BOARD_R - 60, 520, 'CN13', 'right')
     header(CN5, 342, 300, 'CN5', 'left')
     header(CN4, 342, 570, 'CN4', 'left')
 
     # ST-LINK zone + USB-C
-    emit('<rect x="470" y="58" width="60" height="22" rx="6" fill="#3a3a3a"/>')
-    emit(f'<rect x="380" y="95" width="285" height="90" rx="6" fill="none" '
+    emit(f'<rect x="{BOARD_CX - 30}" y="58" width="60" height="22" rx="6" fill="#3a3a3a"/>')
+    emit(f'<rect x="{BOARD_CX - 142}" y="95" width="285" height="90" rx="6" fill="none" '
          f'stroke="{SILK}" stroke-dasharray="5 4" stroke-width="1.2"/>')
-    emit(f'<text x="522" y="140" font-size="12" fill="{SILK}" '
+    emit(f'<text x="{BOARD_CX + 10}" y="140" font-size="12" fill="{SILK}" '
          f'text-anchor="middle">STLINK-V3EC</text>')
-    emit(f'<text x="500" y="45" font-size="12.5" fill="{INK}" '
+    emit(f'<text x="{BOARD_CX}" y="45" font-size="12.5" fill="{INK}" '
          f'text-anchor="middle">CN10 USB-C: ST-LINK (SWD + RTT), VCP '
          f'console, 5V_STLK power</text>')
     emit('<rect x="344" y="100" width="22" height="70" rx="3" '
@@ -166,8 +172,8 @@ def build(variant):
     emit(f'<text x="296" y="145" font-size="11" fill="{MUT}" '
          f'text-anchor="end">debug probe (SWD/trace)</text>')
     for cy, c in ((110, '#d64545'), (130, '#3fae5a'), (150, '#e0c23e')):
-        emit(f'<circle cx="645" cy="{cy}" r="5" fill="{c}"/>')
-    emit(f'<text x="645" y="172" font-size="9" fill="{SILK}" '
+        emit(f'<circle cx="{BOARD_R - 45}" cy="{cy}" r="5" fill="{c}"/>')
+    emit(f'<text x="{BOARD_R - 45}" y="172" font-size="9" fill="{SILK}" '
          f'text-anchor="middle">LEDs</text>')
 
     for x, name in ((430, 'JP1'), (462, 'JP2')):
@@ -188,13 +194,13 @@ def build(variant):
     emit(f'<text x="296" y="238" font-size="11" fill="{MUT}" '
          f'text-anchor="end">(RAM-boot flow, board page)</text>')
 
-    emit('<rect x="435" y="580" width="130" height="130" rx="6" '
+    emit(f'<rect x="{BOARD_CX - 65}" y="580" width="130" height="130" rx="6" '
          'fill="#242424" stroke="#000"/>')
-    emit('<text x="500" y="638" font-size="14" fill="#eee" '
+    emit(f'<text x="{BOARD_CX}" y="638" font-size="14" fill="#eee" '
          'text-anchor="middle">STM32</text>')
-    emit('<text x="500" y="656" font-size="14" fill="#eee" '
+    emit(f'<text x="{BOARD_CX}" y="656" font-size="14" fill="#eee" '
          'text-anchor="middle">N657X0Q</text>')
-    emit('<circle cx="446" cy="591" r="3" fill="#888"/>')
+    emit(f'<circle cx="{BOARD_CX - 54}" cy="591" r="3" fill="#888"/>')
 
     emit('<rect x="352" y="760" width="120" height="14" rx="3" '
          'fill="#161616"/>')
@@ -204,17 +210,17 @@ def build(variant):
     emit('<circle cx="372" cy="1078" r="16" fill="#2563eb" stroke="#111"/>')
     emit(f'<text x="372" y="1108" font-size="10" fill="{SILK}" '
          f'text-anchor="middle">B1 USER</text>')
-    emit('<circle cx="628" cy="1078" r="16" fill="#1c1c1c" stroke="#666"/>')
-    emit(f'<text x="628" y="1108" font-size="10" fill="{SILK}" '
+    emit(f'<circle cx="{BOARD_R - 62}" cy="1078" r="16" fill="#1c1c1c" stroke="#666"/>')
+    emit(f'<text x="{BOARD_R - 62}" y="1108" font-size="10" fill="{SILK}" '
          f'text-anchor="middle">B2 RESET</text>')
-    emit('<rect x="440" y="1128" width="56" height="22" rx="5" '
+    emit(f'<rect x="{BOARD_CX - 63}" y="1128" width="56" height="22" rx="5" '
          'fill="#3a3a3a"/>')
-    emit(f'<text x="468" y="1122" font-size="9" fill="{SILK}" '
+    emit(f'<text x="{BOARD_CX - 35}" y="1122" font-size="9" fill="{SILK}" '
          f'text-anchor="middle">CN8 USB</text>')
-    emit('<rect x="530" y="1096" width="76" height="54" rx="4" '
+    emit(f'<rect x="{BOARD_CX + 20}" y="1096" width="76" height="54" rx="4" '
          'fill="#3a3a3a"/>')
-    emit('<rect x="546" y="1112" width="44" height="30" fill="#181818"/>')
-    emit(f'<text x="568" y="1090" font-size="9" fill="{SILK}" '
+    emit(f'<rect x="{BOARD_CX + 36}" y="1112" width="44" height="30" fill="#181818"/>')
+    emit(f'<text x="{BOARD_CX + 58}" y="1090" font-size="9" fill="{SILK}" '
          f'text-anchor="middle">CN11 ETH</text>')
 
     emit('<line x1="356" y1="1078" x2="300" y2="1078" stroke="#b5b5b0"/>')
@@ -227,18 +233,18 @@ def build(variant):
     else:
         emit(f'<text x="296" y="1074" font-size="12.5" fill="{INK}" '
              f'text-anchor="end">PC13  EXTI13</text>')
-    emit('<line x1="606" y1="1123" x2="700" y2="1123" stroke="#b5b5b0"/>')
-    emit(f'<text x="704" y="1119" font-size="12.5" fill="{INK}">on-chip '
+    emit(f'<line x1="{BOARD_CX + 96}" y1="1123" x2="{BOARD_R + 10}" y2="1123" stroke="#b5b5b0"/>')
+    emit(f'<text x="{BOARD_R + 14}" y="1119" font-size="12.5" fill="{INK}">on-chip '
          f'ETH1 RMII, LAN8742A PHY</text>')
-    emit(f'<text x="704" y="1135" font-size="11" fill="{MUT}">net feature: '
+    emit(f'<text x="{BOARD_R + 14}" y="1135" font-size="11" fill="{MUT}">net feature: '
          f'DHCP + SNTP + MQTT/TLS</text>')
 
     if not ars_mode:
-        emit(f'<line x1="674" y1="770" x2="700" y2="770" '
+        emit(f'<line x1="{BOARD_R - 8}" y1="770" x2="{BOARD_R + 10}" y2="770" '
              f'stroke="#b5b5b0"/>')
-        emit(f'<text x="704" y="766" font-size="11" fill="{MUT}">ST morpho '
+        emit(f'<text x="{BOARD_R + 14}" y="766" font-size="11" fill="{MUT}">ST morpho '
              f'CN3/CN15: most remaining I/O</text>')
-        emit(f'<text x="704" y="780" font-size="11" fill="{MUT}">(UM3417 '
+        emit(f'<text x="{BOARD_R + 14}" y="780" font-size="11" fill="{MUT}">(UM3417 '
              f'Tables 13-14)</text>')
         emit(f'<text x="310" y="1200" font-size="12.5" fill="{INK}">Debug '
              f'hookup: CN10 USB-C alone carries SWD, RTT, and the VCP; '
@@ -253,12 +259,12 @@ def build(variant):
         return W, out
 
     # ── ARS variant: morpho routing, external chain, HIL taps ──
-    emit(f'<line x1="674" y1="800" x2="700" y2="800" stroke="#b5b5b0"/>')
-    emit(f'<text x="704" y="796" font-size="11" fill="{MUT}">morpho CN15 '
+    emit(f'<line x1="{BOARD_R - 8}" y1="800" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
+    emit(f'<text x="{BOARD_R + 14}" y="796" font-size="11" fill="{MUT}">morpho CN15 '
          f'is the routing of record for the amp:</text>')
-    emit(f'<text x="704" y="810" font-size="11" fill="{MUT}">pin 3 PH9 SCL, '
+    emit(f'<text x="{BOARD_R + 14}" y="810" font-size="11" fill="{MUT}">pin 3 PH9 SCL, '
          f'pin 5 PC1 SDA, pin 31 PE9, pin 33 PD0;</text>')
-    emit(f'<text x="704" y="824" font-size="11" fill="{MUT}">pin 38 PA1 = '
+    emit(f'<text x="{BOARD_R + 14}" y="824" font-size="11" fill="{MUT}">pin 38 PA1 = '
          f'G2 fallback ADC tap</text>')
 
     def ext_box(x, y, w, h, lines, dashed=False):
@@ -292,14 +298,15 @@ def build(variant):
 
     # External audio chain, right column, aligned to the D3 row
     d3_y = 520 + 4 * PITCH + PITCH // 2 - 4
-    ext_box(1000, 600, 250, 60,
+    x0 = BOARD_R + 314
+    ext_box(x0, 600, 250, 60,
             ['RC low-pass', 'passive, values at gate G3'])
-    ext_box(1000, 700, 250, 92,
+    ext_box(x0, 700, 250, 92,
             ['MAX9744 class-D amp', 'LEFTIN = JP2.2, SDA = JP2.4',
              'MUTE_INV = JP2.8 (low = mute)', 'VDDIO = Nucleo 3V3, I2C 0x4B'])
-    ext_box(1000, 832, 250, 60,
+    ext_box(x0, 832, 250, 60,
             ['EX25VT2-4 exciter', 'clamped to the H2C toolhead'])
-    ext_box(1000, 932, 250, 76,
+    ext_box(x0, 932, 250, 76,
             ['external PVDD supply', '4.5-14 V, never the Nucleo',
              'grounds commoned'], dashed=True)
     # Mic feeds A0, so it lives on the left, under the CN4 labels
@@ -308,18 +315,18 @@ def build(variant):
              'VCC = 3V3, AUD = analog out'])
 
     # D3 (PE9) -> RC -> amp -> exciter; PVDD up into the amp
-    arrow(892, d3_y, 1000, 626)
-    arrow(1125, 660, 1125, 700)
-    arrow(1125, 792, 1125, 832)
+    arrow(BOARD_R + 202, d3_y, x0, 626)
+    arrow(x0 + 125, 660, x0 + 125, 700)
+    arrow(x0 + 125, 792, x0 + 125, 832)
     # PVDD feeds the amp; route up the clear lane left of the chain
-    emit('<line x1="1010" y1="945" x2="985" y2="945" stroke="#666666" '
+    emit(f'<line x1="{x0 + 10}" y1="945" x2="{x0 - 15}" y2="945" stroke="#666666" '
          'stroke-width="1.6"/>')
-    emit('<line x1="985" y1="945" x2="985" y2="772" stroke="#666666" '
+    emit(f'<line x1="{x0 - 15}" y1="945" x2="{x0 - 15}" y2="772" stroke="#666666" '
          'stroke-width="1.6"/>')
-    arrow(985, 772, 1000, 772)
+    arrow(x0 - 15, 772, x0, 772)
     # I2C + mute leave on the morpho strip, straight into the amp
-    arrow(686, 746, 1000, 746)
-    emit(f'<text x="840" y="738" font-size="10.5" fill="{MUT}" '
+    arrow(BOARD_R - 4, 746, x0, 746)
+    emit(f'<text x="{(BOARD_R + x0) // 2}" y="738" font-size="10.5" fill="{MUT}" '
          f'text-anchor="middle">I2C1 + MUTE_N (morpho CN15 pins '
          f'3/5/33)</text>')
     # Mic AUD up the clear left margin into the A0 row; heads only
@@ -335,17 +342,17 @@ def build(variant):
          f'(analog)</text>')
 
     # HIL taps (hil-measurements.md, gate G3)
-    hil_tap(946, d3_y - 6)
-    emit(f'<text x="920" y="{d3_y - 20}" font-size="10.5" fill="{ARS_TXT}" '
+    hil_tap(x0 - 54, d3_y - 6)
+    emit(f'<text x="{x0 - 80}" y="{d3_y - 20}" font-size="10.5" fill="{ARS_TXT}" '
          f'font-weight="bold" text-anchor="middle">HIL A: PWM carrier '
          f'(pre-RC)</text>')
-    hil_tap(1125, 680)
-    emit(f'<text x="1140" y="684" font-size="10.5" fill="{ARS_TXT}" '
+    hil_tap(x0 + 125, 680)
+    emit(f'<text x="{x0 + 140}" y="684" font-size="10.5" fill="{ARS_TXT}" '
          f'font-weight="bold">HIL B: filtered line (post-RC)</text>')
-    hil_tap(860, 746)
+    hil_tap(BOARD_R + 170, 746)
     # End-anchored left of the tap: the PVDD lane's arrowhead lands
     # at (985, 772), which a start-anchored label would run into.
-    emit(f'<text x="845" y="768" font-size="10.5" fill="{ARS_TXT}" '
+    emit(f'<text x="{BOARD_R + 155}" y="768" font-size="10.5" fill="{ARS_TXT}" '
          f'font-weight="bold" text-anchor="end">HIL C: I2C decode '
          f'(SCL/SDA)</text>')
 
