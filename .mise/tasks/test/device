@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Run on-device tests via probe-rs (requires connected probe)"
-#USAGE arg "<board>" required=#false help="Board name; omit for the default board" {
+#USAGE arg "<board>" required=#false help="Board name; omit for the BOARDS pin or default board" {
 #USAGE   choices "feather-stm32f405" "nucleo-n657x0"
 #USAGE }
 # nucleo-h753zi is absent from the choices: it has no tests/ target
@@ -16,7 +16,15 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.mise/tasks/_boards.sh
 source "${_script_dir}/../_boards.sh"
 
-_board="${usage_board:-${BOARD:-$DEFAULT_BOARD}}"
+# Precedence: CLI arg, then the task-specific BOARD var, then the
+# first entry of a BOARDS env pin, then the default board.  First
+# line via parameter expansion, not `| head -1`: under pipefail,
+# head exiting early can SIGPIPE resolve_boards and kill the task.
+_board="${usage_board:-${BOARD:-}}"
+if [ -z "$_board" ]; then
+	_board="$(resolve_boards)"
+	_board="${_board%%$'\n'*}"
+fi
 
 # embedded-test runs through `probe-rs run`; a loader board cannot,
 # by definition.
@@ -26,7 +34,6 @@ if [ -n "$(board_loader "$_board")" ]; then
 	exit 0
 fi
 
-# Check for connected debug probe
 _probe_output="$(probe-rs list 2>&1)"
 if echo "$_probe_output" | grep -q 'No probes were found'; then
 	echo '⏭  No debug probe connected — skipping device tests.' >&2

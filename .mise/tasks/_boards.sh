@@ -13,6 +13,8 @@
 # Provides:
 #   MEMBER_BOARDS           Workspace-member boards ('all' expands to these)
 #   DEFAULT_BOARD           Board used when no board argument is given
+#   env_boards              Board names pinned by the BOARDS env var
+#   env_project             Project pinned for a board by BOARDS
 #   board_dirs              List every boards/*/ crate directory
 #   board_projects          Projects (cargo feature sets) of a board
 #   board_default_project   Default project of a multi-project board
@@ -27,12 +29,63 @@
 MEMBER_BOARDS='feather-stm32f405 nucleo-h753zi'
 DEFAULT_BOARD='feather-stm32f405'
 
+# The BOARDS env var pins sticky defaults for the board tasks, e.g.
+#
+#   export BOARDS='nucleo-n657x0:net,feather-stm32f405'
+#
+# Comma-separated board[:project] entries.  With no board argument,
+# the tasks target every listed board, and a listed project becomes
+# that board's default project while the variable is set (the
+# --project flag still overrides).  Duplicate entries: the first
+# wins.  Entries use a colon, unlike the CLI grammar, because an
+# env var has no tab-completion to lose.
+#
+# Both parsers run under noglob: the unquoted word-split would
+# otherwise glob entries against the cwd (BOARDS='*' must error as
+# an unknown board, not expand to the repo listing).  Restored
+# unconditionally afterward-- these tasks never set noglob.
+
+# Board names from $BOARDS, one per line, in order.
+env_boards() {
+	local _entry
+	set -o noglob
+	for _entry in $(echo "${BOARDS:-}" | tr ',' ' '); do
+		echo "${_entry%%:*}"
+	done
+	set +o noglob
+}
+
+# Project pinned for a board by $BOARDS; empty if none.  First
+# entry wins on duplicates.
+env_project() {
+	local _entry _proj=''
+	set -o noglob
+	for _entry in $(echo "${BOARDS:-}" | tr ',' ' '); do
+		if [ "${_entry%%:*}" = "$1" ] && [ "$_entry" != "${_entry%%:*}" ] \
+				&& [ -z "$_proj" ]; then
+			_proj="${_entry#*:}"
+		fi
+	done
+	set +o noglob
+	echo "$_proj"
+}
+
 # List every board crate directory (workspace member or not).
+# Needs globbing, so it re-enables it locally: resolve_boards calls
+# this from inside a noglob window when expanding a BOARDS pin.
+# Caller state is restored either way.
 board_dirs() {
-	local _d
+	local _d _had_noglob=0
+	case "$-" in
+		*f*) _had_noglob=1 ;;
+	esac
+	set +o noglob
 	for _d in boards/*/Cargo.toml; do
 		basename "$(dirname "$_d")"
 	done
+	if [ "$_had_noglob" -eq 1 ]; then
+		set -o noglob
+	fi
 }
 
 # Projects a board supports, as a space-separated list.  Empty for
@@ -84,12 +137,37 @@ board_target() {
 }
 
 # Expand board arguments to one validated name per line.
-#   no args  -> DEFAULT_BOARD
+#   no args  -> $BOARDS entries if pinned, else DEFAULT_BOARD
 #   'all'    -> MEMBER_BOARDS (excluded boards stay opt-in by name)
 # Duplicates are dropped, order preserved.
 resolve_boards() {
-	local _out='' _tok _b _known
+	local _out='' _tok _b _known _pinned
 	if [ $# -eq 0 ]; then
+		# 'all' expands per-board, so a project suffix on it would
+		# be silently dropped; reject it instead.
+		case ",${BOARDS:-}," in
+			*,all:*)
+				echo "ERROR: 'all' takes no project in BOARDS (got BOARDS='${BOARDS:-}')." >&2
+				return 1
+				;;
+		esac
+		_pinned="$(env_boards)"
+		if [ -n "$_pinned" ]; then
+			# Re-enter with the pinned names so they get the same
+			# validation as CLI arguments.  This unquoted expansion
+			# needs its own noglob window: without it a pinned
+			# 'nucleo-*' could match a stray root-level file named
+			# like a board and validate silently.
+			set -o noglob
+			# shellcheck disable=SC2086  # one name per word
+			if ! resolve_boards $_pinned; then
+				set +o noglob
+				echo "note: board list came from BOARDS='${BOARDS:-}'." >&2
+				return 1
+			fi
+			set +o noglob
+			return 0
+		fi
 		echo "$DEFAULT_BOARD"
 		return 0
 	fi
@@ -130,7 +208,9 @@ board_features() {
 	_supported="$(board_projects "$_board")"
 	if [ -z "$_supported" ]; then
 		if [ -n "$_proj" ]; then
-			echo "ERROR: ${_board} is single-app and takes no --project." >&2
+			# Source-neutral wording: the project may come from the
+			# --project flag or from a BOARDS entry.
+			echo "ERROR: ${_board} is single-app and takes no project (got '${_proj}')." >&2
 			return 1
 		fi
 		return 0
@@ -153,16 +233,27 @@ board_features() {
 # runner) and lockfile, so there is no -p vs --manifest-path fork.
 # `set -x` echoes the exact command a user could run by hand.
 build_each() {
-	local _verb="$1" _boards _b _feats
+	local _verb="$1" _boards _b _proj _feats
 	shift
 	_boards="$(resolve_boards "$@")" || return 1
 	if [ -n "${usage_project:-}" ] \
 			&& [ "$(printf '%s\n' "$_boards" | wc -l)" -gt 1 ]; then
 		echo 'ERROR: --project applies to exactly one board.' >&2
+		if [ $# -eq 0 ] && [ -n "${BOARDS:-}" ]; then
+			echo "note: board list came from BOARDS='${BOARDS}'." >&2
+		fi
 		return 1
 	fi
 	for _b in $_boards; do
-		_feats="$(board_features "$_b" "${usage_project:-}")" || return 1
+		_proj="${usage_project:-$(env_project "$_b")}"
+		if ! _feats="$(board_features "$_b" "$_proj")"; then
+			# Name the source when the failing project came from the
+			# env pin: the user may have exported BOARDS days ago.
+			if [ -z "${usage_project:-}" ] && [ -n "$_proj" ]; then
+				echo "note: project '${_proj}' came from BOARDS='${BOARDS:-}'." >&2
+			fi
+			return 1
+		fi
 		case "$_feats" in
 			*net*)
 				# The N6 build.rs refuses a net build without a broker

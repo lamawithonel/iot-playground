@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Build + flash one board (loader boards print the RTT attach command)"
-#USAGE arg "<board>" required=#false help="Board name; omit for the default board" {
+#USAGE arg "<board>" required=#false help="Board name; omit for the BOARDS pin or default board" {
 #USAGE   choices "feather-stm32f405" "nucleo-h753zi" "nucleo-n657x0"
 #USAGE }
 #USAGE flag "--release" help="Flash the release profile"
@@ -17,7 +17,15 @@ source "${_script_dir}/_lib.sh"
 # shellcheck source=.mise/tasks/_boards.sh
 source "${_script_dir}/_boards.sh"
 
-_board="${usage_board:-$DEFAULT_BOARD}"
+# resolve_boards honors a BOARDS env pin; flash takes its first
+# entry (the primary board) when no argument is given.  First line
+# via parameter expansion, not `| head -1`: under pipefail, head
+# exiting early can SIGPIPE resolve_boards and kill the task.
+_board="${usage_board:-}"
+if [ -z "$_board" ]; then
+	_board="$(resolve_boards)"
+	_board="${_board%%$'\n'*}"
+fi
 _loader="$(board_loader "$_board")"
 
 if [ -z "$_loader" ]; then
@@ -25,7 +33,13 @@ if [ -z "$_loader" ]; then
 	# probe pin; the root config's generic `probe-rs run` runner
 	# would drop both and fall into the interactive probe prompt on
 	# multi-probe benches.
-	_feats="$(board_features "$_board" "${usage_project:-}")"
+	_proj="${usage_project:-$(env_project "$_board")}"
+	if ! _feats="$(board_features "$_board" "$_proj")"; then
+		if [ -z "${usage_project:-}" ] && [ -n "$_proj" ]; then
+			echo "note: project '${_proj}' came from BOARDS='${BOARDS:-}'." >&2
+		fi
+		exit 1
+	fi
 	# shellcheck disable=SC2086  # _feats intentionally splits
 	( set -x; cd "boards/${_board}" \
 		&& cargo embed ${usage_release:+--release} $_feats )
