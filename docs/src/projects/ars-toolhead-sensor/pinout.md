@@ -8,6 +8,17 @@ the SparkFun MEMS mic breakout and the Adafruit MAX9744 amplifier
 board.  Nothing here has been bench-verified; see Spike Gates
 below for what must pass before the map is final.
 
+The hookup diagram below draws this map onto the MB1940 board
+layout: highlighted pins are the ARS assignments, the external
+boxes are the audio chain, and the circled taps are the gate G3
+analyzer connections from
+[`hil-measurements.md`](./hil-measurements.md).  The [Pin
+Map](#pin-map) table remains the authority on every disagreement;
+the base-board diagram (debug hookup only, no project wiring)
+lives on the [board page](../../boards/nucleo-n657x0.md).
+
+![ARS hookup: NUCLEO-N657X0-Q with peripheral wiring and HIL taps](nucleo-n657x0-ars-pinout.svg)
+
 ## Pin Map
 
 | Signal | MCU Pin | AF | Peripheral | Nucleo Connector | Notes |

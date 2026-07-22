@@ -19,11 +19,15 @@ Grounded in [Pinout](./pinout.md) and
 [Roadmap](../../roadmap.md) section 7 item 4, hardware-in-the-loop
 (HIL) test automation via the Logic 2 gRPC automation API.
 
-| Measurement | What it validates |
-|---|---|
-| PWM carrier residue: dual-channel analog capture of the TIM1_CH1 PWM carrier (~200 kHz carrier, ~10-bit duty ceiling) before the RC low-pass, alongside the RC-filtered line signal into the MAX9744 | The SNR/THD comparison that gate G3 exists to answer. |
-| Loopback sine fidelity: analog capture of the RC-filtered output during an end-to-end sweep/tone playback through the audio path (SAI1 fallback or TIM1-PWM path), analyzed offline (FFT/THD) from the exported CSV | THD and flatness of the played sweep against the source, end to end. |
-| I2C volume transactions: I2C1 decode of MAX9744 volume/mute register writes on SCL (PH9) and SDA (PC1)-- see [Pinout](./pinout.md) for connector routing, device address, and mute-pin rationale | The amplifier receives the expected register writes during a measurement run.  Verify the analyzer's I2C decoder settings against the live Logic 2 UI before capture-- unverified as of this page. |
+The tap letters match the circled taps on the hookup diagram in
+[Pinout](./pinout.md): A = PWM carrier before the RC low-pass,
+B = the RC-filtered line signal, C = the amp I2C bus (SCL/SDA).
+
+| Measurement | Taps | What it validates |
+|---|---|---|
+| PWM carrier residue: dual-channel analog capture of the TIM1_CH1 PWM carrier (~200 kHz carrier, ~10-bit duty ceiling) before the RC low-pass, alongside the RC-filtered line signal into the MAX9744 | A + B | The SNR/THD comparison that gate G3 exists to answer. |
+| Loopback sine fidelity: analog capture of the RC-filtered output during an end-to-end sweep/tone playback through the audio path (SAI1 fallback or TIM1-PWM path), analyzed offline (FFT/THD) from the exported CSV | B | THD and flatness of the played sweep against the source, end to end. |
+| I2C volume transactions: I2C1 decode of MAX9744 volume/mute register writes on SCL (PH9) and SDA (PC1)-- see [Pinout](./pinout.md) for connector routing, device address, and mute-pin rationale | C | The amplifier receives the expected register writes during a measurement run.  Verify the analyzer's I2C decoder settings against the live Logic 2 UI before capture-- unverified as of this page. |
 
 [Roadmap](../../roadmap.md) section 7 item 4 also lists SPI timing
 (W5500, ePaper, SD card), CAN bus signaling, and interrupt latency
