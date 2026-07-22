@@ -11,6 +11,8 @@ target/
 .DS_Store
 .vscode/
 
+*.log
+
 # Generated TLS certificates, agent journal, and other local state
 .local/
 .cache/
