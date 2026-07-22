@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Run on-device tests via probe-rs (requires connected probe)"
-#USAGE arg "<board>" required=#false help="Board name; omit for the BOARDS pin or default board" {
+#USAGE arg "<board>" required=#false help="Board name; omit for the IOT_BOARDS pin or default board" {
 #USAGE   choices "feather-stm32f405" "nucleo-n657x0"
 #USAGE }
 # nucleo-h753zi is absent from the choices: it has no tests/ target
@@ -17,7 +17,7 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_script_dir}/../_boards.sh"
 
 # Precedence: CLI arg, then the task-specific BOARD var, then the
-# first entry of a BOARDS env pin, then the default board.  First
+# first entry of an IOT_BOARDS env pin, then the default board.  First
 # line via parameter expansion, not `| head -1`: under pipefail,
 # head exiting early can SIGPIPE resolve_boards and kill the task.
 _board="${usage_board:-${BOARD:-}}"
@@ -47,7 +47,7 @@ echo ""
 
 _target="${TARGET:-$(board_target "$_board")}"
 _timeout="${DEVICE_TEST_TIMEOUT:-120}"
-# Unconditional: the board under test decides the chip.  The BOARDS
+# Unconditional: the board under test decides the chip.  The IOT_BOARDS
 # bridge (.mise/env.sh) may have exported another board's chip and
 # speed clamp from the pin's first entry.
 PROBE_RS_CHIP="$(board_chip "$_board")"

@@ -37,6 +37,6 @@ for _b in $(board_dirs); do
 done
 echo
 echo "* = default project.  'all' targets workspace members only."
-if [ -n "${BOARDS:-}" ]; then
-	echo "BOARDS='${BOARDS}' pins the no-argument default."
+if [ -n "${IOT_BOARDS:-}" ]; then
+	echo "IOT_BOARDS='${IOT_BOARDS}' pins the no-argument default."
 fi

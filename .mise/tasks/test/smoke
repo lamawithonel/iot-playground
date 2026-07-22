@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Smoke test: route each board to its suite in test/smoke/"
-#USAGE arg "<board>" var=#true required=#false help="Board name(s), or 'all' for the workspace members; omit for the BOARDS pin or default board" {
+#USAGE arg "<board>" var=#true required=#false help="Board name(s), or 'all' for the workspace members; omit for the IOT_BOARDS pin or default board" {
 #USAGE   choices "all" "feather-stm32f405" "nucleo-h753zi" "nucleo-n657x0"
 #USAGE }
 

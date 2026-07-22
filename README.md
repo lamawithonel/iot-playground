@@ -27,12 +27,12 @@ everything else (docs, broker, TLS certs); setup detail lives under
 Working on the same targets for a while?  Pin them:
 
 ```bash
-export BOARDS='feather-stm32f405,nucleo-n657x0:net'
+export IOT_BOARDS='feather-stm32f405,nucleo-n657x0:net'
 mise run build    # builds both, nucleo-n657x0 with the net project
 mise run flash    # targets the first entry (feather-stm32f405)
 ```
 
-`BOARDS` takes comma-separated `board[:project]` entries; a listed
+`IOT_BOARDS` takes comma-separated `board[:project]` entries; a listed
 project becomes that board's default while the variable is set, and
 `--project` still overrides.  Explicit board arguments beat the pin.
 Single-board tasks (`flash`, `test:device`) take the first entry, so

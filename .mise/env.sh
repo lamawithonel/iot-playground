@@ -8,7 +8,7 @@
 #   BROKER_HOST_IP     Default broker bind IP address.
 #                      macOS: 127.0.0.1 (loopback)
 #                      Linux: detected from BROKER_INTERFACE
-#   BOARDS             Sticky board[:project] pin (see
+#   IOT_BOARDS         Sticky board[:project] pin (see
 #                      .mise/tasks/_boards.sh); its first entry
 #                      also feeds the probe-rs bridge below.
 
@@ -25,7 +25,7 @@ if [ -z "${BROKER_HOST_IP:-}" ]; then
 	unset _ip
 fi
 
-# ── BOARDS pin -> probe-rs bridge ────────────────────
+# ── IOT_BOARDS pin -> probe-rs bridge ────────────────────
 # probe-rs reads PROBE_RS_CHIP and PROBE_RS_SPEED natively, so
 # deriving them from the pin's first board makes bare probe-rs
 # commands (attach, gdb, reset, ...) target it with no flags.
@@ -38,9 +38,9 @@ fi
 # `mise run` re-evaluates this file every invocation, so tasks
 # always see a fresh pin; an interactive mise-activated shell may
 # need a prompt refresh (cd, or `eval "$(mise hook-env)"`) after
-# changing BOARDS.
-if [ -n "${BOARDS:-}" ]; then
-	_first="${BOARDS%%,*}"
+# changing IOT_BOARDS.
+if [ -n "${IOT_BOARDS:-}" ]; then
+	_first="${IOT_BOARDS%%,*}"
 	_first="${_first%%:*}"
 	_bdir="${_env_dir}/../boards/${_first}"
 	_chip=''

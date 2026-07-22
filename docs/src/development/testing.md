@@ -123,7 +123,7 @@ and handles sensor conditioning windows.
 
 **Routing:** Smoke is a test class, not a board feature.
 `mise run test:smoke [<board>...]` resolves boards exactly like
-`mise run build` (arguments, the `BOARDS` pin, or the default
+`mise run build` (arguments, the `IOT_BOARDS` pin, or the default
 board) and dispatches each to its suite at `test/smoke/<board>.sh`;
 a board without a suite skips loudly.  The feather suite is the
 Cucumber-RS pipeline described below; the nucleo-n657x0 suite
@@ -233,7 +233,7 @@ or CMSIS-DAP) connected to the target board.
 mise run test:smoke [<board>...]
 ```
 
-Routes each resolved board (arguments, the `BOARDS` pin, or the
+Routes each resolved board (arguments, the `IOT_BOARDS` pin, or the
 default) to its suite in `test/smoke/`.  The feather suite flashes
 debug firmware, captures RTT output, and validates boot milestones
 via Cucumber-RS at the standard tier (165 seconds, 5-second sample

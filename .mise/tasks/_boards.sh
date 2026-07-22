@@ -13,8 +13,8 @@
 # Provides:
 #   MEMBER_BOARDS           Workspace-member boards ('all' expands to these)
 #   DEFAULT_BOARD           Board used when no board argument is given
-#   env_boards              Board names pinned by the BOARDS env var
-#   env_project             Project pinned for a board by BOARDS
+#   env_boards              Board names pinned by the IOT_BOARDS env var
+#   env_project             Project pinned for a board by IOT_BOARDS
 #   board_dirs              List every boards/*/ crate directory
 #   board_projects          Projects (cargo feature sets) of a board
 #   board_default_project   Default project of a multi-project board
@@ -29,9 +29,9 @@
 MEMBER_BOARDS='feather-stm32f405 nucleo-h753zi'
 DEFAULT_BOARD='feather-stm32f405'
 
-# The BOARDS env var pins sticky defaults for the board tasks, e.g.
+# The IOT_BOARDS env var pins sticky defaults for the board tasks, e.g.
 #
-#   export BOARDS='nucleo-n657x0:net,feather-stm32f405'
+#   export IOT_BOARDS='nucleo-n657x0:net,feather-stm32f405'
 #
 # Comma-separated board[:project] entries.  With no board argument,
 # the tasks target every listed board, and a listed project becomes
@@ -41,26 +41,26 @@ DEFAULT_BOARD='feather-stm32f405'
 # env var has no tab-completion to lose.
 #
 # Both parsers run under noglob: the unquoted word-split would
-# otherwise glob entries against the cwd (BOARDS='*' must error as
+# otherwise glob entries against the cwd (IOT_BOARDS='*' must error as
 # an unknown board, not expand to the repo listing).  Restored
 # unconditionally afterward-- these tasks never set noglob.
 
-# Board names from $BOARDS, one per line, in order.
+# Board names from $IOT_BOARDS, one per line, in order.
 env_boards() {
 	local _entry
 	set -o noglob
-	for _entry in $(echo "${BOARDS:-}" | tr ',' ' '); do
+	for _entry in $(echo "${IOT_BOARDS:-}" | tr ',' ' '); do
 		echo "${_entry%%:*}"
 	done
 	set +o noglob
 }
 
-# Project pinned for a board by $BOARDS; empty if none.  First
+# Project pinned for a board by $IOT_BOARDS; empty if none.  First
 # entry wins on duplicates.
 env_project() {
 	local _entry _proj=''
 	set -o noglob
-	for _entry in $(echo "${BOARDS:-}" | tr ',' ' '); do
+	for _entry in $(echo "${IOT_BOARDS:-}" | tr ',' ' '); do
 		if [ "${_entry%%:*}" = "$1" ] && [ "$_entry" != "${_entry%%:*}" ] \
 				&& [ -z "$_proj" ]; then
 			_proj="${_entry#*:}"
@@ -72,7 +72,7 @@ env_project() {
 
 # List every board crate directory (workspace member or not).
 # Needs globbing, so it re-enables it locally: resolve_boards calls
-# this from inside a noglob window when expanding a BOARDS pin.
+# this from inside a noglob window when expanding an IOT_BOARDS pin.
 # Caller state is restored either way.
 board_dirs() {
 	local _d _had_noglob=0
@@ -137,7 +137,7 @@ board_target() {
 }
 
 # Expand board arguments to one validated name per line.
-#   no args  -> $BOARDS entries if pinned, else DEFAULT_BOARD
+#   no args  -> $IOT_BOARDS entries if pinned, else DEFAULT_BOARD
 #   'all'    -> MEMBER_BOARDS (excluded boards stay opt-in by name)
 # Duplicates are dropped, order preserved.
 resolve_boards() {
@@ -145,9 +145,9 @@ resolve_boards() {
 	if [ $# -eq 0 ]; then
 		# 'all' expands per-board, so a project suffix on it would
 		# be silently dropped; reject it instead.
-		case ",${BOARDS:-}," in
+		case ",${IOT_BOARDS:-}," in
 			*,all:*)
-				echo "ERROR: 'all' takes no project in BOARDS (got BOARDS='${BOARDS:-}')." >&2
+				echo "ERROR: 'all' takes no project in IOT_BOARDS (got IOT_BOARDS='${IOT_BOARDS:-}')." >&2
 				return 1
 				;;
 		esac
@@ -162,7 +162,7 @@ resolve_boards() {
 			# shellcheck disable=SC2086  # one name per word
 			if ! resolve_boards $_pinned; then
 				set +o noglob
-				echo "note: board list came from BOARDS='${BOARDS:-}'." >&2
+				echo "note: board list came from IOT_BOARDS='${IOT_BOARDS:-}'." >&2
 				return 1
 			fi
 			set +o noglob
@@ -209,7 +209,7 @@ board_features() {
 	if [ -z "$_supported" ]; then
 		if [ -n "$_proj" ]; then
 			# Source-neutral wording: the project may come from the
-			# --project flag or from a BOARDS entry.
+			# --project flag or from an IOT_BOARDS entry.
 			echo "ERROR: ${_board} is single-app and takes no project (got '${_proj}')." >&2
 			return 1
 		fi
@@ -239,8 +239,8 @@ build_each() {
 	if [ -n "${usage_project:-}" ] \
 			&& [ "$(printf '%s\n' "$_boards" | wc -l)" -gt 1 ]; then
 		echo 'ERROR: --project applies to exactly one board.' >&2
-		if [ $# -eq 0 ] && [ -n "${BOARDS:-}" ]; then
-			echo "note: board list came from BOARDS='${BOARDS}'." >&2
+		if [ $# -eq 0 ] && [ -n "${IOT_BOARDS:-}" ]; then
+			echo "note: board list came from IOT_BOARDS='${IOT_BOARDS}'." >&2
 		fi
 		return 1
 	fi
@@ -248,9 +248,9 @@ build_each() {
 		_proj="${usage_project:-$(env_project "$_b")}"
 		if ! _feats="$(board_features "$_b" "$_proj")"; then
 			# Name the source when the failing project came from the
-			# env pin: the user may have exported BOARDS days ago.
+			# env pin: the user may have exported IOT_BOARDS days ago.
 			if [ -z "${usage_project:-}" ] && [ -n "$_proj" ]; then
-				echo "note: project '${_proj}' came from BOARDS='${BOARDS:-}'." >&2
+				echo "note: project '${_proj}' came from IOT_BOARDS='${IOT_BOARDS:-}'." >&2
 			fi
 			return 1
 		fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Build + flash one board (loader boards print the RTT attach command)"
-#USAGE arg "<board>" required=#false help="Board name; omit for the BOARDS pin or default board" {
+#USAGE arg "<board>" required=#false help="Board name; omit for the IOT_BOARDS pin or default board" {
 #USAGE   choices "feather-stm32f405" "nucleo-h753zi" "nucleo-n657x0"
 #USAGE }
 #USAGE flag "--release" help="Flash the release profile"
@@ -17,7 +17,7 @@ source "${_script_dir}/_lib.sh"
 # shellcheck source=.mise/tasks/_boards.sh
 source "${_script_dir}/_boards.sh"
 
-# resolve_boards honors a BOARDS env pin; flash takes its first
+# resolve_boards honors an IOT_BOARDS env pin; flash takes its first
 # entry (the primary board) when no argument is given.  First line
 # via parameter expansion, not `| head -1`: under pipefail, head
 # exiting early can SIGPIPE resolve_boards and kill the task.
@@ -36,7 +36,7 @@ if [ -z "$_loader" ]; then
 	_proj="${usage_project:-$(env_project "$_board")}"
 	if ! _feats="$(board_features "$_board" "$_proj")"; then
 		if [ -z "${usage_project:-}" ] && [ -n "$_proj" ]; then
-			echo "note: project '${_proj}' came from BOARDS='${BOARDS:-}'." >&2
+			echo "note: project '${_proj}' came from IOT_BOARDS='${IOT_BOARDS:-}'." >&2
 		fi
 		exit 1
 	fi

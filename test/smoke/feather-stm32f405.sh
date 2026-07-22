@@ -31,7 +31,7 @@ _board='feather-stm32f405'
 _target="${TARGET:-thumbv7em-none-eabihf}"
 _duration="${SMOKE_TEST_DURATION:-165}"
 _max_errors="${SMOKE_MAX_ERRORS:-5}"
-# Unconditional: this suite IS the feather, and the BOARDS bridge
+# Unconditional: this suite IS the feather, and the IOT_BOARDS bridge
 # (.mise/env.sh) may have exported another board's chip and speed
 # clamp from the pin's first entry.  A leaked STM32N657/100 kHz
 # pair would misroute probe-rs run entirely.
