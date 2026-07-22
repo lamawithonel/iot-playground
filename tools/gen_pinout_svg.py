@@ -82,7 +82,8 @@ CN4 = [
     ('A5', 'PG15', 'ADC12_INP7', ''),
 ]
 
-PITCH = 26
+PITCH = 26  # one 2.54 mm grid step; ALL connectors share it
+G0 = 210    # grid origin: row k's pad center is G0 + k*PITCH
 BOARD_X, BOARD_W = 310, 566  # 566/1080 ~= 70/133.34 mm (UM3417)
 BOARD_R = BOARD_X + BOARD_W
 BOARD_CX = BOARD_X + BOARD_W // 2
@@ -117,10 +118,10 @@ def build(variant):
     morpho_gnd = {'CN3': {8, 19, 20, 22}, 'CN15': {9, 20, 32}}
     for x, name, foot in ((318, 'CN3', 'CN2'),
                           (BOARD_R - 28, 'CN15', 'CN16')):
-        emit(f'<rect x="{x}" y="200" width="20" '
-             f'height="{morpho_rows * 26 + 10}" fill="#161616" rx="3"/>')
+        emit(f'<rect x="{x}" y="{G0 - 13}" width="20" '
+             f'height="{morpho_rows * 26}" fill="#161616" rx="3"/>')
         for i in range(morpho_rows):
-            cy = 208 + i * 26
+            cyc = G0 + i * 26
             for col, dx in ((0, 3.5), (1, 11)):
                 pin_no = 2 * i + 1 + col
                 hot = (ars_mode and name == 'CN15'
@@ -135,22 +136,23 @@ def build(variant):
                     fill, stroke = '#8f8f8f', ''
                 extra = (f' stroke="{stroke}" stroke-width="0.5"'
                          if stroke else '')
-                emit(f'<rect x="{x + dx}" y="{cy}" width="5.5" '
+                emit(f'<rect x="{x + dx}" y="{cyc - 2.75}" width="5.5" '
                      f'height="5.5" fill="{fill}"{extra}/>')
                 if hot:
-                    emit(f'<text x="{x - 4}" y="{cy + 6}" '
+                    emit(f'<text x="{x - 4}" y="{cyc + 3}" '
                          f'font-size="8.5" fill="{ARS_TXT}" '
                          f'font-weight="bold" text-anchor="end">'
                          f'{pin_no}</text>')
-        emit(f'<text x="{x + 10}" y="192" font-size="11" fill="{SILK}" '
-             f'text-anchor="middle">{name}</text>')
-        foot_y0 = 208 + morpho_rows * 26 + 30
+        emit(f'<text x="{x + 10}" y="{G0 - 19}" font-size="11" '
+             f'fill="{SILK}" text-anchor="middle">{name}</text>')
+        # The through-hole grid continues without a break; only the
+        # soldered header ends (UM3417 Figure 15)
         for i in range(10):
-            cy = foot_y0 + i * 26
+            cyc = G0 + (morpho_rows + i) * 26
             for dx in (6, 13.5):
-                emit(f'<circle cx="{x + dx}" cy="{cy}" r="2.6" '
+                emit(f'<circle cx="{x + dx}" cy="{cyc}" r="2.6" '
                      f'fill="none" stroke="#9a9a9a" stroke-width="1"/>')
-        emit(f'<text x="{x + 10}" y="{foot_y0 + 10 * 26 + 6}" '
+        emit(f'<text x="{x + 10}" y="{G0 + (morpho_rows + 10) * 26}" '
              f'font-size="8.5" fill="{MUT}" text-anchor="middle">'
              f'{foot}</text>')
 
@@ -159,17 +161,21 @@ def build(variant):
     emit(f'<text x="{BOARD_CX}" y="548" font-size="11" fill="{SILK}" '
          f'text-anchor="middle">MB1940</text>')
 
-    def header(rows, strip_x, y0, name, side):
-        hgt = len(rows) * PITCH + 10
-        emit(f'<rect x="{strip_x}" y="{y0 - 5}" width="28" height="{hgt}" '
-             f'rx="4" fill="#181818"/>')
-        emit(f'<text x="{strip_x + 14}" y="{y0 - 12}" font-size="11" '
+    def header(rows, strip_x, k0, name, side, title='top'):
+        y0c = G0 + k0 * PITCH
+        emit(f'<rect x="{strip_x}" y="{y0c - 13}" width="28" '
+             f'height="{len(rows) * PITCH}" rx="4" fill="#181818"/>')
+        if title == 'top':
+            ty = y0c - 19
+        else:
+            ty = y0c + len(rows) * PITCH + 7
+        emit(f'<text x="{strip_x + 14}" y="{ty}" font-size="11" '
              f'fill="{SILK}" text-anchor="middle">{name}</text>')
         for i, (mark, pin, func, note) in enumerate(rows):
             ars = ars_mode and bool(note)
             is_gnd = func.startswith('Ground')
             is_pwr = mark in ('3V3', '5V', 'VIN')
-            cy = y0 + i * PITCH + PITCH // 2 - 4
+            cy = y0c + i * PITCH
             if ars:
                 fill, stroke = ARS, '#000'
             elif is_pwr:
@@ -220,10 +226,10 @@ def build(variant):
                 gnd_done = True
             cn5_rows.append((mark, pin, func, note))
 
-    header(CN14, BOARD_R - 72, 220, 'CN14', 'right')
-    header(CN13, BOARD_R - 72, 520, 'CN13', 'right')
-    header(cn5_rows, 342, 300, 'CN5', 'left')
-    header(CN4, 342, 570, 'CN4', 'left')
+    header(CN14, BOARD_R - 72, 1, 'CN14', 'right')
+    header(CN13, BOARD_R - 72, 11, 'CN13', 'right', title='bottom')
+    header(cn5_rows, 342, 2, 'CN5', 'left')
+    header(CN4, 342, 12, 'CN4', 'left')
 
     # ST-LINK zone + USB-C
     emit(f'<rect x="{BOARD_CX - 30}" y="58" width="60" height="22" rx="6" fill="#3a3a3a"/>')
@@ -312,7 +318,7 @@ def build(variant):
          f'DHCP + SNTP + MQTT/TLS</text>')
 
     if not ars_mode:
-        emit(f'<line x1="{BOARD_R - 6}" y1="700" x2="{BOARD_R + 10}" y2="770" '
+        emit(f'<line x1="{BOARD_R - 6}" y1="694" x2="{BOARD_R + 10}" y2="770" '
              f'stroke="#b5b5b0"/>')
         emit(f'<text x="{BOARD_R + 14}" y="766" font-size="11" fill="{MUT}">ST morpho '
              f'CN3/CN15: most remaining I/O</text>')
@@ -339,7 +345,7 @@ def build(variant):
         return W, out
 
     # ── ARS variant: morpho routing, external chain, HIL taps ──
-    emit(f'<line x1="{BOARD_R - 6}" y1="700" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
+    emit(f'<line x1="{BOARD_R - 6}" y1="694" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
     emit(f'<text x="{BOARD_R + 14}" y="796" font-size="11" fill="{MUT}">morpho CN15 '
          f'is the routing of record for the amp:</text>')
     emit(f'<text x="{BOARD_R + 14}" y="810" font-size="11" fill="{MUT}">pin 3 PH9 SCL, '
@@ -378,9 +384,10 @@ def build(variant):
              f'font-weight="bold" text-anchor="middle">{letter}</text>')
 
     # External audio chain, right column, aligned to the D3 row
-    d3_y = 520 + 4 * PITCH + PITCH // 2 - 4
+    d3_y = G0 + 15 * PITCH  # CN13 D3 row (k = 11 + 4);
+    # level with morpho pin 31 (PE9), its electrical twin
     x0 = BOARD_R + 314
-    ext_box(x0, 600, 250, 60,
+    ext_box(x0, d3_y - 30, 250, 60,
             ['RC low-pass', 'passive, values at gate G3'])
     ext_box(x0, 700, 250, 92,
             ['MAX9744 class-D amp', 'LEFTIN = JP2.2, SDA = JP2.4',
@@ -396,8 +403,8 @@ def build(variant):
              'VCC = 3V3, AUD = analog out'])
 
     # D3 (PE9) -> RC -> amp -> exciter; PVDD up into the amp
-    arrow(BOARD_R + 202, d3_y, x0, 626)
-    arrow(x0 + 125, 660, x0 + 125, 700)
+    arrow(BOARD_R + 202, d3_y, x0, d3_y)
+    arrow(x0 + 125, d3_y + 30, x0 + 125, 700)
     arrow(x0 + 125, 792, x0 + 125, 832)
     # PVDD feeds the amp; route up the clear lane left of the chain
     emit(f'<line x1="{x0 + 10}" y1="945" x2="{x0 - 15}" y2="945" stroke="#666666" '
@@ -412,7 +419,7 @@ def build(variant):
          f'3/5/33)</text>')
     # Mic AUD up the clear left margin into the A0 row; heads only
     # on the final segment, matching the PVDD lane
-    a0_y = 570 + PITCH // 2 - 4
+    a0_y = G0 + 12 * PITCH  # CN4 A0 row
     emit('<line x1="165" y1="740" x2="80" y2="740" stroke="#666666" '
          'stroke-width="1.6"/>')
     emit(f'<line x1="80" y1="740" x2="80" y2="{a0_y}" stroke="#666666" '
@@ -425,8 +432,8 @@ def build(variant):
     # HIL taps (hil-measurements.md, gate G3).  Circled letters
     # only; the legend decodes them.  Floating per-tap labels
     # crowded the chain and read as part of it.
-    hil_tap(x0 - 54, d3_y - 6, 'A')
-    hil_tap(x0 + 125, 680, 'B')
+    hil_tap(x0 - 54, d3_y, 'A')
+    hil_tap(x0 + 125, 682, 'B')
     hil_tap(BOARD_R + 170, 746, 'C')
     hil_tap(80, 615, 'D')
 
