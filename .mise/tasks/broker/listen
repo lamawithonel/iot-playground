@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+#MISE description="Subscribe read-only to the MQTT test broker"
+#USAGE arg "<filter>" var=#true required=#false help="Topic filter(s); omit for device telemetry (narrowed by the IOT_BOARDS pin) plus IOT_TOPICS"
+
+# A dev listener cannot interfere with other subscribers: the broker
+# copies every matching message to every plain subscription.  The
+# guards that keep it that way: a unique client ID per invocation
+# (an ID collision is a session takeover-- the broker kicks the
+# older client, e.g., a running smoke capture), QoS 0 with a clean
+# session (nothing queued server-side after disconnect), no shared
+# ($share/...) subscriptions (they steal messages from their group,
+# so such filters are rejected), and no publishing.
+#
+# Topic selection precedence:
+#   filters given      -> subscribe exactly those, raw stream
+#   IOT_TOPICS set     -> device/+/telemetry plus each extra filter,
+#                         raw stream (naming topics takes control)
+#   IOT_BOARDS set     -> device/+/telemetry, narrowed client-side
+#                         to the pinned boards' topic prefixes (an
+#                         MQTT '+' matches a whole level, so
+#                         device/n657-*/... is not expressible as a
+#                         broker-side filter)
+#   nothing set        -> device/+/telemetry firehose
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/../_lib.sh"
+# shellcheck source=.mise/tasks/_boards.sh
+source "${_script_dir}/../_boards.sh"
+
+if ! detect_runtime; then
+	echo 'ERROR: no container runtime (podman or docker) found.' >&2
+	exit 1
+fi
+if ! "$RUNTIME" exec "$CONTAINER_NAME" true >/dev/null 2>&1; then
+	echo "ERROR: broker container '${CONTAINER_NAME}' is not running." >&2
+	echo '   Start it with: mise run broker:start' >&2
+	exit 1
+fi
+
+# The server cert's SAN is the detected interface IP, so a blind
+# 127.0.0.1 fallback fails TLS verification on Linux; detect first,
+# as broker:start does.
+_host="${BROKER_HOST_IP:-$(detect_broker_ip || echo '127.0.0.1')}"
+_port="${BROKER_PORT:-8883}"
+_client_id="listen-${USER:-dev}-$$"
+
+# A shared subscription is the one filter kind that DOES steal
+# messages from other members of its group.
+_reject_shared() {
+	case "$1" in
+		# shellcheck disable=SC2016  # literal $share, an MQTT prefix
+		'$share/'*)
+			echo "ERROR: refusing shared subscription '$1' (it steals messages from its group)." >&2
+			exit 1
+			;;
+	esac
+}
+
+# Build the -t argument list (bash array: topic filters carry MQTT
+# wildcard characters and must reach mosquitto_sub verbatim) and an
+# optional client-side prefix pattern.  IOT_TOPICS splits on commas
+# only-- MQTT topics may contain spaces, and `read` neither globs
+# nor word-splits.
+_topic_args=(-t 'device/+/telemetry')
+_prefix_pattern=''
+if [ $# -gt 0 ]; then
+	_topic_args=()
+	for _f in "$@"; do
+		_reject_shared "$_f"
+		_topic_args+=(-t "$_f")
+	done
+elif [ -n "${IOT_TOPICS:-}" ]; then
+	IFS=',' read -r -a _extra <<< "$IOT_TOPICS"
+	for _f in "${_extra[@]}"; do
+		if [ -z "$_f" ]; then
+			continue
+		fi
+		_reject_shared "$_f"
+		_topic_args+=(-t "$_f")
+	done
+elif [ -n "${IOT_BOARDS:-}" ]; then
+	for _b in $(env_boards); do
+		_p="$(board_topic_prefix "$_b")"
+		if [ -n "$_p" ]; then
+			_prefix_pattern="${_prefix_pattern:+${_prefix_pattern}|}device/${_p}"
+		fi
+	done
+	if [ -z "$_prefix_pattern" ]; then
+		echo 'note: no pinned board publishes MQTT; showing all device telemetry.' >&2
+	fi
+fi
+
+echo "listening on ${_host}:${_port} as '${_client_id}' (read-only; QoS 0, clean session)" >&2
+echo "filters: ${_topic_args[*]}  -- ctrl-C to stop" >&2
+
+# mosquitto_sub runs inside the container, so no host mosquitto
+# install is needed and the container-local CA path is always right.
+if [ -n "$_prefix_pattern" ]; then
+	echo "pin narrows to: ${_prefix_pattern}" >&2
+	# An interactive listener's normal stops are abnormal exits to
+	# the shell: ctrl-C/timeout kill grep with 130/143, and a stream
+	# that ends before any match leaves grep at 1.  Treat those as
+	# success; anything else is a real failure.
+	set +o errexit
+	"$RUNTIME" exec "$CONTAINER_NAME" mosquitto_sub -v \
+		-h "$_host" -p "$_port" --cafile /mosquitto/certs/root.crt \
+		-i "$_client_id" -q 0 "${_topic_args[@]}" \
+		| grep --line-buffered -E "^(${_prefix_pattern})"
+	_status=$?
+	set -o errexit
+	case "$_status" in
+		0 | 1 | 130 | 143) exit 0 ;;
+		*) exit "$_status" ;;
+	esac
+else
+	exec "$RUNTIME" exec "$CONTAINER_NAME" mosquitto_sub -v \
+		-h "$_host" -p "$_port" --cafile /mosquitto/certs/root.crt \
+		-i "$_client_id" -q 0 "${_topic_args[@]}"
+fi

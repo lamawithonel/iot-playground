@@ -46,6 +46,13 @@ mise-activated shell.  Board-routed test tasks (`test:device`,
 `test:smoke`) follow the pin as well; a board without a given suite
 skips loudly.
 
+To watch what a device publishes, `mise run broker:listen` opens a
+read-only subscription that cannot disturb other subscribers
+(unique client ID, QoS 0, clean session).  With no arguments it
+shows device telemetry, narrowed to the pinned boards; positional
+topic filters override, and `IOT_TOPICS` (comma-separated filters)
+adds extra subscriptions and switches off the pin narrowing.
+
 ## Overview
 
 This project provides a multi-device capable embedded firmware framework using:

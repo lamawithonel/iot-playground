@@ -19,6 +19,7 @@
 #   board_projects          Projects (cargo feature sets) of a board
 #   board_default_project   Default project of a multi-project board
 #   board_loader            Loader script for boards probe-rs cannot flash
+#   board_topic_prefix      MQTT client-ID prefix in the board's topics
 #   board_chip              Chip name from the board's Embed.toml
 #   board_target            Target triple (board override or root default)
 #   resolve_boards          Expand and validate board args, one per line
@@ -114,6 +115,17 @@ board_default_project() {
 board_loader() {
 	case "$1" in
 		nucleo-n657x0) echo "${N6_LOAD_CMD:-boards/nucleo-n657x0/flash.py}" ;;
+		*) echo '' ;;
+	esac
+}
+
+# MQTT client-ID prefix the board's firmware bakes into its topics
+# (device/<prefix><uid>/...); empty if the board has no network
+# stack yet.  Mirrors device_id.rs / net.rs-- update together.
+board_topic_prefix() {
+	case "$1" in
+		feather-stm32f405) echo 'stm32f405-' ;;
+		nucleo-n657x0) echo 'n657-' ;;
 		*) echo '' ;;
 	esac
 }
