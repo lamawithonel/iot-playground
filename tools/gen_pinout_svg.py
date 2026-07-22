@@ -82,7 +82,10 @@ CN4 = [
     ('A5', 'PG15', 'ADC12_INP7', ''),
 ]
 
-PITCH = 26  # one 2.54 mm grid step; ALL connectors share it
+# One 2.54 mm grid step in BOTH axes, at true board scale:
+# 2.54 mm * (566 px / 70 mm) = 20.54 px.  Vertical row spacing
+# and the morpho column spacing both use it.
+PITCH = 20.5
 G0 = 210    # grid origin: row k's pad center is G0 + k*PITCH
 BOARD_X, BOARD_W = 310, 566  # 566/1080 ~= 70/133.34 mm (UM3417)
 BOARD_R = BOARD_X + BOARD_W
@@ -116,13 +119,14 @@ def build(variant):
     # as supplies; VREFP/IOREF are references and stay plain)
     morpho_pwr = {'CN3': {5, 6, 10, 16, 18, 24, 31, 33}, 'CN15': {8}}
     morpho_gnd = {'CN3': {8, 19, 20, 22}, 'CN15': {9, 20, 32}}
-    for x, name, foot in ((318, 'CN3', 'CN2'),
-                          (BOARD_R - 28, 'CN15', 'CN16')):
-        emit(f'<rect x="{x}" y="{G0 - 13}" width="20" '
-             f'height="{morpho_rows * 26}" fill="#161616" rx="3"/>')
+    for x, name, foot in ((316, 'CN3', 'CN2'),
+                          (BOARD_R - 50, 'CN15', 'CN16')):
+        # Body width holds two pin columns one PITCH apart
+        emit(f'<rect x="{x}" y="{G0 - 13}" width="34" '
+             f'height="{morpho_rows * PITCH}" fill="#161616" rx="3"/>')
         for i in range(morpho_rows):
-            cyc = G0 + i * 26
-            for col, dx in ((0, 3.5), (1, 11)):
+            cyc = G0 + i * PITCH
+            for col, dx in ((0, 6.75 - 2.75), (1, 27.25 - 2.75)):
                 pin_no = 2 * i + 1 + col
                 hot = (ars_mode and name == 'CN15'
                        and pin_no in ars_cn15)
@@ -139,20 +143,22 @@ def build(variant):
                 emit(f'<rect x="{x + dx}" y="{cyc - 2.75}" width="5.5" '
                      f'height="5.5" fill="{fill}"{extra}/>')
                 if hot:
-                    emit(f'<text x="{x - 4}" y="{cyc + 3}" '
-                         f'font-size="8.5" fill="{ARS_TXT}" '
-                         f'font-weight="bold" text-anchor="end">'
+                    # In the body's central gap, between the two pad
+                    # columns: the strip gap outside is too narrow
+                    emit(f'<text x="{x + 17}" y="{cyc + 3}" '
+                         f'font-size="8" fill="{ARS}" '
+                         f'font-weight="bold" text-anchor="middle">'
                          f'{pin_no}</text>')
-        emit(f'<text x="{x + 10}" y="{G0 - 19}" font-size="11" '
+        emit(f'<text x="{x + 17}" y="{G0 - 19}" font-size="11" '
              f'fill="{SILK}" text-anchor="middle">{name}</text>')
         # The through-hole grid continues without a break; only the
         # soldered header ends (UM3417 Figure 15)
-        for i in range(10):
-            cyc = G0 + (morpho_rows + i) * 26
-            for dx in (6, 13.5):
+        for i in range(15):
+            cyc = G0 + (morpho_rows + i) * PITCH
+            for dx in (6.75, 27.25):
                 emit(f'<circle cx="{x + dx}" cy="{cyc}" r="2.6" '
                      f'fill="none" stroke="#9a9a9a" stroke-width="1"/>')
-        emit(f'<text x="{x + 10}" y="{G0 + (morpho_rows + 10) * 26}" '
+        emit(f'<text x="{x + 17}" y="{G0 + (morpho_rows + 15) * PITCH}" '
              f'font-size="8.5" fill="{MUT}" text-anchor="middle">'
              f'{foot}</text>')
 
@@ -226,10 +232,10 @@ def build(variant):
                 gnd_done = True
             cn5_rows.append((mark, pin, func, note))
 
-    header(CN14, BOARD_R - 72, 1, 'CN14', 'right')
-    header(CN13, BOARD_R - 72, 11, 'CN13', 'right', title='bottom')
-    header(cn5_rows, 342, 2, 'CN5', 'left')
-    header(CN4, 342, 12, 'CN4', 'left')
+    header(CN14, BOARD_R - 82, 1, 'CN14', 'right')
+    header(CN13, BOARD_R - 82, 11, 'CN13', 'right', title='bottom')
+    header(cn5_rows, 358, 2, 'CN5', 'left')
+    header(CN4, 358, 12, 'CN4', 'left')
 
     # ST-LINK zone + USB-C
     emit(f'<rect x="{BOARD_CX - 30}" y="58" width="60" height="22" rx="6" fill="#3a3a3a"/>')
@@ -318,7 +324,7 @@ def build(variant):
          f'DHCP + SNTP + MQTT/TLS</text>')
 
     if not ars_mode:
-        emit(f'<line x1="{BOARD_R - 6}" y1="694" x2="{BOARD_R + 10}" y2="770" '
+        emit(f'<line x1="{BOARD_R - 6}" y1="592" x2="{BOARD_R + 10}" y2="770" '
              f'stroke="#b5b5b0"/>')
         emit(f'<text x="{BOARD_R + 14}" y="766" font-size="11" fill="{MUT}">ST morpho '
              f'CN3/CN15: most remaining I/O</text>')
@@ -345,7 +351,7 @@ def build(variant):
         return W, out
 
     # ── ARS variant: morpho routing, external chain, HIL taps ──
-    emit(f'<line x1="{BOARD_R - 6}" y1="694" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
+    emit(f'<line x1="{BOARD_R - 6}" y1="592" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
     emit(f'<text x="{BOARD_R + 14}" y="796" font-size="11" fill="{MUT}">morpho CN15 '
          f'is the routing of record for the amp:</text>')
     emit(f'<text x="{BOARD_R + 14}" y="810" font-size="11" fill="{MUT}">pin 3 PH9 SCL, '
@@ -413,7 +419,12 @@ def build(variant):
          'stroke-width="1.6"/>')
     arrow(x0 - 15, 772, x0, 772)
     # I2C + mute leave on the morpho strip, straight into the amp
-    arrow(BOARD_R - 4, 746, x0, 746)
+    # The amp wiring leaves the populated CN15 header (pins 3/5/33),
+    # not the unfitted footprint below it: drop down from the header
+    # bottom between the hole columns, then run out to the amp.
+    emit(f'<line x1="{BOARD_R - 33}" y1="596" x2="{BOARD_R - 33}" '
+         f'y2="746" stroke="#666666" stroke-width="1.6"/>')
+    arrow(BOARD_R - 33, 746, x0, 746)
     emit(f'<text x="{(BOARD_R + x0) // 2}" y="738" font-size="10.5" fill="{MUT}" '
          f'text-anchor="middle">I2C1 + MUTE_N (morpho CN15 pins '
          f'3/5/33)</text>')
