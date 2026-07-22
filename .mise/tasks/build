@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Build firmware: one board, several, or 'all' members"
-#USAGE arg "<board>" var=#true required=#false help="Board name(s), or 'all' for the workspace members; omit for the IOT_BOARDS pin or default board" {
+#USAGE arg "<board>" var=#true required=#false help="Board name(s), or 'all' for the workspace members; omit for the IoT_PG_BOARDS pin or default board" {
 #USAGE   choices "all" "feather-stm32f405" "nucleo-h753zi" "nucleo-n657x0"
 #USAGE }
 #USAGE flag "--release" help="Build the release profile"

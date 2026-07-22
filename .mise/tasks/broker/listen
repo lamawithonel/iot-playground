@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Subscribe read-only to the MQTT test broker"
-#USAGE arg "<filter>" var=#true required=#false help="Topic filter(s); omit for device telemetry (narrowed by the IOT_BOARDS pin) plus IOT_TOPICS"
+#USAGE arg "<filter>" var=#true required=#false help="Topic filter(s); omit for device telemetry (narrowed by the IoT_PG_BOARDS pin) plus IoT_PG_TOPICS"
 
 # A dev listener cannot interfere with other subscribers: the broker
 # copies every matching message to every plain subscription.  The
@@ -13,9 +13,9 @@
 #
 # Topic selection precedence:
 #   filters given      -> subscribe exactly those, raw stream
-#   IOT_TOPICS set     -> device/+/telemetry plus each extra filter,
+#   IoT_PG_TOPICS set  -> device/+/telemetry plus each extra filter,
 #                         raw stream (naming topics takes control)
-#   IOT_BOARDS set     -> device/+/telemetry, narrowed client-side
+#   IoT_PG_BOARDS set  -> device/+/telemetry, narrowed client-side
 #                         to the pinned boards' topic prefixes (an
 #                         MQTT '+' matches a whole level, so
 #                         device/n657-*/... is not expressible as a
@@ -53,8 +53,8 @@ _client_id="listen-${USER:-dev}-$$"
 # A shared subscription is the one filter kind that DOES steal
 # messages from other members of its group.
 _reject_shared() {
+	# shellcheck disable=SC2016  # literal $share, an MQTT prefix
 	case "$1" in
-		# shellcheck disable=SC2016  # literal $share, an MQTT prefix
 		'$share/'*)
 			echo "ERROR: refusing shared subscription '$1' (it steals messages from its group)." >&2
 			exit 1
@@ -64,7 +64,7 @@ _reject_shared() {
 
 # Build the -t argument list (bash array: topic filters carry MQTT
 # wildcard characters and must reach mosquitto_sub verbatim) and an
-# optional client-side prefix pattern.  IOT_TOPICS splits on commas
+# optional client-side prefix pattern.  IoT_PG_TOPICS splits on commas
 # only-- MQTT topics may contain spaces, and `read` neither globs
 # nor word-splits.
 _topic_args=(-t 'device/+/telemetry')
@@ -75,8 +75,8 @@ if [ $# -gt 0 ]; then
 		_reject_shared "$_f"
 		_topic_args+=(-t "$_f")
 	done
-elif [ -n "${IOT_TOPICS:-}" ]; then
-	IFS=',' read -r -a _extra <<< "$IOT_TOPICS"
+elif [ -n "$PIN_TOPICS" ]; then
+	IFS=',' read -r -a _extra <<< "$PIN_TOPICS"
 	for _f in "${_extra[@]}"; do
 		if [ -z "$_f" ]; then
 			continue
@@ -84,7 +84,7 @@ elif [ -n "${IOT_TOPICS:-}" ]; then
 		_reject_shared "$_f"
 		_topic_args+=(-t "$_f")
 	done
-elif [ -n "${IOT_BOARDS:-}" ]; then
+elif [ -n "$PIN_BOARDS" ]; then
 	for _b in $(env_boards); do
 		_p="$(board_topic_prefix "$_b")"
 		if [ -n "$_p" ]; then
