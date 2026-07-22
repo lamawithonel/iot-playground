@@ -36,6 +36,7 @@ INK = '#222222'
 MUT = '#555555'
 EXT = '#ffffff'
 EXT_EDGE = '#888888'
+HIL = '#6d28d9'  # distinct from the amber ARS highlights
 
 # (mark, mcu_pin, func, ars_note)
 CN14 = [
@@ -318,10 +319,11 @@ def build(variant):
             emit(f'<line x1="{x2}" y1="{y2}" x2="{hx}" y2="{hy}" '
                  f'stroke="{color}" stroke-width="1.6"/>')
 
-    def hil_tap(x, y):
-        emit(f'<circle cx="{x}" cy="{y}" r="7" fill="none" '
-             f'stroke="{ARS_TXT}" stroke-width="2"/>')
-        emit(f'<circle cx="{x}" cy="{y}" r="2" fill="{ARS_TXT}"/>')
+    def hil_tap(x, y, letter):
+        emit(f'<circle cx="{x}" cy="{y}" r="9" fill="#ffffff" '
+             f'stroke="{HIL}" stroke-width="2"/>')
+        emit(f'<text x="{x}" y="{y + 4}" font-size="11" fill="{HIL}" '
+             f'font-weight="bold" text-anchor="middle">{letter}</text>')
 
     # External audio chain, right column, aligned to the D3 row
     d3_y = 520 + 4 * PITCH + PITCH // 2 - 4
@@ -368,20 +370,12 @@ def build(variant):
          f'text-anchor="middle" transform="rotate(-90 72 660)">AUD '
          f'(analog)</text>')
 
-    # HIL taps (hil-measurements.md, gate G3)
-    hil_tap(x0 - 54, d3_y - 6)
-    emit(f'<text x="{x0 - 80}" y="{d3_y - 20}" font-size="10.5" fill="{ARS_TXT}" '
-         f'font-weight="bold" text-anchor="middle">HIL A: PWM carrier '
-         f'(pre-RC)</text>')
-    hil_tap(x0 + 125, 680)
-    emit(f'<text x="{x0 + 140}" y="684" font-size="10.5" fill="{ARS_TXT}" '
-         f'font-weight="bold">HIL B: filtered line (post-RC)</text>')
-    hil_tap(BOARD_R + 170, 746)
-    # End-anchored left of the tap: the PVDD lane's arrowhead lands
-    # at (985, 772), which a start-anchored label would run into.
-    emit(f'<text x="{BOARD_R + 155}" y="768" font-size="10.5" fill="{ARS_TXT}" '
-         f'font-weight="bold" text-anchor="end">HIL C: I2C decode '
-         f'(SCL/SDA)</text>')
+    # HIL taps (hil-measurements.md, gate G3).  Circled letters
+    # only; the legend decodes them.  Floating per-tap labels
+    # crowded the chain and read as part of it.
+    hil_tap(x0 - 54, d3_y - 6, 'A')
+    hil_tap(x0 + 125, 680, 'B')
+    hil_tap(BOARD_R + 170, 746, 'C')
 
     # Legend
     emit(f'<rect x="310" y="1190" width="12" height="12" fill="{ARS}" '
@@ -389,11 +383,19 @@ def build(variant):
     emit(f'<text x="330" y="1200" font-size="12.5" fill="{INK}">* '
          f'ARS-assigned signal (provisional, gates G0-G5) -- pinout.md '
          f'is the authority</text>')
-    emit(f'<circle cx="316" cy="1218" r="7" fill="none" '
-         f'stroke="{ARS_TXT}" stroke-width="2"/>')
-    emit(f'<circle cx="316" cy="1218" r="2" fill="{ARS_TXT}"/>')
-    emit(f'<text x="330" y="1222" font-size="12.5" fill="{INK}">HIL '
-         f'analyzer tap (hil-measurements.md, gate G3)</text>')
+    emit(f'<text x="310" y="1222" font-size="12.5" fill="{INK}">HIL '
+         f'analyzer taps, gate G3 (hil-measurements.md):</text>')
+    for lx, letter, desc in (
+        (640, 'A', 'PWM carrier, pre-RC'),
+        (860, 'B', 'filtered line, post-RC'),
+        (1090, 'C', 'I2C decode, SCL/SDA'),
+    ):
+        emit(f'<circle cx="{lx}" cy="1218" r="9" fill="#ffffff" '
+             f'stroke="{HIL}" stroke-width="2"/>')
+        emit(f'<text x="{lx}" y="1222" font-size="11" fill="{HIL}" '
+             f'font-weight="bold" text-anchor="middle">{letter}</text>')
+        emit(f'<text x="{lx + 16}" y="1222" font-size="12.5" '
+             f'fill="{INK}">{desc}</text>')
     emit(f'<text x="310" y="1244" font-size="11" fill="{MUT}">Arduino V3 '
          f'header data: UM3417 Rev 3, Table 12.  A0-A5 route through the '
          f'on-board 3.3V-to-1.8V adaptation amplifier; the 1.8V-domain '
