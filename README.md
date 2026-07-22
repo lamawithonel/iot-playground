@@ -38,6 +38,12 @@ project becomes that board's default while the variable is set, and
 Single-board tasks (`flash`, `test:device`) take the first entry, so
 list your primary board first.
 
+The pin reaches the primitives too: the first entry's chip (and its
+`--speed` workaround, where one exists) exports as
+`PROBE_RS_CHIP`/`PROBE_RS_SPEED`, which probe-rs reads natively-- so
+bare `probe-rs attach`/`gdb`/`reset` need no flags in a
+mise-activated shell.
+
 ## Overview
 
 This project provides a multi-device capable embedded firmware framework using:

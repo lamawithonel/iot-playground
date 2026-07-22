@@ -47,7 +47,12 @@ echo ""
 
 _target="${TARGET:-$(board_target "$_board")}"
 _timeout="${DEVICE_TEST_TIMEOUT:-120}"
-export PROBE_RS_CHIP="${PROBE_RS_CHIP:-$(board_chip "$_board")}"
+# Unconditional: the board under test decides the chip.  The BOARDS
+# bridge (.mise/env.sh) may have exported another board's chip and
+# speed clamp from the pin's first entry.
+PROBE_RS_CHIP="$(board_chip "$_board")"
+export PROBE_RS_CHIP
+unset PROBE_RS_SPEED
 
 echo "🧪 Running on-device tests for ${_board} (timeout: ${_timeout}s)..."
 echo ""
