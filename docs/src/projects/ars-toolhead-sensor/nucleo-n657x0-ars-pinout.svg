@@ -384,6 +384,15 @@
 <text x="1136" y="521.5" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">A</text>
 <circle cx="1315" cy="682" r="9" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
 <text x="1315" y="686" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">B</text>
+<rect x="1092" y="509.5" width="16" height="16" rx="3" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
+<text x="1100" y="521.5" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">E</text>
+<rect x="1092" y="530.0" width="16" height="16" rx="3" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
+<text x="1100" y="542.0" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">F</text>
+<rect x="142" y="284.0" width="16" height="16" rx="3" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
+<text x="150" y="296.0" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">G</text>
+<rect x="272" y="427.5" width="16" height="16" rx="3" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
+<text x="280" y="439.5" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">H</text>
+<line x1="290" y1="435.5" x2="316" y2="435.5" stroke="#b5b5b0"/>
 <circle cx="1046" cy="746" r="9" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
 <text x="1046" y="750" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">C</text>
 <circle cx="80" cy="615" r="9" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
@@ -411,5 +420,8 @@
 <circle cx="1280" cy="1218" r="9" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
 <text x="1280" y="1222" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">D</text>
 <text x="1296" y="1222" font-size="12.5" fill="#222222">mic line, into A0</text>
-<text x="310" y="1244" font-size="11" fill="#555555">Arduino V3 header data: UM3417 Rev 3, Table 12.  A0-A5 route through the on-board 3.3V-to-1.8V adaptation amplifier; the 1.8V-domain ADC pin is shown.</text>
+<rect x="316" y="1232" width="16" height="16" rx="3" fill="#ffffff" stroke="#6d28d9" stroke-width="2"/>
+<text x="324" y="1244" font-size="11" fill="#6d28d9" font-weight="bold" text-anchor="middle">E</text>
+<text x="340" y="1244" font-size="12.5" fill="#222222">MSO digital channels: C = SCL + SDA (2), E = PE9 carrier edges, F = PD0 mute, G = NRST, H = PC13 (morpho CN3 pin 23) -- six of eight; analog (circles) is 2 per run</text>
+<text x="310" y="1264" font-size="11" fill="#555555">Arduino V3 header data: UM3417 Rev 3, Table 12.  A0-A5 route through the on-board 3.3V-to-1.8V adaptation amplifier; the 1.8V-domain ADC pin is shown.</text>
 </svg>

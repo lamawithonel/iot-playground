@@ -389,6 +389,13 @@ def build(variant):
         emit(f'<text x="{x}" y="{y + 4}" font-size="11" fill="{HIL}" '
              f'font-weight="bold" text-anchor="middle">{letter}</text>')
 
+    def hil_dig(x, y, letter):
+        # Square glyph: an MSO digital channel (circles are analog)
+        emit(f'<rect x="{x - 8}" y="{y - 8}" width="16" height="16" '
+             f'rx="3" fill="#ffffff" stroke="{HIL}" stroke-width="2"/>')
+        emit(f'<text x="{x}" y="{y + 4}" font-size="11" fill="{HIL}" '
+             f'font-weight="bold" text-anchor="middle">{letter}</text>')
+
     # External audio chain, right column, aligned to the D3 row
     d3_y = G0 + 15 * PITCH  # CN13 D3 row (k = 11 + 4);
     # level with morpho pin 31 (PE9), its electrical twin
@@ -445,6 +452,15 @@ def build(variant):
     # crowded the chain and read as part of it.
     hil_tap(x0 - 54, d3_y, 'A')
     hil_tap(x0 + 125, 682, 'B')
+    # Digital channels on their nets: E rides the D3 feed line with
+    # tap A; F sits on the D2 row; G on the CN5 RST row; H points
+    # at morpho CN3 pin 23, where PC13 is probeable (Table 13)
+    hil_dig(1100, d3_y, 'E')
+    hil_dig(1100, G0 + 16 * PITCH, 'F')
+    hil_dig(150, G0 + 4 * PITCH, 'G')
+    hil_dig(280, G0 + 11 * PITCH, 'H')
+    emit(f'<line x1="290" y1="{G0 + 11 * PITCH}" x2="316" '
+         f'y2="{G0 + 11 * PITCH}" stroke="#b5b5b0"/>')
     hil_tap(BOARD_R + 170, 746, 'C')
     hil_tap(80, 615, 'D')
 
@@ -493,7 +509,15 @@ def build(variant):
              f'font-weight="bold" text-anchor="middle">{letter}</text>')
         emit(f'<text x="{lx + 16}" y="1222" font-size="12.5" '
              f'fill="{INK}">{desc}</text>')
-    emit(f'<text x="310" y="1244" font-size="11" fill="{MUT}">Arduino V3 '
+    emit(f'<rect x="316" y="1232" width="16" height="16" rx="3" '
+         f'fill="#ffffff" stroke="{HIL}" stroke-width="2"/>')
+    emit(f'<text x="324" y="1244" font-size="11" fill="{HIL}" '
+         f'font-weight="bold" text-anchor="middle">E</text>')
+    emit(f'<text x="340" y="1244" font-size="12.5" fill="{INK}">'
+         f'MSO digital channels: C = SCL + SDA (2), E = PE9 carrier '
+         f'edges, F = PD0 mute, G = NRST, H = PC13 (morpho CN3 pin '
+         f'23) -- six of eight; analog (circles) is 2 per run</text>')
+    emit(f'<text x="310" y="1264" font-size="11" fill="{MUT}">Arduino V3 '
          f'header data: UM3417 Rev 3, Table 12.  A0-A5 route through the '
          f'on-board 3.3V-to-1.8V adaptation amplifier; the 1.8V-domain '
          f'ADC pin is shown.</text>')

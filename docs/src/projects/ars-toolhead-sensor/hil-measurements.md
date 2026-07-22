@@ -41,6 +41,25 @@ instrument-injected signal.
 | I2C volume transactions: I2C1 decode of MAX9744 volume/mute register writes on SCL (PH9) and SDA (PC1)-- see [Pinout](./pinout.md) for connector routing, device address, and mute-pin rationale | C | The amplifier receives the expected register writes during a measurement run.  Verify the analyzer's I2C decoder settings against the live Logic 2 UI before capture-- unverified as of this page. |
 | Mic input capture: analog capture of the mic AUD line into A0 during a sweep, correlated with the output-side captures | B + D | The input half of the closed loop: separates acoustic-path effects from adaptation-amp and ADC effects, and cross-checks what the firmware's own capture should have seen. |
 
+### Digital Channel Plan
+
+Taps A, B, and D are analog, and the MSO has two analog channels,
+so analog pairs are chosen per run (A + B or B + D above).  The
+eight digital channels carry the full set below simultaneously--
+squares on the hookup diagram, letters continuing the tap series:
+
+| Channel | Pin | Probe point | Purpose |
+|---|---|---|---|
+| C (x2) | PH9 SCL, PC1 SDA | morpho CN15 pins 3 and 5 | I2C decode, as above. |
+| E | PE9 | on the D3 feed to the RC filter | Exact carrier edge timing; correlates DMA-driven duty updates with the analog taps. |
+| F | PD0 | morpho CN15 pin 33 | Mute assertion vs sweep and capture windows: proves AMP_MUTE_N is low during capture-only windows. |
+| G | NRST | CN5 RST pin (or morpho CN3 pin 14) | Reset marker on the capture timeline; catches unexpected resets mid-run. |
+| H | PC13 | morpho CN3 pin 23 (the pin, not the button cap) | Button edges for EXTI correlation, and a manual event marker: press to timestamp a moment in the capture. |
+
+Six of the eight digital channels are used, leaving two spare for
+the future trigger/strobe lines the H753ZI loopback plan defines
+(its channel assignment below is separate and unchanged).
+
 [Roadmap](../../roadmap.md) section 7 item 4 also lists SPI timing
 (W5500, ePaper, SD card), CAN bus signaling, and interrupt latency
 as future HIL targets; they sit outside the gate G3 audio path and
