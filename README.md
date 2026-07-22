@@ -3,6 +3,27 @@
 An embedded Rust IoT framework for STM32 microcontrollers, with a focus on
 real-time performance and security.  Microchip ATSAM support is planned.
 
+## Quick Start
+
+Install [mise](https://mise.jdx.dev/), then:
+
+```bash
+mise trust . && mise run setup   # install pinned tools, check the bench
+mise run boards                  # list boards and their projects
+mise run build                   # build the default board (feather-stm32f405)
+mise run build nucleo-h753zi     # build one board
+mise run build all               # build all workspace-member boards
+mise run build nucleo-n657x0 --project net   # a project on a multi-project board
+mise run flash                   # build + flash (+ attach RTT)
+mise run test                    # host unit tests, no hardware needed
+```
+
+Every wrapper prints the exact `cargo` command it runs, and `cargo`,
+`cargo embed`, and `probe-rs` stay usable directly from any board
+directory (`cd boards/<board> && cargo build`).  `mise tasks` lists
+everything else (docs, broker, TLS certs); setup detail lives under
+[Prerequisites](#prerequisites).
+
 ## Overview
 
 This project provides a multi-device capable embedded firmware framework using:
@@ -19,30 +40,22 @@ The board roster and per-board documentation live in
 
 ## Prerequisites
 
-### Quick Start with mise (Recommended)
+### Tool Installation with mise (Recommended)
 
 [mise](https://mise.jdx.dev/) manages dev tools (Rust toolchain, flip-link,
 mdBook) and provides task runner commands.  Install mise, then:
 
 ```bash
 mise trust .
-mise install
+mise run setup
 ```
 
-This installs pinned versions of Rust (with the
+`setup` runs `mise install` (pinned versions of Rust with the
 `thumbv7em-none-eabihf` cross-compilation target, `rustfmt`, and
-`clippy`), flip-link, mdBook, and other tools.  Use `cargo` and
-`probe-rs` directly for building, checking, and flashing firmware.
-
-```bash
-mise run docs           # serve documentation locally
-mise run broker:start   # start MQTT test broker
-mise run broker:stop    # stop MQTT test broker
-mise run broker:logs    # view broker logs
-mise run tls:ca         # generate root CA certificate
-mise run tls:server broker  # generate broker server cert
-mise run tls:client device  # generate device client cert
-```
+`clippy`, plus flip-link, probe-rs-tools, and mdBook), then prints
+an advisory bench report-- every gap comes with its fix command.
+`mise tasks` lists every available task (docs, broker, TLS certs,
+tests); the common ones appear in [Quick Start](#quick-start).
 
 ### Required Tools
 
@@ -81,7 +94,10 @@ mise run tls:client device  # generate device client cert
 
 ## Building and Flashing
 
-### Quick Start (from workspace root)
+The `mise run build`/`flash` wrappers in [Quick Start](#quick-start)
+front these commands; everything below also works directly.
+
+### From the workspace root
 
 The workspace default member is `feather-stm32f405`, so plain
 `cargo run`/`cargo embed` from the root targets the feather:

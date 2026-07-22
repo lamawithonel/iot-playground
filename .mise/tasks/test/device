@@ -1,8 +1,30 @@
 #!/usr/bin/env bash
 #MISE description="Run on-device tests via probe-rs (requires connected probe)"
+#USAGE arg "<board>" required=#false help="Board name; omit for the default board" {
+#USAGE   choices "feather-stm32f405" "nucleo-n657x0"
+#USAGE }
+# nucleo-h753zi is absent from the choices: it has no tests/ target
+# yet (boards/AGENTS.md requires one for active profiles), so
+# offering it would print the test banner and pass having run
+# nothing.  Add it back with its bring-up test binary.
 set -o errexit
 set -o nounset
 set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_boards.sh
+source "${_script_dir}/../_boards.sh"
+
+_board="${usage_board:-${BOARD:-$DEFAULT_BOARD}}"
+
+# embedded-test runs through `probe-rs run`; a loader board cannot,
+# by definition.
+if [ -n "$(board_loader "$_board")" ]; then
+	echo "⏭  ${_board} loads through a loader script, which embedded-test cannot use." >&2
+	echo "   Flash it instead with: mise run flash ${_board}" >&2
+	exit 0
+fi
 
 # Check for connected debug probe
 _probe_output="$(probe-rs list 2>&1)"
@@ -16,19 +38,21 @@ echo "🔌 Probe detected:"
 echo "$_probe_output" | sed 's/^/   /'
 echo ""
 
-_board="${BOARD:-feather-stm32f405}"
-_target="${TARGET:-thumbv7em-none-eabihf}"
+_target="${TARGET:-$(board_target "$_board")}"
 _timeout="${DEVICE_TEST_TIMEOUT:-120}"
-export PROBE_RS_CHIP="${PROBE_RS_CHIP:-STM32F405RGTx}"
+export PROBE_RS_CHIP="${PROBE_RS_CHIP:-$(board_chip "$_board")}"
 
 echo "🧪 Running on-device tests for ${_board} (timeout: ${_timeout}s)..."
 echo ""
 
+# No `-- "$@"` passthrough: mise also passes the usage arg
+# positionally, so forwarding it would hand the board name to
+# cargo test as a test-name filter that matches nothing-- a
+# vacuous pass of a testing gate.
 _rc=0
 timeout "$_timeout" cargo test \
 	-p "$_board" \
 	--target "$_target" \
-	-- "$@" \
 	|| _rc=$?
 
 if [ "$_rc" -eq 124 ]; then

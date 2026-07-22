@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#MISE description="List boards, their projects, and workspace status"
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_boards.sh
+source "${_script_dir}/_boards.sh"
+
+printf '%-19s %-16s %s\n' 'BOARD' 'PROJECTS' 'STATUS'
+for _b in $(board_dirs); do
+	_projects="$(board_projects "$_b")"
+	_default="$(board_default_project "$_b")"
+	if [ -z "$_projects" ]; then
+		_cell='(single app)'
+	else
+		_cell=''
+		for _p in $_projects; do
+			[ "$_p" = "$_default" ] && _p="${_p}*"
+			_cell="${_cell} ${_p}"
+		done
+		_cell="${_cell# }"
+	fi
+	case " $MEMBER_BOARDS " in
+		*" $_b "*)
+			_status='member'
+			[ "$_b" = "$DEFAULT_BOARD" ] && _status='member (default)'
+			;;
+		*)
+			_status='excluded (bring-up; opt-in by name)'
+			;;
+	esac
+	printf '%-19s %-16s %s\n' "$_b" "$_cell" "$_status"
+done
+echo
+echo "* = default project.  'all' targets workspace members only."

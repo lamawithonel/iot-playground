@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="Build firmware: one board, several, or 'all' members"
+#USAGE arg "<board>" var=#true required=#false help="Board name(s), or 'all' for the workspace members; omit for the default board" {
+#USAGE   choices "all" "feather-stm32f405" "nucleo-h753zi" "nucleo-n657x0"
+#USAGE }
+#USAGE flag "--release" help="Build the release profile"
+#USAGE flag "--project <project>" help="Project (cargo feature set) on a multi-project board; exactly one board"
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/_lib.sh"
+# shellcheck source=.mise/tasks/_boards.sh
+source "${_script_dir}/_boards.sh"
+
+# shellcheck disable=SC2086  # usage_board is a space-separated list
+build_each build ${usage_board:-}

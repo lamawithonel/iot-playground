@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+#MISE description="Install pinned tools, then check the bench (advisory)"
+
+# Post-clone entry point: `mise trust . && mise run setup`.  The
+# checks are advisory-- every gap prints its fix and the task exits
+# 0 regardless, because a fresh clone without a probe or dev certs
+# is a normal, working state.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/_lib.sh"
+# shellcheck source=.mise/tasks/_boards.sh
+source "${_script_dir}/_boards.sh"
+
+mise install
+echo
+
+_report() {
+	printf '%-5s %s\n' "$1" "$2"
+}
+
+if command -v rustc >/dev/null 2>&1; then
+	_report ok "rustc $(rustc --version | awk '{print $2}') (host $(detect_host_target))"
+else
+	_report miss 'rustc  fix: mise install'
+fi
+
+if command -v rustup >/dev/null 2>&1; then
+	_targets="$(rustup target list --installed 2>/dev/null)"
+	if echo "$_targets" | grep -q '^thumbv7em-none-eabihf$'; then
+		_report ok 'target thumbv7em-none-eabihf'
+	else
+		_report miss 'target thumbv7em-none-eabihf  fix: rustup target add thumbv7em-none-eabihf'
+	fi
+	if echo "$_targets" | grep -q '^thumbv8m\.main-none-eabihf$'; then
+		_report ok 'target thumbv8m.main-none-eabihf'
+	else
+		_report skip 'target thumbv8m.main-none-eabihf (only for nucleo-n657x0)  fix: rustup target add thumbv8m.main-none-eabihf'
+	fi
+else
+	_report info 'rustup not found; cannot verify installed ARM targets'
+fi
+
+for _tool in flip-link probe-rs mdbook; do
+	if command -v "$_tool" >/dev/null 2>&1; then
+		_report ok "$_tool"
+	else
+		_report miss "${_tool}  fix: mise install"
+	fi
+done
+
+if command -v probe-rs >/dev/null 2>&1; then
+	if probe-rs list 2>&1 | grep -q 'No probes were found'; then
+		_report skip 'no debug probe detected (needed only to flash or run device tests)'
+	else
+		_report ok 'debug probe detected'
+	fi
+fi
+
+if detect_runtime; then
+	_report ok "container runtime: $RUNTIME"
+else
+	_report skip 'no container runtime (needed only for the MQTT test broker)  fix: install podman'
+fi
+
+if [ -f '.local/certs/ca/root.crt' ]; then
+	_report ok 'dev TLS certificates'
+else
+	_report info 'dev TLS certs absent (generated on demand by broker tasks)'
+fi
+
+cat <<-'EOF'
+
+	Quick start:
+	  mise run boards         # list boards and their projects
+	  mise run build          # build the default board
+	  mise run flash          # build + flash (+ attach RTT)
+	  mise run test           # host unit tests, no hardware
+	EOF

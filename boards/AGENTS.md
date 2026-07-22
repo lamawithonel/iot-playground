@@ -33,6 +33,13 @@ wins on any disagreement with this table.
   [`testing_gates.md`](../.agents/rules/testing_gates.md), plus
   an `--exclude` in the host-test commands (bin crates do not
   host-test).
+- Promotion also updates the mise front door: add the board to
+  `MEMBER_BOARDS` (and `DEFAULT_BOARD` if it becomes the default)
+  in `.mise/tasks/_boards.sh`, and to the `choices` lists in
+  `.mise/tasks/{build,clippy,flash,test/device}`.  Add
+  `board_projects`/`board_default_project` case arms only if the
+  board is multi-project, and a `board_loader` arm only if
+  `probe-rs run` cannot flash it.
 - Board crates hold hardware I/O and RTIC task wiring only; pure
   logic goes to `core/`, trait boundaries to `hal-abstractions/`.
 - Each active profile needs a Layer 2 bring-up test binary

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#MISE description="Build + flash one board (loader boards print the RTT attach command)"
+#USAGE arg "<board>" required=#false help="Board name; omit for the default board" {
+#USAGE   choices "feather-stm32f405" "nucleo-h753zi" "nucleo-n657x0"
+#USAGE }
+#USAGE flag "--release" help="Flash the release profile"
+#USAGE flag "--project <project>" help="Project (cargo feature set) on a multi-project board"
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/_lib.sh"
+# shellcheck source=.mise/tasks/_boards.sh
+source "${_script_dir}/_boards.sh"
+
+_board="${usage_board:-$DEFAULT_BOARD}"
+_loader="$(board_loader "$_board")"
+
+if [ -z "$_loader" ]; then
+	# cargo embed reads the board's Embed.toml for the chip and the
+	# probe pin; the root config's generic `probe-rs run` runner
+	# would drop both and fall into the interactive probe prompt on
+	# multi-probe benches.
+	_feats="$(board_features "$_board" "${usage_project:-}")"
+	# shellcheck disable=SC2086  # _feats intentionally splits
+	( set -x; cd "boards/${_board}" \
+		&& cargo embed ${usage_release:+--release} $_feats )
+	exit 0
+fi
+
+# Loader board: `probe-rs run` cannot flash it (see the board page),
+# so build with the uniform recipe, then hand the ELF to the loader.
+build_each build "$_board"
+_profile='debug'
+[ -n "${usage_release:-}" ] && _profile='release'
+_elf="boards/${_board}/target/$(board_target "$_board")/${_profile}/${_board}"
+
+if [ -x "$_loader" ]; then
+	( set -x; "$_loader" "$_elf" )
+else
+	{
+		echo "ERROR: ${_board} loads through a loader script, not 'probe-rs run'."
+		echo "Expected loader: ${_loader} (override with N6_LOAD_CMD)."
+		echo "See docs/src/boards/nucleo-n657x0.md, section 'Bring-Up: RAM-Boot Dev Flow'."
+	} >&2
+	exit 1
+fi

@@ -17,9 +17,15 @@ mdbook = '0.4.40'
 # ──────────────────────────────────────────────────────
 # Tasks
 # ──────────────────────────────────────────────────────
-# Rust build/check/flash tasks are handled by cargo and
-# probe-rs directly.  Mise tasks are for non-Rust tools
-# only (docs, broker, TLS certs, etc.).
+# cargo, cargo embed, and probe-rs are the primitives for
+# Rust build/check/flash work and stay usable directly
+# from any board directory.  The file tasks in
+# .mise/tasks/ (build, clippy, flash, boards, setup,
+# test:*, broker:*) are discoverable front doors over
+# those primitives; the build/clippy/flash wrappers echo
+# the exact command they run via `set -x`.  File tasks
+# are auto-discovered from .mise/tasks/; only inline
+# tasks live in this file.
 
 # ── TLS Certificate Management ───────────────────────
 # Usage specs below enable tab-completion for mise.

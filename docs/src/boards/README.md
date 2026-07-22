@@ -8,10 +8,14 @@ board-specific detail (flashing, debugging, configuration).
 
 - [**Adafruit Feather STM32F405**](./feather-stm32f405.md)-- flagship board,
   active workspace member.  Tier 2 connected device, hardware-validated:
-  DHCP, SNTP, TLS 1.3, MQTT v5 QoS-1, and a SEN66 sensor.
+  DHCP, SNTP, TLS 1.3, MQTT v5 QoS-1, and a SEN66 sensor.  The full
+  reference implementation-- copy this profile when building a
+  connected device.
 - [**ST NUCLEO-H753ZI**](./nucleo-h753zi.md)-- active workspace member.
   Minimal RTIC heartbeat app today; planned home for an ARS DAC->ADC
-  loopback rig and Ethernet bring-up.
+  loopback rig and Ethernet bring-up.  The minimal reference-- the
+  smallest working profile and the one to copy when starting a new
+  board.
 - [**ST NUCLEO-N657X0-Q**](./nucleo-n657x0.md)-- workspace-excluded,
   ARS toolhead sensor project.  Bring-up spike in progress; hardware
   on bench, gate G0 RAM-boot bench-verified 2026-07-21.

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#MISE description="Lint boards on their ARM targets (-D warnings)"
+#USAGE arg "<board>" var=#true required=#false help="Board name(s), or 'all' for the workspace members; omit for the default board" {
+#USAGE   choices "all" "feather-stm32f405" "nucleo-h753zi" "nucleo-n657x0"
+#USAGE }
+#USAGE flag "--release" help="Lint the release profile"
+#USAGE flag "--project <project>" help="Project (cargo feature set) on a multi-project board; exactly one board"
+
+# Per-board convenience loop; a subset of the pre-commit clippy
+# gate, not a replacement.  See .agents/rules/testing_gates.md.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_script_dir}/_lib.sh"
+# shellcheck source=.mise/tasks/_boards.sh
+source "${_script_dir}/_boards.sh"
+
+# shellcheck disable=SC2086  # usage_board is a space-separated list
+build_each clippy ${usage_board:-}

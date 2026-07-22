@@ -83,10 +83,16 @@ never share one cargo invocation-- feature unification trips the
 metapac multiple-chips guard.  Each board gets its own `-p`
 invocation; extend the list when a board joins the workspace.
 
+`mise run clippy <board>` runs the same `-D warnings` lint for one
+board from its own directory-- a convenience loop for board work,
+not a replacement for the commands above.  The workspace run
+deny-lints the library crates as primary packages, and the
+`iot-core --all-features` run has no wrapper equivalent.
+
 ### 4. Device Tests (When Hardware Is Connected)
 
 ```bash
-mise run test:device
+mise run test:device [<board>]
 ```
 
 Device tests require a probe (J-Link or compatible) connected
