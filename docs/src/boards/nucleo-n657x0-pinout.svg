@@ -7,35 +7,35 @@
 <rect x="329" y="208" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="321.5" y="234" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="329" y="234" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="321.5" y="260" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="260" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="321.5" y="260" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
+<rect x="329" y="260" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
 <rect x="321.5" y="286" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="286" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="329" y="286" width="5.5" height="5.5" fill="#111111" stroke="#bbbbbb" stroke-width="0.5"/>
 <rect x="321.5" y="312" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="312" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="329" y="312" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
 <rect x="321.5" y="338" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="329" y="338" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="321.5" y="364" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="329" y="364" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="321.5" y="390" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="390" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="329" y="390" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
 <rect x="321.5" y="416" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="416" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="321.5" y="442" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="442" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="329" y="416" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
+<rect x="321.5" y="442" width="5.5" height="5.5" fill="#111111" stroke="#bbbbbb" stroke-width="0.5"/>
+<rect x="329" y="442" width="5.5" height="5.5" fill="#111111" stroke="#bbbbbb" stroke-width="0.5"/>
 <rect x="321.5" y="468" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="468" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="329" y="468" width="5.5" height="5.5" fill="#111111" stroke="#bbbbbb" stroke-width="0.5"/>
 <rect x="321.5" y="494" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="329" y="494" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="329" y="494" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
 <rect x="321.5" y="520" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="329" y="520" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="321.5" y="546" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="329" y="546" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="321.5" y="572" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="329" y="572" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="321.5" y="598" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="321.5" y="598" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
 <rect x="329" y="598" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="321.5" y="624" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="321.5" y="624" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
 <rect x="329" y="624" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="321.5" y="650" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="329" y="650" width="5.5" height="5.5" fill="#8f8f8f"/>
@@ -71,8 +71,8 @@
 <rect x="851.5" y="260" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="859" y="260" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="851.5" y="286" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="859" y="286" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="851.5" y="312" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="859" y="286" width="5.5" height="5.5" fill="#c0392b" stroke="#000" stroke-width="0.5"/>
+<rect x="851.5" y="312" width="5.5" height="5.5" fill="#111111" stroke="#bbbbbb" stroke-width="0.5"/>
 <rect x="859" y="312" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="851.5" y="338" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="859" y="338" width="5.5" height="5.5" fill="#8f8f8f"/>
@@ -83,7 +83,7 @@
 <rect x="851.5" y="416" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="859" y="416" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="851.5" y="442" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="859" y="442" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="859" y="442" width="5.5" height="5.5" fill="#111111" stroke="#bbbbbb" stroke-width="0.5"/>
 <rect x="851.5" y="468" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="859" y="468" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="851.5" y="494" width="5.5" height="5.5" fill="#8f8f8f"/>
@@ -95,7 +95,7 @@
 <rect x="851.5" y="572" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="859" y="572" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="851.5" y="598" width="5.5" height="5.5" fill="#8f8f8f"/>
-<rect x="859" y="598" width="5.5" height="5.5" fill="#8f8f8f"/>
+<rect x="859" y="598" width="5.5" height="5.5" fill="#111111" stroke="#bbbbbb" stroke-width="0.5"/>
 <rect x="851.5" y="624" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="859" y="624" width="5.5" height="5.5" fill="#8f8f8f"/>
 <rect x="851.5" y="650" width="5.5" height="5.5" fill="#8f8f8f"/>
@@ -140,10 +140,10 @@
 <text x="798" y="285" font-size="11" fill="#03234B" text-anchor="end">AREF</text>
 <line x1="876" y1="281" x2="886" y2="281" stroke="#b5b5b0" stroke-width="1"/>
 <text x="890" y="285" font-size="12.5" fill="#222222" text-anchor="start">AVDD</text>
-<rect x="812" y="301" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
+<rect x="812" y="301" width="12" height="12" fill="#111111" stroke="#bbbbbb" stroke-width="0.6"/>
 <text x="798" y="311" font-size="11" fill="#03234B" text-anchor="end">GND</text>
 <line x1="876" y1="307" x2="886" y2="307" stroke="#b5b5b0" stroke-width="1"/>
-<text x="890" y="311" font-size="12.5" fill="#222222" text-anchor="start">Ground</text>
+<text x="890" y="311" font-size="12.5" fill="#111111" text-anchor="start">Ground</text>
 <rect x="812" y="327" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
 <text x="798" y="337" font-size="11" fill="#03234B" text-anchor="end">D13</text>
 <line x1="876" y1="333" x2="886" y2="333" stroke="#b5b5b0" stroke-width="1"/>
@@ -216,26 +216,26 @@
 <text x="376" y="365" font-size="11" fill="#03234B">RST</text>
 <line x1="310" y1="361" x2="300" y2="361" stroke="#b5b5b0" stroke-width="1"/>
 <text x="296" y="365" font-size="12.5" fill="#222222" text-anchor="end">NRST  Reset</text>
-<rect x="350" y="381" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
+<rect x="350" y="381" width="12" height="12" fill="#c0392b" stroke="#000" stroke-width="0.6"/>
 <text x="376" y="391" font-size="11" fill="#03234B">3V3</text>
 <line x1="310" y1="387" x2="300" y2="387" stroke="#b5b5b0" stroke-width="1"/>
-<text x="296" y="391" font-size="12.5" fill="#222222" text-anchor="end">3.3V out</text>
-<rect x="350" y="407" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
+<text x="296" y="391" font-size="12.5" fill="#c0392b" text-anchor="end">3.3V out</text>
+<rect x="350" y="407" width="12" height="12" fill="#c0392b" stroke="#000" stroke-width="0.6"/>
 <text x="376" y="417" font-size="11" fill="#03234B">5V</text>
 <line x1="310" y1="413" x2="300" y2="413" stroke="#b5b5b0" stroke-width="1"/>
-<text x="296" y="417" font-size="12.5" fill="#222222" text-anchor="end">5V out</text>
-<rect x="350" y="433" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
+<text x="296" y="417" font-size="12.5" fill="#c0392b" text-anchor="end">5V out</text>
+<rect x="350" y="433" width="12" height="12" fill="#111111" stroke="#bbbbbb" stroke-width="0.6"/>
 <text x="376" y="443" font-size="11" fill="#03234B">GND</text>
 <line x1="310" y1="439" x2="300" y2="439" stroke="#b5b5b0" stroke-width="1"/>
-<text x="296" y="443" font-size="12.5" fill="#222222" text-anchor="end">Ground</text>
-<rect x="350" y="459" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
+<text x="296" y="443" font-size="12.5" fill="#111111" text-anchor="end">Ground</text>
+<rect x="350" y="459" width="12" height="12" fill="#111111" stroke="#bbbbbb" stroke-width="0.6"/>
 <text x="376" y="469" font-size="11" fill="#03234B">GND</text>
 <line x1="310" y1="465" x2="300" y2="465" stroke="#b5b5b0" stroke-width="1"/>
-<text x="296" y="469" font-size="12.5" fill="#222222" text-anchor="end">Ground</text>
-<rect x="350" y="485" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
+<text x="296" y="469" font-size="12.5" fill="#111111" text-anchor="end">Ground</text>
+<rect x="350" y="485" width="12" height="12" fill="#c0392b" stroke="#000" stroke-width="0.6"/>
 <text x="376" y="495" font-size="11" fill="#03234B">VIN</text>
 <line x1="310" y1="491" x2="300" y2="491" stroke="#b5b5b0" stroke-width="1"/>
-<text x="296" y="495" font-size="12.5" fill="#222222" text-anchor="end">Power in</text>
+<text x="296" y="495" font-size="12.5" fill="#c0392b" text-anchor="end">Power in</text>
 <rect x="342" y="565" width="28" height="166" rx="4" fill="#181818"/>
 <text x="356" y="558" font-size="11" fill="#03234B" text-anchor="middle">CN4</text>
 <rect x="350" y="573" width="12" height="12" fill="#c9c9c9" stroke="#000" stroke-width="0.6"/>
@@ -309,6 +309,10 @@
 <line x1="870" y1="700" x2="886" y2="770" stroke="#b5b5b0"/>
 <text x="890" y="766" font-size="11" fill="#555555">ST morpho CN3/CN15: most remaining I/O</text>
 <text x="890" y="780" font-size="11" fill="#555555">(UM3417 Tables 13-14)</text>
+<rect x="310" y="1170" width="12" height="12" fill="#c0392b" stroke="#000" stroke-width="0.6"/>
+<text x="330" y="1180" font-size="12.5" fill="#222222">power pin (3V3, 5V, VIN, VDDIO, VBAT)</text>
+<rect x="620" y="1170" width="12" height="12" fill="#111111" stroke="#bbbbbb" stroke-width="0.6"/>
+<text x="640" y="1180" font-size="12.5" fill="#222222">ground pin (GND, AGND)</text>
 <text x="310" y="1200" font-size="12.5" fill="#222222">Debug hookup: CN10 USB-C alone carries SWD, RTT, and the VCP; CN1 takes an external probe.</text>
 <text x="310" y="1222" font-size="11" fill="#555555">Arduino V3 header data: UM3417 Rev 3, Table 12.  A0-A5 route through the on-board 3.3V-to-1.8V</text>
 <text x="310" y="1237" font-size="11" fill="#555555">adaptation amplifier; the 1.8V-domain ADC pin is shown.  ARS assignments: see the project pinout.</text>

@@ -37,6 +37,8 @@ MUT = '#555555'
 EXT = '#ffffff'
 EXT_EDGE = '#888888'
 HIL = '#6d28d9'  # distinct from the amber ARS highlights
+PWR = '#c0392b'  # power pins (red, the common pinout convention)
+GND_FILL = '#111111'  # ground pins (black, white-stroked on strips)
 
 # (mark, mcu_pin, func, ars_note)
 CN14 = [
@@ -109,6 +111,10 @@ def build(variant):
     # (UM3417 Rev 3, Figure 15, p.31; sect. 8.2).
     morpho_rows = 19
     ars_cn15 = {3, 5, 31, 33, 38}  # PH9/PC1/PE9/PD0/PA1, Table 13
+    # Supply and ground pins per UM3417 Table 13 (VDDIO*/VBAT count
+    # as supplies; VREFP/IOREF are references and stay plain)
+    morpho_pwr = {'CN3': {5, 6, 10, 16, 18, 24, 31, 33}, 'CN15': {8}}
+    morpho_gnd = {'CN3': {8, 19, 20, 22}, 'CN15': {9, 20, 32}}
     for x, name, foot in ((318, 'CN3', 'CN2'),
                           (BOARD_R - 28, 'CN15', 'CN16')):
         emit(f'<rect x="{x}" y="200" width="20" '
@@ -119,8 +125,16 @@ def build(variant):
                 pin_no = 2 * i + 1 + col
                 hot = (ars_mode and name == 'CN15'
                        and pin_no in ars_cn15)
-                fill = ARS if hot else '#8f8f8f'
-                extra = ' stroke="#000" stroke-width="0.5"' if hot else ''
+                if hot:
+                    fill, stroke = ARS, '#000'
+                elif pin_no in morpho_pwr[name]:
+                    fill, stroke = PWR, '#000'
+                elif pin_no in morpho_gnd[name]:
+                    fill, stroke = GND_FILL, '#bbbbbb'
+                else:
+                    fill, stroke = '#8f8f8f', ''
+                extra = (f' stroke="{stroke}" stroke-width="0.5"'
+                         if stroke else '')
                 emit(f'<rect x="{x + dx}" y="{cy}" width="5.5" '
                      f'height="5.5" fill="{fill}"{extra}/>')
                 if hot:
@@ -153,10 +167,19 @@ def build(variant):
              f'fill="{SILK}" text-anchor="middle">{name}</text>')
         for i, (mark, pin, func, note) in enumerate(rows):
             ars = ars_mode and bool(note)
+            is_gnd = func.startswith('Ground')
+            is_pwr = mark in ('3V3', '5V', 'VIN')
             cy = y0 + i * PITCH + PITCH // 2 - 4
-            fill = ARS if ars else PAD
+            if ars:
+                fill, stroke = ARS, '#000'
+            elif is_pwr:
+                fill, stroke = PWR, '#000'
+            elif is_gnd:
+                fill, stroke = GND_FILL, '#bbbbbb'
+            else:
+                fill, stroke = PAD, '#000'
             emit(f'<rect x="{strip_x + 8}" y="{cy - 6}" width="12" '
-                 f'height="12" fill="{fill}" stroke="#000" '
+                 f'height="12" fill="{fill}" stroke="{stroke}" '
                  f'stroke-width="0.6"/>')
             if side == 'left':
                 emit(f'<text x="{strip_x + 34}" y="{cy + 4}" font-size="11" '
@@ -169,16 +192,37 @@ def build(variant):
             emit(f'<line x1="{ta}" y1="{cy}" x2="{tb}" y2="{cy}" '
                  f'stroke="#b5b5b0" stroke-width="1"/>')
             core = f'{pin}  {func}' if pin else func
-            fillc = ARS_TXT if ars else INK
+            if ars:
+                fillc = ARS_TXT
+            elif is_pwr:
+                fillc = PWR
+            elif is_gnd:
+                fillc = GND_FILL
+            else:
+                fillc = INK
             weight = ' font-weight="bold"' if ars else ''
             suffix = f'  ({note}) *' if ars else ''
             emit(f'<text x="{tx}" y="{cy + 4}" font-size="12.5" '
                  f'fill="{fillc}"{weight} text-anchor="{anchor}">'
                  f'{core}{suffix}</text>')
 
+    cn5_rows = CN5
+    if ars_mode:
+        # Beginner-explicit power wiring: name the loads on the
+        # supply rows instead of drawing more cross-board lines.
+        cn5_rows = []
+        gnd_done = False
+        for mark, pin, func, note in CN5:
+            if mark == '3V3':
+                func = '3.3V out -> mic VCC + amp VDDIO'
+            elif func == 'Ground' and not gnd_done:
+                func = 'Ground -> mic + amp + PVDD common'
+                gnd_done = True
+            cn5_rows.append((mark, pin, func, note))
+
     header(CN14, BOARD_R - 72, 220, 'CN14', 'right')
     header(CN13, BOARD_R - 72, 520, 'CN13', 'right')
-    header(CN5, 342, 300, 'CN5', 'left')
+    header(cn5_rows, 342, 300, 'CN5', 'left')
     header(CN4, 342, 570, 'CN4', 'left')
 
     # ST-LINK zone + USB-C
@@ -274,6 +318,14 @@ def build(variant):
              f'CN3/CN15: most remaining I/O</text>')
         emit(f'<text x="{BOARD_R + 14}" y="780" font-size="11" fill="{MUT}">(UM3417 '
              f'Tables 13-14)</text>')
+        emit(f'<rect x="310" y="1170" width="12" height="12" '
+             f'fill="{PWR}" stroke="#000" stroke-width="0.6"/>')
+        emit(f'<text x="330" y="1180" font-size="12.5" '
+             f'fill="{INK}">power pin (3V3, 5V, VIN, VDDIO, VBAT)</text>')
+        emit(f'<rect x="620" y="1170" width="12" height="12" '
+             f'fill="{GND_FILL}" stroke="#bbbbbb" stroke-width="0.6"/>')
+        emit(f'<text x="640" y="1180" font-size="12.5" '
+             f'fill="{INK}">ground pin (GND, AGND)</text>')
         emit(f'<text x="310" y="1200" font-size="12.5" fill="{INK}">Debug '
              f'hookup: CN10 USB-C alone carries SWD, RTT, and the VCP; '
              f'CN1 takes an external probe.</text>')
@@ -401,6 +453,14 @@ def build(variant):
     emit(f'<text x="330" y="1200" font-size="12.5" fill="{INK}">* '
          f'ARS-assigned signal (provisional, gates G0-G5) -- pinout.md '
          f'is the authority</text>')
+    emit(f'<rect x="900" y="1190" width="12" height="12" '
+         f'fill="{PWR}" stroke="#000" stroke-width="0.6"/>')
+    emit(f'<text x="920" y="1200" font-size="12.5" '
+         f'fill="{INK}">power pin</text>')
+    emit(f'<rect x="1020" y="1190" width="12" height="12" '
+         f'fill="{GND_FILL}" stroke="#bbbbbb" stroke-width="0.6"/>')
+    emit(f'<text x="1040" y="1200" font-size="12.5" '
+         f'fill="{INK}">ground pin</text>')
     emit(f'<text x="310" y="1222" font-size="12.5" fill="{INK}">HIL '
          f'analyzer taps, gate G3 (hil-measurements.md):</text>')
     for lx, letter, desc in (
