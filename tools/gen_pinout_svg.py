@@ -102,15 +102,42 @@ def build(variant):
     emit(f'<rect x="{BOARD_X}" y="{BOARD_Y}" width="{BOARD_W}" '
          f'height="{BOARD_H}" rx="14" fill="{PCB}" stroke="{PCB_EDGE}" '
          f'stroke-width="3"/>')
-    for x, name in ((318, 'CN3'), (BOARD_R - 24, 'CN15')):
-        emit(f'<rect x="{x}" y="200" width="16" height="810" fill="#161616" '
-             f'rx="3"/>')
-        for i in range(31):
-            for dx in (3, 10):
-                emit(f'<rect x="{x + dx}" y="{206 + i * 26}" width="3.5" '
-                     f'height="3.5" fill="#8f8f8f"/>')
-        emit(f'<text x="{x + 8}" y="192" font-size="11" fill="{SILK}" '
+    # ST morpho: the populated 2x19 male headers (CN3/CN15) cover
+    # only the upper half of two full-length through-hole columns;
+    # the lower continuation is the unfitted CN2/CN16 footprint
+    # (UM3417 Rev 3, Figure 15, p.31; sect. 8.2).
+    morpho_rows = 19
+    ars_cn15 = {3, 5, 31, 33, 38}  # PH9/PC1/PE9/PD0/PA1, Table 13
+    for x, name, foot in ((318, 'CN3', 'CN2'),
+                          (BOARD_R - 28, 'CN15', 'CN16')):
+        emit(f'<rect x="{x}" y="200" width="20" '
+             f'height="{morpho_rows * 26 + 10}" fill="#161616" rx="3"/>')
+        for i in range(morpho_rows):
+            cy = 208 + i * 26
+            for col, dx in ((0, 3.5), (1, 11)):
+                pin_no = 2 * i + 1 + col
+                hot = (ars_mode and name == 'CN15'
+                       and pin_no in ars_cn15)
+                fill = ARS if hot else '#8f8f8f'
+                extra = ' stroke="#000" stroke-width="0.5"' if hot else ''
+                emit(f'<rect x="{x + dx}" y="{cy}" width="5.5" '
+                     f'height="5.5" fill="{fill}"{extra}/>')
+                if hot:
+                    emit(f'<text x="{x - 4}" y="{cy + 6}" '
+                         f'font-size="8.5" fill="{ARS_TXT}" '
+                         f'font-weight="bold" text-anchor="end">'
+                         f'{pin_no}</text>')
+        emit(f'<text x="{x + 10}" y="192" font-size="11" fill="{SILK}" '
              f'text-anchor="middle">{name}</text>')
+        foot_y0 = 208 + morpho_rows * 26 + 30
+        for i in range(10):
+            cy = foot_y0 + i * 26
+            for dx in (6, 13.5):
+                emit(f'<circle cx="{x + dx}" cy="{cy}" r="2.6" '
+                     f'fill="none" stroke="#9a9a9a" stroke-width="1"/>')
+        emit(f'<text x="{x + 10}" y="{foot_y0 + 10 * 26 + 6}" '
+             f'font-size="8.5" fill="{MUT}" text-anchor="middle">'
+             f'{foot}</text>')
 
     emit(f'<text x="{BOARD_CX}" y="530" font-size="15" fill="{SILK}" '
          f'text-anchor="middle" font-weight="bold">NUCLEO-N657X0-Q</text>')
@@ -148,8 +175,8 @@ def build(variant):
                  f'fill="{fillc}"{weight} text-anchor="{anchor}">'
                  f'{core}{suffix}</text>')
 
-    header(CN14, BOARD_R - 60, 220, 'CN14', 'right')
-    header(CN13, BOARD_R - 60, 520, 'CN13', 'right')
+    header(CN14, BOARD_R - 72, 220, 'CN14', 'right')
+    header(CN13, BOARD_R - 72, 520, 'CN13', 'right')
     header(CN5, 342, 300, 'CN5', 'left')
     header(CN4, 342, 570, 'CN4', 'left')
 
@@ -240,7 +267,7 @@ def build(variant):
          f'DHCP + SNTP + MQTT/TLS</text>')
 
     if not ars_mode:
-        emit(f'<line x1="{BOARD_R - 8}" y1="770" x2="{BOARD_R + 10}" y2="770" '
+        emit(f'<line x1="{BOARD_R - 6}" y1="700" x2="{BOARD_R + 10}" y2="770" '
              f'stroke="#b5b5b0"/>')
         emit(f'<text x="{BOARD_R + 14}" y="766" font-size="11" fill="{MUT}">ST morpho '
              f'CN3/CN15: most remaining I/O</text>')
@@ -259,7 +286,7 @@ def build(variant):
         return W, out
 
     # ── ARS variant: morpho routing, external chain, HIL taps ──
-    emit(f'<line x1="{BOARD_R - 8}" y1="800" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
+    emit(f'<line x1="{BOARD_R - 6}" y1="700" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
     emit(f'<text x="{BOARD_R + 14}" y="796" font-size="11" fill="{MUT}">morpho CN15 '
          f'is the routing of record for the amp:</text>')
     emit(f'<text x="{BOARD_R + 14}" y="810" font-size="11" fill="{MUT}">pin 3 PH9 SCL, '
