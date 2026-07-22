@@ -22,3 +22,7 @@ target/
 !.claude/skills
 !.claude/agents
 !.claude/rules
+
+# Pi coding harness local state
+.pi/*
+!.pi/rules
