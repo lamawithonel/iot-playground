@@ -11,6 +11,7 @@ built by CI; they run via mise tasks only.
 | `broker/` | Mosquitto MQTT broker container (`mise run broker:start`) |
 | `features/` | Cucumber BDD specs consumed by `smoke-validator/`, split into `mqtt/` and `rtt/` suites |
 | `mqtt-subscriber/` | Host subscriber for captured telemetry |
+| `smoke/` | Per-board smoke suites (`<board>.sh`), dispatched by the `test:smoke` router |
 | `smoke-validator/` | Cucumber-RS smoke/integration validator (tiered durations) |
 | `scripts/` | Shared scripts (TLS cert generation) |
 

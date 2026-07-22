@@ -121,8 +121,17 @@ justified only after Layers 1, 2, and 4 are solid.
 sleep mode correctly, publishes MQTT messages with valid data,
 and handles sensor conditioning windows.
 
-**How it works:** A Cucumber-RS validator (`test/smoke-validator/`)
-orchestrates the entire pipeline:
+**Routing:** Smoke is a test class, not a board feature.
+`mise run test:smoke [<board>...]` resolves boards exactly like
+`mise run build` (arguments, the `BOARDS` pin, or the default
+board) and dispatches each to its suite at `test/smoke/<board>.sh`;
+a board without a suite skips loudly.  The feather suite is the
+Cucumber-RS pipeline described below; the nucleo-n657x0 suite
+RAM-boots the net firmware and asserts the DHCP -> SNTP -> MQTT
+publish/PUBACK chain over RTT.
+
+**How the feather suite works:** A Cucumber-RS validator
+(`test/smoke-validator/`) orchestrates the entire pipeline:
 
 1. Flash debug firmware via probe-rs
 2. Capture RTT output to a log file via `probe-rs run`
@@ -221,12 +230,14 @@ or CMSIS-DAP) connected to the target board.
 ### Layer 4: System Smoke Test
 
 ```sh
-mise run test:smoke
+mise run test:smoke [<board>...]
 ```
 
-Flashes debug firmware, captures RTT output, and validates
-boot milestones via Cucumber-RS.  Uses the standard tier
-(165 seconds, 5-second sample interval).
+Routes each resolved board (arguments, the `BOARDS` pin, or the
+default) to its suite in `test/smoke/`.  The feather suite flashes
+debug firmware, captures RTT output, and validates boot milestones
+via Cucumber-RS at the standard tier (165 seconds, 5-second sample
+interval).
 
 ### Layers 4-5: Tiered Integration Tests
 

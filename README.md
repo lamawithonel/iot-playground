@@ -42,7 +42,9 @@ The pin reaches the primitives too: the first entry's chip (and its
 `--speed` workaround, where one exists) exports as
 `PROBE_RS_CHIP`/`PROBE_RS_SPEED`, which probe-rs reads natively-- so
 bare `probe-rs attach`/`gdb`/`reset` need no flags in a
-mise-activated shell.
+mise-activated shell.  Board-routed test tasks (`test:device`,
+`test:smoke`) follow the pin as well; a board without a given suite
+skips loudly.
 
 ## Overview
 

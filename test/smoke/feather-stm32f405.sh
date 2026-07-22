@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+# Feather STM32F405 smoke suite: boot plus PM conditioning against
+# the SEN66/W5500 pipeline, validated by the Cucumber-RS
+# smoke-validator.  Invoked by the `test:smoke` router
+# (.mise/tasks/test/smoke); duration tiers arrive via
+# SMOKE_TEST_DURATION and SAMPLE_INTERVAL_SECS.
+set -o errexit
+set -o nounset
+set -o pipefail
+
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_repo_root="$(cd "${_script_dir}/../.." && pwd)"
+cd "$_repo_root"
+
+# shellcheck source=.mise/tasks/_lib.sh
+source "${_repo_root}/.mise/tasks/_lib.sh"
+
+# Check for connected debug probe
+_probe_output="$(probe-rs list 2>&1)"
+if echo "$_probe_output" | grep -q 'No probes were found'; then
+	echo '⏭  No debug probe connected — skipping smoke test.' >&2
+	echo '   Connect a J-Link or compatible SWD probe and retry.' >&2
+	exit 0
+fi
+
+echo "🔌 Probe detected:"
+echo "$_probe_output" | sed 's/^/   /'
+echo ""
+
+_board='feather-stm32f405'
+_target="${TARGET:-thumbv7em-none-eabihf}"
+_duration="${SMOKE_TEST_DURATION:-165}"
+_max_errors="${SMOKE_MAX_ERRORS:-5}"
+# Unconditional: this suite IS the feather, and the BOARDS bridge
+# (.mise/env.sh) may have exported another board's chip and speed
+# clamp from the pin's first entry.  A leaked STM32N657/100 kHz
+# pair would misroute probe-rs run entirely.
+export PROBE_RS_CHIP='STM32F405RGTx'
+unset PROBE_RS_SPEED
+
+# Sensor sample interval (seconds).  The default of 5 s
+# captures many data points in the standard tier.  Tiered
+# wrappers (smoke-extended, smoke-full) override this to
+# match realistic deployment intervals.
+export SAMPLE_INTERVAL_SECS="${SAMPLE_INTERVAL_SECS:-5}"
+
+# ── Temp files ───────────────────────────────────────
+
+_rtt_file="/tmp/smoke-rtt-output.$$"
+_msg_file="/tmp/smoke-mqtt-messages.$$"
+_csv_file="/tmp/smoke-mqtt-telemetry-$$.csv"
+: > "$_rtt_file"
+: > "$_msg_file"
+
+_cleanup() {
+	rm -f "$_rtt_file" "$_msg_file"
+}
+trap _cleanup EXIT
+
+# ── Build ────────────────────────────────────────────
+
+echo "🔨 Building firmware and test tools..."
+cargo build \
+	-p "$_board" \
+	--target "$_target"
+
+_elf="target/${_target}/debug/${_board}"
+
+if [ ! -f "$_elf" ]; then
+	echo "ERROR: Expected ELF not found: ${_elf}" >&2
+	exit 1
+fi
+
+# Detect the host triple for building host-side tools.
+_host_target="$(detect_host_target)"
+
+# Build the Cucumber-RS smoke validator on the host.
+echo "   Building smoke-validator..."
+cargo build \
+	--manifest-path "${_repo_root}/test/smoke-validator/Cargo.toml" \
+	--target "$_host_target" \
+	--quiet
+_validator_bin="${_repo_root}/test/smoke-validator/target/${_host_target}/debug/smoke-validator"
+
+# ── Start MQTT subscriber (if broker is up) ──────────
+
+_mqtt_active=false
+_sub_pid=''
+
+if [ -n "${BROKER_HOST_IP:-}" ]; then
+	_sub_bin="${_repo_root}/test/mqtt-subscriber/target/${_host_target}/release/mqtt-subscriber"
+	_ca_cert="${_repo_root}/.local/certs/ca/root.crt"
+
+	if [ ! -f "$_ca_cert" ]; then
+		echo "ℹ️  CA cert not found — MQTT subscriber disabled."
+	else
+		echo "🔨 Building MQTT subscriber..."
+		if cargo build \
+				--manifest-path "${_repo_root}/test/mqtt-subscriber/Cargo.toml" \
+				--target "$_host_target" \
+				--release --quiet 2>/dev/null; then
+			echo "   ✓ Built."
+		else
+			echo "⚠️  MQTT subscriber build failed — MQTT tests will be skipped."
+		fi
+	fi
+
+	if [ -f "$_sub_bin" ] && [ -f "$_ca_cert" ]; then
+		echo "📡 Starting MQTT subscriber (${BROKER_HOST_IP}:${BROKER_PORT:-8883}, TLS)..."
+		MQTT_CA_FILE="$_ca_cert" \
+			"$_sub_bin" "$_msg_file" "$_duration" \
+			2>/dev/null &
+		_sub_pid=$!
+
+		# Give the subscriber a moment to connect.
+		sleep 1
+
+		if kill -0 "$_sub_pid" 2>/dev/null; then
+			_mqtt_active=true
+		else
+			echo "⚠️  MQTT subscriber exited early — MQTT tests will be skipped."
+			_sub_pid=''
+		fi
+	fi
+else
+	echo "ℹ️  BROKER_HOST_IP not set — MQTT subscriber disabled."
+fi
+echo ""
+
+# ── Flash and capture RTT ────────────────────────────
+
+# With more than one probe attached, probe-rs falls into an
+# interactive selection prompt and fails non-interactively.
+# Default to the feather's J-Link; override via PROBE_RS_PROBE.
+export PROBE_RS_PROBE="${PROBE_RS_PROBE:-1366:1020}"
+
+echo "🚀 Flashing and monitoring RTT for ${_duration}s..."
+echo ""
+
+# Capture RTT output to a file; timeout kills probe-rs
+# after the observation window.
+timeout "$_duration" probe-rs run "$_elf" \
+	> "$_rtt_file" 2>&1 || true
+
+echo "── RTT Output ──────────────────────────────────"
+cat "$_rtt_file"
+echo "────────────────────────────────────────────────"
+echo ""
+
+# ── Stop MQTT subscriber ─────────────────────────────
+
+if [ -n "$_sub_pid" ] && kill -0 "$_sub_pid" 2>/dev/null; then
+	kill "$_sub_pid" 2>/dev/null || true
+	wait "$_sub_pid" 2>/dev/null || true
+fi
+
+# ── Pre-validation: correlate streams ────────────────
+# Extract the device's SNTP-synced epoch from RTT output.
+# This is the authoritative wall-clock reference-- it
+# eliminates host/device clock skew from all timestamp
+# comparisons.
+
+_device_epoch=''
+_sntp_match="$(sed -n 's/.*SNTP sync successful: \([0-9][0-9]*\).*/\1/p' \
+	"$_rtt_file" | tail -1)"
+if [ -n "$_sntp_match" ]; then
+	_device_epoch="$_sntp_match"
+fi
+
+# Count RTT-reported publishes for cross-validation with
+# the MQTT message stream.
+_rtt_pub_count="$(grep -c 'Publishing #' "$_rtt_file" || true)"
+
+# Trim stale MQTT messages from the previous firmware
+# session.  The subscriber starts before the flash, so it
+# may capture messages from old firmware.  The last
+# occurrence of msg_id=1 marks the start of the current
+# session.
+_stale_count=0
+if [ "$_mqtt_active" = true ] && [ -s "$_msg_file" ]; then
+	_trim_line="$(grep -n '"msg_id":1,' "$_msg_file" \
+		| tail -1 | cut -d: -f1 || true)"
+	if [ -n "$_trim_line" ] && [ "$_trim_line" -gt 1 ]; then
+		_stale_count=$((_trim_line - 1))
+		_tmp_msg="$(mktemp)"
+		sed "1,${_stale_count}d" "$_msg_file" > "$_tmp_msg"
+		mv "$_tmp_msg" "$_msg_file"
+		echo "ℹ️  Trimmed ${_stale_count} stale message(s) from previous firmware."
+	fi
+fi
+
+# ── Critical failure guards ──────────────────────────
+# These abort before running the validator-- panics and
+# HardFaults make all other test results meaningless.
+
+_pass=true
+
+if grep -qi 'panic' "$_rtt_file"; then
+	echo '❌ FAIL: Panic detected in RTT output.' >&2
+	_pass=false
+fi
+
+if grep -qiE 'hardfault|hard fault' "$_rtt_file"; then
+	echo '❌ FAIL: HardFault detected.' >&2
+	_pass=false
+fi
+
+if [ ! -s "$_rtt_file" ]; then
+	echo '❌ FAIL: No RTT output — device may not have booted.' >&2
+	_pass=false
+fi
+
+_error_count="$(grep -c '\[ERROR\]' "$_rtt_file" || true)"
+if [ "$_error_count" -gt "$_max_errors" ]; then
+	echo "❌ FAIL: ${_error_count} ERROR-level messages exceeds threshold (${_max_errors})." >&2
+	_pass=false
+elif [ "$_error_count" -gt 0 ]; then
+	echo "⚠️  ${_error_count} ERROR-level message(s) in RTT output." >&2
+	grep '\[ERROR\]' "$_rtt_file" | sed 's/^/   /' >&2
+fi
+
+if [ "$_pass" = false ]; then
+	echo "" >&2
+	echo "🔥 Smoke test FAILED: critical failure (see above)." >&2
+	exit 1
+fi
+
+# ── Run Cucumber-RS validator ────────────────────────
+
+echo "── Smoke Validator ─────────────────────────────"
+RTT_LOG_FILE="$_rtt_file" \
+	MQTT_MSG_FILE="$_msg_file" \
+	MQTT_CSV_FILE="$_csv_file" \
+	MQTT_DEVICE_EPOCH="${_device_epoch:-}" \
+	MQTT_RTT_PUBLISH_COUNT="${_rtt_pub_count:-0}" \
+	MQTT_STALE_TRIMMED="${_stale_count:-0}" \
+	SMOKE_TEST_DURATION="$_duration" \
+	SAMPLE_INTERVAL_SECS="${SAMPLE_INTERVAL_SECS}" \
+	"$_validator_bin"
+echo "────────────────────────────────────────────────"
+
+echo ""
+echo "✅ Smoke test PASSED."
