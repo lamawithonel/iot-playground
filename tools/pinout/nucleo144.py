@@ -62,6 +62,11 @@ class Board:
     # defaults match the N6/MB1940 hand-tuned layout; a second board
     # module overrides whichever ones its own manual places
     # differently, instead of the position silently drifting.
+    # ponytail: H753ZI, the second board built on this template, uses
+    # every default below unchanged-- none of the six has been
+    # overridden yet.  Fine to leave for the flexibility it offers,
+    # but a candidate for hardcoding or deletion if a third board
+    # still doesn't need it.
     label_name_y: int = 530
     label_ref_y: int = 548
     mcu_box_y: int = 580
