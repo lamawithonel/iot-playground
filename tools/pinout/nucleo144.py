@@ -125,6 +125,22 @@ class Header:
     ((mark, mcu_pin, func, note), (mark, mcu_pin, func, note)) pairs,
     one pair per physical connector row-- the first tuple is the
     header's inboard pin, the second its outboard pin.
+
+    `note`'s two columns disagree on what a truthy value means.
+    draw_header (columns=1) both highlights the pin and renders `note`
+    inline as "  (note) *"-- the string itself reaches the diagram.
+    _draw_header_2col (columns=2) only tests `bool(note)` to decide
+    whether to highlight; the string is never rendered, because the
+    combined inboard/outboard text line has no slot for it.  A
+    columns=2 caller that passes real note text loses it silently.
+    h753zi.py's own ars overlay works around this today by passing
+    note='ars' as a pure boolean flag and writing the actual text
+    ("SPI3_NSS (DAC1_OUT1)", "ADC12_INP15 loopback") into `func`
+    instead, where it always renders.  A future columns=2 board that
+    needs both a highlight and separate note text should extend
+    _draw_header_2col to render it, or assert `not note or
+    columns == 1` at header-build time rather than repeat the
+    workaround.
     """
 
     designator: str
