@@ -96,11 +96,13 @@
 <rect x="274" y="270" width="34" height="54" rx="3" fill="#8a8a8a"/>
 <text x="291.0" y="337" font-size="9" fill="#ffffff" text-anchor="middle">USB-C</text>
 <rect x="276" y="360" width="20" height="16" rx="3" fill="#111111"/>
+<text x="286.0" y="389" font-size="9" fill="none" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" text-anchor="middle">JST 2-pin (BAT)</text>
 <text x="286.0" y="389" font-size="9" fill="#222222" text-anchor="middle">JST 2-pin (BAT)</text>
 <circle cx="356" cy="286" r="11" fill="#3a3a3a" stroke="#111"/>
 <text x="356" y="310" font-size="9" fill="#ffffff" text-anchor="middle">RST</text>
 <text x="280" y="150" font-size="13" fill="#222222" font-weight="bold">feather-stm32f405/-- Air-Quality Sensor Node: full pin map</text>
 <text x="280" y="166" font-size="11" fill="#555555">Amber ring + bold + "*": firmware-verified.  Muted, no ring: physically wired, not yet driven by any firmware module.</text>
+<text x="280" y="182" font-size="11" fill="#555555">flash + attach: mise run flash feather-stm32f405</text>
 <text x="560" y="685" font-size="10.5" fill="#555555">on-board, position not manual-verified (pin identity only, SRS 3.2):</text>
 <rect x="560" y="695" width="110" height="34" rx="4" fill="#6b6b6b" stroke="#333" stroke-width="1"/>
 <text x="615" y="710" font-size="9.5" fill="#eeeeee" text-anchor="middle">NeoPixel</text>

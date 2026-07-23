@@ -224,8 +224,16 @@ def build(variant):
                   f'font-size="12.5" fill="{svg.INK}">Debug: Segger '
                   f'J-Link over SWD, unpopulated 2x5 pad on the PCB '
                   f'bottom (product guide p.9).</text>')
+        doc.emit(f'<text x="{board.x}" y="{board.y - 30}" '
+                  f'font-size="11" fill="{svg.MUT}">flash + attach: '
+                  f'mise run flash feather-stm32f405</text>')
+        # y = board.b + 26, not + 20: the bottom row's own pin labels
+        # baseline at board.b + 22 (draw_pin_row's label_dy for a
+        # 45px-pitch, 2.00in-wide board)-- a + 20 box top clipped
+        # through "Rst"/"3.3V"/"Gnd" (confirmed in a 2x render); + 26
+        # clears the baseline with a few px to spare.
         t.draw_bottom_side_note(
-            doc, board.x, board.b + 20, 260, 42,
+            doc, board.x, board.b + 26, 260, 42,
             ['SWD debug (2x5 pad, unpopulated)',
              'bottom of PCB -- primary debug path'])
         doc.emit(f'<text x="{board.x}" y="{board.b + 84}" '
@@ -258,6 +266,9 @@ def build(variant):
               f'fill="{svg.MUT}">Amber ring + bold + "*": firmware-'
               f'verified.  Muted, no ring: physically wired, not yet '
               f'driven by any firmware module.</text>')
+    doc.emit(f'<text x="{board.x}" y="{board.y - 38}" font-size="11" '
+              f'fill="{svg.MUT}">flash + attach: mise run flash '
+              f'feather-stm32f405</text>')
 
     # On-board fixtures with no manual-verified exact PCB position--
     # placed near the MCU as a cluster (same _draw_onboard_fixed the

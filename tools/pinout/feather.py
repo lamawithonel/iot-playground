@@ -220,8 +220,22 @@ def draw_fixture(doc, f):
     if f.kind == 'conn':
         doc.emit(f'<rect x="{f.x}" y="{f.y}" width="{f.w}" height="{f.h}" '
                  f'rx="3" fill="{f.fill}"/>')
-        doc.emit(f'<text x="{f.x + f.w / 2}" y="{f.y + f.h + 13}" '
-                 f'font-size="9" fill="{f.label_fill or PCB_SILK}" '
+        lx, ly = f.x + f.w / 2, f.y + f.h + 13
+        if f.label_fill:
+            # A caller-overridden (dark-ink) label means the fixture's
+            # label overhangs the board edge (feather_f405._fixtures'
+            # JST label docstring)-- its middle-anchored text can
+            # straddle the PCB/page-background boundary, landing dark
+            # ink on the dark PCB for the half that does not overhang.
+            # A light halo behind the ink keeps that half legible
+            # without changing anything on the page-background half,
+            # where a white halo against white is invisible.
+            doc.emit(f'<text x="{lx}" y="{ly}" font-size="9" '
+                     f'fill="none" stroke="{PCB_SILK}" stroke-width="3" '
+                     f'stroke-linejoin="round" text-anchor="middle">'
+                     f'{f.label}</text>')
+        doc.emit(f'<text x="{lx}" y="{ly}" font-size="9" '
+                 f'fill="{f.label_fill or PCB_SILK}" '
                  f'text-anchor="middle">{f.label}</text>')
     elif f.kind == 'button':
         doc.emit(f'<circle cx="{f.x}" cy="{f.y}" r="{f.r}" fill="{f.fill}" '
