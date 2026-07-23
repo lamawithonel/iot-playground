@@ -246,7 +246,10 @@ def build(variant):
     project_mode = variant == 'ars'
     board = _board()
     W = board.r + 340
-    H = 1270
+    # ars gets one extra legend row (the amber loopback swatch below,
+    # matching n657x0.py's own amber-decode line)-- board's own H
+    # stays 1270 so the base-variant SVG is untouched by this.
+    H = 1300 if project_mode else 1270
     doc = svg.SvgDoc(W, H)
 
     svg.open_doc(doc)
@@ -340,6 +343,19 @@ def build(variant):
              f'fill="{svg.MUT}">carry power + SDMMC and A0-A5/CAN.  '
              f'Morpho CN11/CN12: Table 22, both fully populated '
              f'(no unfitted footprint).</text>')
+
+    if project_mode:
+        # Legend parity (Phase 4 review): every other amber element on
+        # this diagram (pads, morpho pin numbers 32/37, the "PLANNED
+        # loopback" margin labels) reads off this one swatch-- N6-ars
+        # and Feather-project both decode their own amber the same
+        # way; H753ZI-ars was the one variant with 23 amber elements
+        # and no key.
+        doc.emit(f'<rect x="{board.x}" y="1275" width="12" height="12" '
+                 f'fill="{svg.HL}" stroke="#000" stroke-width="0.6"/>')
+        doc.emit(f'<text x="{board.x + 20}" y="1285" font-size="12.5" '
+                 f'fill="{svg.INK}">PLANNED ARS loopback pins-- not '
+                 f'yet wired</text>')
 
     if not project_mode:
         doc.emit('</svg>')
