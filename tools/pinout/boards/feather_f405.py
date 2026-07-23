@@ -317,7 +317,17 @@ def build(variant):
                   f'fill="{color}"{weight}>{dev}{star}</text>')
         doc.emit(f'<text x="{board.x + 210}" y="{ly}" font-size="11" '
                   f'fill="{svg.MUT}">{where}</text>')
-    footer_y = legend_y + 20 + len(rows) * 16 + 12
+    # Power/ground swatches, carried over from the base variant
+    # (superset doctrine): draw_pin_row colors Bat/En/USB/3.3V and Gnd
+    # pads red/black unconditionally in both variants, so the project
+    # diagram needs its own decode-- without it, this variant's pads
+    # would be undecoded color where the base variant's are not.
+    swatch_y = legend_y + 20 + len(rows) * 16 + 12
+    _swatch(doc, board.x, swatch_y, svg.PWR, '#000',
+            'power pin (Bat, En, USB, 3.3V)')
+    _swatch(doc, board.x + 260, swatch_y, svg.GND_FILL, '#bbbbbb',
+            'ground pin (Gnd)')
+    footer_y = swatch_y + 26
     doc.emit(f'<text x="{board.x}" y="{footer_y}" font-size="11" '
               f'fill="{svg.MUT}">Full pin data: '
               f'system_requirements.md section 3.  Module map: '
