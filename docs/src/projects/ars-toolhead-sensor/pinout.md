@@ -15,7 +15,10 @@ analyzer connections from
 [`hil-measurements.md`](./hil-measurements.md).  The [Pin
 Map](#pin-map) table remains the authority on every disagreement;
 the base-board diagram (debug hookup only, no project wiring)
-lives on the [board page](../../boards/nucleo-n657x0.md).
+lives on the [board page](../../boards/nucleo-n657x0.md).  The
+NUCLEO-H753ZI's own planned DAC/ADC loopback bench is a separate
+board, not part of this pin map; it is diagrammed in
+[`hil-measurements.md`](./hil-measurements.md#planned-h753zi-loopback-measurements).
 
 ![ARS hookup: NUCLEO-N657X0-Q with peripheral wiring and HIL taps](nucleo-n657x0-ars-pinout.svg)
 
