@@ -4,6 +4,7 @@
 target/
 *.hex
 *.local.toml
+__pycache__/
 
 # mdBook build output
 **/docs/book/
