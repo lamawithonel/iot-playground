@@ -40,6 +40,25 @@ HIL = '#6d28d9'  # distinct from the amber ARS highlights
 PWR = '#c0392b'  # power pins (red, the common pinout convention)
 GND_FILL = '#111111'  # ground pins (black, white-stroked on strips)
 
+# ST morpho per-pin names (UM3417 Rev 3, Table 13).  Odd pins are
+# the inner column on the top view.  HSDM/HSDP follow the board's
+# own silk abbreviation for OTG_HSDM_CON/OTG_HSDP_CON.
+CN3_ODD = ['NC', 'PC2', 'VDDIO', 'BOOT0', 'PH0', 'PH1', 'PC4',
+           'PC5', 'PC0', 'GND', 'PE4', 'PC13', 'PC3', 'PC15',
+           'PC14', 'VDDIO5', 'VBAT', 'BOOT1', 'PC8']
+CN3_EVEN = ['HSDM', 'HSDP', '5V', 'GND', 'VDDIO4', 'IOREF', 'NRST',
+            '3V3', '5V', 'GND', 'GND', 'VIN', 'PH4', 'PF5', 'PC10',
+            'PF6', 'PA2', 'PC12', 'PH2']
+CN15_ODD = ['PE12', 'PH9', 'PC1', 'VREFP', 'GND', 'PE15', 'PG1',
+            'PG2', 'PA3', 'PD7', 'PD12', 'PE11', 'PD5', 'PE10',
+            'PE0', 'PE9', 'PD0', 'PD8', 'PD9']
+CN15_EVEN = ['PE6', 'PE5', 'PD6', '5V_STLK', 'PB2', 'PB3', 'PB8',
+             'PB9', 'PB14', 'GND', 'PE7', 'PE1', 'PE14', 'PE13',
+             'PE2', 'AGND', 'PD10', 'PD11', 'PA1']
+PWR_NAMES = {'5V', '3V3', 'VIN', 'VDDIO', 'VDDIO4', 'VDDIO5',
+             'VBAT', '5V_STLK'}
+GND_NAMES = {'GND', 'AGND'}
+
 # (mark, mcu_pin, func, ars_note)
 CN14 = [
     ('D15', 'PH9', 'I2C1_SCL', 'amp SCL'),
@@ -119,11 +138,15 @@ def build(variant):
     # as supplies; VREFP/IOREF are references and stay plain)
     morpho_pwr = {'CN3': {5, 6, 10, 16, 18, 24, 31, 33}, 'CN15': {8}}
     morpho_gnd = {'CN3': {8, 19, 20, 22}, 'CN15': {9, 20, 32}}
+    hil_violet = {'CN3': {23, 14}}  # PC13 (ch H), NRST (ch G)
+    morpho_names = {'CN3': (CN3_ODD, CN3_EVEN),
+                    'CN15': (CN15_ODD, CN15_EVEN)}
     for x, name, foot in ((316, 'CN3', 'CN2'),
                           (BOARD_R - 50, 'CN15', 'CN16')):
         # Body width holds two pin columns one PITCH apart
         emit(f'<rect x="{x}" y="{G0 - 13}" width="34" '
              f'height="{morpho_rows * PITCH}" fill="#161616" rx="3"/>')
+        odd_names, even_names = morpho_names[name]
         for i in range(morpho_rows):
             cyc = G0 + i * PITCH
             for col, dx in ((0, 6.75 - 2.75), (1, 27.25 - 2.75)):
@@ -149,16 +172,42 @@ def build(variant):
                          f'font-size="8" fill="{ARS}" '
                          f'font-weight="bold" text-anchor="middle">'
                          f'{pin_no}</text>')
+            # Per-row silk label inboard, odd/even, each name
+            # colored by role; unused names light and normal weight
+            spans = []
+            for col, nm in ((0, odd_names[i]), (1, even_names[i])):
+                pin_no = 2 * i + 1 + col
+                if ars_mode and name == 'CN15' and pin_no in ars_cn15:
+                    c, w = ARS_TXT, ' font-weight="bold"'
+                elif ars_mode and pin_no in hil_violet.get(name, ()):
+                    c, w = HIL, ' font-weight="bold"'
+                elif nm in PWR_NAMES:
+                    c, w = PWR, ''
+                elif nm in GND_NAMES:
+                    c, w = GND_FILL, ''
+                else:
+                    c, w = '#9a9a94', ''
+                spans.append(f'<tspan fill="{c}"{w}>{nm}</tspan>')
+            row_lbl = (spans[0]
+                       + '<tspan fill="#c4c4be">/</tspan>'
+                       + spans[1])
+            if name == 'CN3':
+                emit(f'<text x="{x + 38}" y="{cyc + 3}" '
+                     f'font-size="7.5">{row_lbl}</text>')
+            else:
+                emit(f'<text x="{x - 4}" y="{cyc + 3}" '
+                     f'font-size="7.5" text-anchor="end">'
+                     f'{row_lbl}</text>')
         emit(f'<text x="{x + 17}" y="{G0 - 19}" font-size="11" '
              f'fill="{SILK}" text-anchor="middle">{name}</text>')
         # The through-hole grid continues without a break; only the
         # soldered header ends (UM3417 Figure 15)
-        for i in range(15):
+        for i in range(17):
             cyc = G0 + (morpho_rows + i) * PITCH
             for dx in (6.75, 27.25):
                 emit(f'<circle cx="{x + dx}" cy="{cyc}" r="2.6" '
                      f'fill="none" stroke="#9a9a9a" stroke-width="1"/>')
-        emit(f'<text x="{x + 17}" y="{G0 + (morpho_rows + 15) * PITCH}" '
+        emit(f'<text x="{x + 17}" y="{G0 + (morpho_rows + 17) * PITCH}" '
              f'font-size="8.5" fill="{MUT}" text-anchor="middle">'
              f'{foot}</text>')
 
@@ -210,6 +259,8 @@ def build(variant):
                 fillc = PWR
             elif is_gnd:
                 fillc = GND_FILL
+            elif ars_mode:
+                fillc = '#9a9a94'  # unused: lighter, normal weight
             else:
                 fillc = INK
             weight = ' font-weight="bold"' if ars else ''
@@ -232,10 +283,10 @@ def build(variant):
                 gnd_done = True
             cn5_rows.append((mark, pin, func, note))
 
-    header(CN14, BOARD_R - 82, 1, 'CN14', 'right')
-    header(CN13, BOARD_R - 82, 11, 'CN13', 'right', title='bottom')
-    header(cn5_rows, 358, 2, 'CN5', 'left')
-    header(CN4, 358, 12, 'CN4', 'left')
+    header(CN14, BOARD_R - 160, 0, 'CN14', 'right')
+    header(CN13, BOARD_R - 160, 11, 'CN13', 'right', title='bottom')
+    header(cn5_rows, 435, 4, 'CN5', 'left')
+    header(CN4, 435, 13, 'CN4', 'left')
 
     # ST-LINK zone + USB-C
     emit(f'<rect x="{BOARD_CX - 30}" y="58" width="60" height="22" rx="6" fill="#3a3a3a"/>')
@@ -260,7 +311,7 @@ def build(variant):
     emit(f'<text x="{BOARD_R - 45}" y="172" font-size="9" fill="{SILK}" '
          f'text-anchor="middle">LEDs</text>')
 
-    for x, name in ((430, 'JP1'), (462, 'JP2')):
+    for x, name in ((370, 'JP1'), (402, 'JP2')):
         emit(f'<rect x="{x}" y="210" width="20" height="44" rx="3" '
              f'fill="#161616"/>')
         emit(f'<rect x="{x + 5}" y="216" width="10" height="14" '
@@ -346,7 +397,7 @@ def build(variant):
              f'through the on-board 3.3V-to-1.8V</text>')
         emit(f'<text x="310" y="1237" font-size="11" fill="{MUT}">'
              f'adaptation amplifier; the 1.8V-domain ADC pin is shown.  '
-             f'ARS assignments: see the project pinout.</text>')
+             f'Morpho rows: odd/even pin names, Table 13.</text>')
         emit('</svg>')
         return W, out
 
@@ -437,7 +488,7 @@ def build(variant):
          f'3/5/33)</text>')
     # Mic AUD up the clear left margin into the A0 row; heads only
     # on the final segment, matching the PVDD lane
-    a0_y = G0 + 12 * PITCH  # CN4 A0 row
+    a0_y = G0 + 13 * PITCH  # CN4 A0 row
     emit('<line x1="165" y1="740" x2="80" y2="740" stroke="#666666" '
          'stroke-width="1.6"/>')
     emit(f'<line x1="80" y1="740" x2="80" y2="{a0_y}" stroke="#666666" '
@@ -457,9 +508,9 @@ def build(variant):
     # at morpho CN3 pin 23, where PC13 is probeable (Table 13)
     hil_dig(1100, d3_y, 'E')
     hil_dig(1100, G0 + 16 * PITCH, 'F')
-    hil_dig(150, G0 + 4 * PITCH, 'G')
-    hil_dig(280, G0 + 11 * PITCH, 'H')
-    emit(f'<line x1="290" y1="{G0 + 11 * PITCH}" x2="316" '
+    hil_dig(150, G0 + 6 * PITCH, 'G')
+    hil_dig(270, G0 + 12 * PITCH, 'H')
+    emit(f'<line x1="280" y1="{G0 + 12 * PITCH - 4}" x2="316" '
          f'y2="{G0 + 11 * PITCH}" stroke="#b5b5b0"/>')
     hil_tap(BOARD_R + 170, 746, 'C')
     hil_tap(80, 615, 'D')
@@ -520,7 +571,7 @@ def build(variant):
     emit(f'<text x="310" y="1264" font-size="11" fill="{MUT}">Arduino V3 '
          f'header data: UM3417 Rev 3, Table 12.  A0-A5 route through the '
          f'on-board 3.3V-to-1.8V adaptation amplifier; the 1.8V-domain '
-         f'ADC pin is shown.</text>')
+         f'ADC pin is shown.  Morpho rows: odd/even names, Table 13.</text>')
     emit('</svg>')
     return W, out
 

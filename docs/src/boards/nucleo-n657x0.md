@@ -218,9 +218,10 @@ Notes:
   I2C1 (PC1/PH9), but only with solder-bridge changes (SB2/SB4
   ON, SB3/SB5 OFF); D15/D14 expose the same I2C1 pins with no
   bridges.
-- The ST morpho headers (CN2/CN3/CN15/CN16) break out most
-  remaining STM32 I/Os and are not reproduced pin-by-pin; see
-  UM3417 Tables 13-14.
+- The ST morpho headers CN3/CN15 carry per-row pin names on the
+  diagram (odd/even, UM3417 Table 13), matching the board's own
+  silk.  The unfitted CN2/CN16 footprints below them are drawn but
+  not named; see UM3417 Table 14.
 
 Authoritative source:
 [`pinout.md`](../projects/ars-toolhead-sensor/pinout.md)-- read it
