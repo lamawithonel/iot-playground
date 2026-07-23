@@ -35,7 +35,7 @@ unlabeled pad to resolve.
 
 from dataclasses import dataclass, field
 
-from .svg import GND_FILL, HL, HL_TXT, MUT, PWR, ext_box
+from .svg import GND_FILL, HL, HL_TXT, INK, MUT, PWR, ext_box
 
 # Feather boards are blue-PCB-with-white-silk, the opposite of the
 # Nucleo-144 family's white-PCB-with-blue-silk-- so this template
@@ -133,6 +133,11 @@ class Fixture:
     h: int = 0
     r: int = 0
     fill: str = '#3a3a3a'
+    # White silk (the default) only reads where the fixture's own
+    # label sits over the dark PCB fill.  A fixture whose label
+    # overhangs the board edge onto the page background needs dark
+    # ink instead (see feather_f405._fixtures' JST label).
+    label_fill: str = ''
 
 
 def draw_board_rect(doc, board):
@@ -161,18 +166,28 @@ def draw_board_label(doc, board):
 def draw_pin_row(doc, board, row):
     y = board.y if row.side == 'top' else board.b
     pad_r = board.pitch * 0.28
-    label_dy = -10 if row.side == 'top' else 14
+    away = -1 if row.side == 'top' else 1
+    # The silk name is drawn outboard of the pad, on the page
+    # background-- not inboard on the PCB, where the real board prints
+    # it in white silk (module docstring)-- so it needs dark ink
+    # instead of a pad-matching fill, and needs to clear the pad
+    # circle entirely rather than straddle its edge.  The clearance
+    # differs by direction: a top label's descender dips back toward
+    # the pad; a bottom label's ascender, which reaches further at
+    # this font size, does the same.
+    label_dy = away * (pad_r + (3 if row.side == 'top' else 9))
     x0 = board.x + row.start_in / board.width_in * board.w
+    last_note_i, tier = None, 0
     for i, name in enumerate(row.names):
         cx = x0 + i * board.pitch
         if name is None:
-            fill, stroke, txt, txt_fill = '#5a5a5a', '#222', '?', '#9a9a94'
+            fill, stroke, txt = '#5a5a5a', '#222', '?'
         elif name in PWR_NAMES:
-            fill, stroke, txt, txt_fill = PWR, '#000', name, PWR
+            fill, stroke, txt = PWR, '#000', name
         elif name in GND_NAMES:
-            fill, stroke, txt, txt_fill = GND_FILL, '#bbbbbb', name, GND_FILL
+            fill, stroke, txt = GND_FILL, '#bbbbbb', name
         else:
-            fill, stroke, txt, txt_fill = '#c9c9c9', '#000', name, PCB_SILK
+            fill, stroke, txt = '#c9c9c9', '#000', name
         doc.emit(f'<circle cx="{cx}" cy="{y}" r="{pad_r}" fill="{fill}" '
                  f'stroke="{stroke}" stroke-width="0.8"/>')
         is_impl = name in row.impl
@@ -180,10 +195,19 @@ def draw_pin_row(doc, board, row):
             doc.emit(f'<circle cx="{cx}" cy="{y}" r="{pad_r + 2.2}" '
                      f'fill="none" stroke="{HL}" stroke-width="1.4"/>')
         doc.emit(f'<text x="{cx}" y="{y + label_dy}" font-size="9.5" '
-                 f'fill="{txt_fill}" text-anchor="middle">{txt}</text>')
+                 f'fill="{INK}" text-anchor="middle">{txt}</text>')
         note = row.notes.get(name)
         if note:
-            note_dy = label_dy + (-11 if row.side == 'top' else 11)
+            # Stagger onto a second tier only when the previous named
+            # pin also carried a note-- adjacent middle-anchored notes
+            # at this 45 px pitch otherwise collide (e.g. the bottom
+            # row's "PB14 MISO"/"PB15 MOSI", or B0's long
+            # "BOOT0->3V3+RST" overwriting TX's "PB10 CS").  An
+            # isolated note, with nothing adjacent to collide with,
+            # stays on the near tier, closest to its pin.
+            tier = 0 if last_note_i != i - 1 else 1 - tier
+            last_note_i = i
+            note_dy = label_dy + away * (11 + tier * 9)
             color = HL_TXT if is_impl else MUT
             weight = ' font-weight="bold"' if is_impl else ''
             suffix = ' *' if is_impl else ''
@@ -197,14 +221,18 @@ def draw_fixture(doc, f):
         doc.emit(f'<rect x="{f.x}" y="{f.y}" width="{f.w}" height="{f.h}" '
                  f'rx="3" fill="{f.fill}"/>')
         doc.emit(f'<text x="{f.x + f.w / 2}" y="{f.y + f.h + 13}" '
-                 f'font-size="9" fill="{PCB_SILK}" text-anchor="middle">'
-                 f'{f.label}</text>')
+                 f'font-size="9" fill="{f.label_fill or PCB_SILK}" '
+                 f'text-anchor="middle">{f.label}</text>')
     elif f.kind == 'button':
         doc.emit(f'<circle cx="{f.x}" cy="{f.y}" r="{f.r}" fill="{f.fill}" '
                  f'stroke="#111"/>')
         doc.emit(f'<text x="{f.x}" y="{f.y + f.r + 13}" font-size="9" '
                  f'fill="{PCB_SILK}" text-anchor="middle">{f.label}</text>')
     elif f.kind == 'led':
+        # ponytail: no board module constructs Fixture(kind='led')--
+        # the Feather NeoPixel ended up in _draw_onboard_fixed's boxes
+        # instead (feather_f405.py).  Dead branch; delete at next
+        # touch if it still has no caller.
         doc.emit(f'<circle cx="{f.x}" cy="{f.y}" r="{f.r}" fill="{f.fill}" '
                  f'stroke="#111" stroke-width="0.8"/>')
         doc.emit(f'<text x="{f.x}" y="{f.y + f.r + 13}" font-size="9" '

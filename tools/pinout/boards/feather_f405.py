@@ -151,13 +151,19 @@ def _rows(project):
 def _fixtures(board):
     # x values overlap the board's left edge rather than floating off
     # it entirely: draw_fixture's label sits below the fixture rect,
-    # and needs the dark PCB fill (not the page background) behind
-    # it for the template's white PCB_SILK label text to read.
+    # and needs the dark PCB fill (not the page background) behind it
+    # for the template's white PCB_SILK label text to read.  That
+    # holds for USB-C (its label overhangs the edge by only a few px)
+    # and RST (fully inboard), but not for the JST label below-- at 16
+    # characters it runs wider than this fixture sits inboard of the
+    # edge, so most of it lands on the page background and needs dark
+    # ink instead (label_fill=svg.INK).
     return [
         t.Fixture(kind='conn', x=board.x - 6, y=board.y + 50,
                    w=34, h=54, label='USB-C', fill='#8a8a8a'),
         t.Fixture(kind='conn', x=board.x - 4, y=board.y + 140,
-                   w=20, h=16, label='JST 2-pin (BAT)', fill='#111111'),
+                   w=20, h=16, label='JST 2-pin (BAT)', fill='#111111',
+                   label_fill=svg.INK),
         t.Fixture(kind='button', x=board.x + 76, y=board.y + 66,
                    r=11, label='RST', fill='#3a3a3a'),
     ]
@@ -214,7 +220,7 @@ def build(variant):
         # Base-board doctrine: generic pin names, debug + DFU hookup
         # only, no peripheral wiring (n657x0.py's board/ars split is
         # the model this repo already uses).
-        doc.emit(f'<text x="{board.x}" y="{board.y - 34}" '
+        doc.emit(f'<text x="{board.x}" y="{board.y - 46}" '
                   f'font-size="12.5" fill="{svg.INK}">Debug: Segger '
                   f'J-Link over SWD, unpopulated 2x5 pad on the PCB '
                   f'bottom (product guide p.9).</text>')
@@ -245,10 +251,10 @@ def build(variant):
     # Captions sit well above the top row's own per-pin function
     # labels (drawn at board.y - 21 by draw_pin_row's note offset)--
     # 40+ px of clearance avoids the two overlapping.
-    doc.emit(f'<text x="{board.x}" y="{board.y - 58}" font-size="13" '
+    doc.emit(f'<text x="{board.x}" y="{board.y - 70}" font-size="13" '
               f'fill="{svg.INK}" font-weight="bold">feather-stm32f405'
               f'/-- Air-Quality Sensor Node: full pin map</text>')
-    doc.emit(f'<text x="{board.x}" y="{board.y - 42}" font-size="11" '
+    doc.emit(f'<text x="{board.x}" y="{board.y - 54}" font-size="11" '
               f'fill="{svg.MUT}">Amber ring + bold + "*": firmware-'
               f'verified.  Muted, no ring: physically wired, not yet '
               f'driven by any firmware module.</text>')
