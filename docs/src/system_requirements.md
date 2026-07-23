@@ -103,30 +103,30 @@ toolhead-sensor project is documented separately under
 
 ### 3.1 Pin Assignments (CRITICAL - DO NOT MODIFY)
 
-```
-LEFT SIDE (16-Pin Header)             BOARD          RIGHT SIDE (12-Pin Header)
-==============================    Physical Layout    ====================================
-                                       .....
-Device         Func  Pin  Mark     .--|     |--.     Mark  Pin   Func    Device
--------------  ----- ---- ----     |  |USB-C|  |     ----  ----  -----  -----------------
-                                   |  |     |  |
-               Reset NRST RST   o--|  '-----'  |
-               3.3V       3V3   o--|           |
-               3.3V       3V3   o--|           |
-               GND   GND  GND   o--|           |--o  VBAT  VBAT  Power
-eInk display   BUSY  PA4  (A0)  o--|           |--o  EN    EN    Enable
-eInk SPI       SCK   PA5  (A1)  o--|           |--o  VBUS  VBUS  USB 5V
-eInk SPI       MISO  PA6  A2    o--|           |--o  13    PC1   LED    On-board red LED
-eInk SPI       MOSI  PA7  A3    o--|           |--o  12    PC2   IRQ    WIZnet W5500
-eInk display   ECS   PC4  A4    o--|           |--o  11    PC3   Reset  WIZnet W5500
-eInk display   D/C   PC5  A5    o--|           |--o  10    PB9   TX     CAN1
-WIZnet W5500   SCK   PB13 SCK   o--|           |--o  9     PB8   RX     CAN1
-WIZnet W5500   MISO  PB14 MO    o--|           |--o  6     PC6   CS     WIZnet W5500
-WIZnet W5500   MOSI  PB15 MI    o--|           |--o  5     PC7   Reset  eInk display
-eInk SRAM      SCS   PB11 RX    o--|           |--o  SCL   PB6   SCL    I2C (SEN66, etc.)
-eInk microSD   SDCS  PB10 TX    o--|           |--o  SDA   PB7   SDA    I2C (SEN66, etc.)
-                                   '-----------'
-```
+The diagram below is the flagship connected-device app's full pin map: every
+physically-wired header pin, with its silk mark, MCU pin, and device.  Amber
+ring + bold + "*" marks a firmware-verified signal (W5500 Ethernet, the
+SEN66 sensor, the on-board LED, and the BOOT0/RESET DFU fallback-- see
+`boards/feather-stm32f405/AGENTS.md`'s module map); muted, no ring marks a
+pin that is physically wired per this section but not yet driven by any
+firmware module (the SSD1681 e-ink display, the 23LC1024 SRAM, the CAN1
+transceiver, and the e-ink display's own on-board microSD).  Section
+[3.2](#32-peripheral-pin-map) is the same data in table form and is the
+authority on any disagreement.
+
+![Feather STM32F405 full pin map: verified vs. present-only peripherals](boards/feather-stm32f405-project-pinout.svg)
+
+Header sizes: the bottom (left-side) header is 15 pins, not 16-- one 3.3V
+pad, not two, plus BOOT0 (B0), which has no dedicated button on this board
+(jumper B0 to 3.3V, then press RST or power-cycle to enter the DFU
+bootloader).  A prior version of this section's ASCII diagram listed a
+duplicate 3.3V row and omitted BOOT0 entirely; every MCU-pin-to-function
+assignment below is unchanged from that version, only the pin count and the
+BOOT0 addition are corrected, cross-checked against a 600 dpi render of the
+Adafruit product guide's own pinout photo (p.5) and its DFU bootloader
+instructions (p.34).  The base-board diagram (debug hookup and DFU entry
+point only, no peripheral wiring) lives on the
+[board page](boards/feather-stm32f405.md#pinout).
 
 ### 3.2 Peripheral Pin Map
 

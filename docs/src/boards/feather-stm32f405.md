@@ -16,6 +16,17 @@ Sensirion SEN66 environmental sensor (PM, CO2, VOC, NOx,
 temperature, humidity) over I2C.  Debug probe: Segger J-Link over
 SWD.
 
+## Pinout
+
+This is the base-board diagram: generic header names, the debug hookup
+(SWD, unpopulated 2x5 pad), and the DFU entry point only-- no peripheral
+wiring.  The full pin map, with every peripheral's wiring and which of
+them firmware actually drives today, replaces the ASCII diagram in
+[System Requirements, section 3](../system_requirements.md), which wins
+on any disagreement.
+
+![Feather STM32F405 base-board pinout and debug hookup](feather-stm32f405-pinout.svg)
+
 ## What It Does
 
 An RTIC 2.x application that reads the SEN66 over I2C and publishes
