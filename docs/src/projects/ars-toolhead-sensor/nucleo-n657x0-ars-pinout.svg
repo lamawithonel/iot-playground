@@ -377,6 +377,30 @@
 <text x="296" y="232" font-size="11" fill="#555555" text-anchor="end">boot; JP1 + CN9 stay at defaults.</text>
 <text x="296" y="246" font-size="11" fill="#555555" text-anchor="end">BOOT latches at reset-- power-cycle</text>
 <text x="296" y="260" font-size="11" fill="#555555" text-anchor="end">after moving a cap.</text>
+<rect x="745" y="162" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="745" y="172" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="753" y="162" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="753" y="172" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="761" y="162" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="761" y="172" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="769" y="162" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="769" y="172" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="777" y="162" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="777" y="172" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="785" y="162" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="785" y="172" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="793" y="162" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="793" y="172" width="6" height="6" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<text x="772" y="191" font-size="9" fill="#03234B" text-anchor="middle">CN12</text>
+<rect x="757" y="213" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="757" y="229" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<text x="753" y="237" font-size="7" fill="#03234B" text-anchor="end">1</text>
+<text x="761" y="251" font-size="9" fill="#03234B" text-anchor="middle">JP3</text>
+<text x="761" y="263" font-size="7.5" fill="#03234B" text-anchor="middle">OFF</text>
+<text x="890" y="160" font-size="11" fill="#555555">CN12 power test (UM3417 Table 7/8):</text>
+<text x="890" y="174" font-size="11" fill="#555555">14-pin, always fitted, ammeter tap</text>
+<text x="890" y="188" font-size="11" fill="#555555">not JTAG/SWD; CN1/MIPI20 is the debug port</text>
+<text x="890" y="202" font-size="11" fill="#555555">JP3 STLK_RST: 2-pin, default OFF (open)</text>
 <rect x="528" y="580" width="130" height="130" rx="6" fill="#242424" stroke="#000"/>
 <text x="593" y="638" font-size="14" fill="#eee" text-anchor="middle">STM32</text>
 <text x="593" y="656" font-size="14" fill="#eee" text-anchor="middle">N657X0Q</text>

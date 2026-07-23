@@ -372,6 +372,66 @@ def build(variant):
     emit(f'<text x="296" y="260" font-size="11" fill="{MUT}" '
          f'text-anchor="end">after moving a cap.</text>')
 
+    # CN12 power-test header (UM3417 Rev 3 Figure 5, p.10; Table 7 / Table 8,
+    # p.20-21; schematic pins PICN1201-14).  The original bug report called this
+    # a JTAG/SWD header-- it is not.  CN12 is a 14-pin (2x7), always-fitted
+    # current-measurement header: each of its 7 columns is a pin-pair (EXT_IN,
+    # EVCORE, INT_IN, GND, INT_VCORE, VDDIO, VDDA1V8) bridged elsewhere on the
+    # board by a 0-ohm shunt; removing that shunt and bridging an ammeter here
+    # instead measures the rail's current.  It is not a jumper, so no cap is
+    # drawn.  The board's only debug connector remains CN1/MIPI20, drawn above
+    # with the ST-LINK zone.  x/y measured off the UM3417 p.8/p.10 photos
+    # (pixel-grid method, cross-checked against JP1/JP2/CN9/CN15's
+    # already-verified positions-- see .cache/agents/pinout-phase1/); nudged a
+    # few px right of the ST-LINK zone's edge (x=736) and left of the LEDs label
+    # (x=831) to clear both without moving either.  Only one on-diagram label
+    # line fits above CN15's row-label band (which starts at y=197, same as
+    # CN14/CN15's header top)-- the fuller citation moves to the right margin
+    # below, clear of the morpho per-pin labels that would otherwise run under a
+    # second line.
+    for col in range(7):
+        cx = 745 + col * 8
+        for cy in (162, 172):
+            emit(f'<rect x="{cx}" y="{cy}" width="6" height="6" '
+                 f'fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>')
+    emit(f'<text x="772" y="191" font-size="9" fill="{SILK}" '
+         f'text-anchor="middle">CN12</text>')
+
+    # JP3 ST-LINK reset jumper (UM3417 Rev 3 Table 4, p.8: silkscreen STLK_RST,
+    # default OFF).  Drawn as a 2-pin, uncapped header-- OFF means no shunt
+    # fitted, unlike JP1/JP2/CN9 which are always capped somewhere.  CN15's
+    # per-row pin labels run text-anchor "end" out of x=822 for every one of its
+    # 19 rows (see the morpho loop above), so they occupy roughly x=786-822 all
+    # the way down the header-- there is no y that clears them in that band.
+    # JP3 goes in the narrower gap between CN14's pad column (ends x=736) and
+    # that label band instead, not at its photo x, to stay clear of both.
+    def jumper2(x, name, tag):
+        for py in (213, 229):
+            emit(f'<rect x="{x + 4}" y="{py}" width="8" height="8" '
+                 f'fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>')
+        emit(f'<text x="{x}" y="237" font-size="7" fill="{SILK}" '
+             f'text-anchor="end">1</text>')
+        emit(f'<text x="{x + 8}" y="251" font-size="9" fill="{SILK}" '
+             f'text-anchor="middle">{name}</text>')
+        emit(f'<text x="{x + 8}" y="263" font-size="7.5" fill="{SILK}" '
+             f'text-anchor="middle">{tag}</text>')
+
+    jumper2(753, 'JP3', 'OFF')
+
+    # CN12/JP3 citation, right margin: clear of everything above
+    # (nothing else is drawn at x >= BOARD_R+14 above y=1119) so the
+    # full correction and default state fit without truncation.
+    emit(f'<text x="{BOARD_R + 14}" y="160" font-size="11" '
+         f'fill="{MUT}">CN12 power test (UM3417 Table 7/8):</text>')
+    emit(f'<text x="{BOARD_R + 14}" y="174" font-size="11" '
+         f'fill="{MUT}">14-pin, always fitted, ammeter tap</text>')
+    emit(f'<text x="{BOARD_R + 14}" y="188" font-size="11" '
+         f'fill="{MUT}">not JTAG/SWD; CN1/MIPI20 is the debug '
+         f'port</text>')
+    emit(f'<text x="{BOARD_R + 14}" y="202" font-size="11" '
+         f'fill="{MUT}">JP3 STLK_RST: 2-pin, default OFF (open)'
+         f'</text>')
+
     emit(f'<rect x="{BOARD_CX - 65}" y="580" width="130" height="130" rx="6" '
          'fill="#242424" stroke="#000"/>')
     emit(f'<text x="{BOARD_CX}" y="638" font-size="14" fill="#eee" '
