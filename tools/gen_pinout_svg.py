@@ -294,9 +294,13 @@ def build(variant):
          f'stroke="{SILK}" stroke-dasharray="5 4" stroke-width="1.2"/>')
     emit(f'<text x="{BOARD_CX + 10}" y="140" font-size="12" fill="{SILK}" '
          f'text-anchor="middle">STLINK-V3EC</text>')
-    emit(f'<text x="{BOARD_CX}" y="45" font-size="12.5" fill="{INK}" '
-         f'text-anchor="middle">CN10 USB-C: ST-LINK (SWD + RTT), VCP '
-         f'console, 5V_STLK power</text>')
+    emit(f'<text x="{BOARD_CX}" y="30" font-size="12.5" fill="{INK}" '
+         f'font-weight="bold" text-anchor="middle">CN10 USB-C: PRIMARY '
+         f'DEV PORT -- SWD + RTT debug, VCP console, 5V_STLK power '
+         f'in</text>')
+    emit(f'<text x="{BOARD_CX}" y="46" font-size="11" fill="{MUT}" '
+         f'text-anchor="middle">flash + attach: mise run flash '
+         f'nucleo-n657x0 [--project net]</text>')
     emit('<rect x="344" y="100" width="22" height="70" rx="3" '
          'fill="#161616"/>')
     emit(f'<text x="355" y="185" font-size="9" fill="{SILK}" '
@@ -311,23 +315,50 @@ def build(variant):
     emit(f'<text x="{BOARD_R - 45}" y="172" font-size="9" fill="{SILK}" '
          f'text-anchor="middle">LEDs</text>')
 
-    for x, name in ((370, 'JP1'), (402, 'JP2')):
-        emit(f'<rect x="{x}" y="210" width="20" height="44" rx="3" '
-             f'fill="#161616"/>')
-        emit(f'<rect x="{x + 5}" y="216" width="10" height="14" '
-             f'fill="#d9d9d9"/>')
-        emit(f'<text x="{x + 10}" y="268" font-size="9" fill="{SILK}" '
+    # BOOT jumpers, drawn in their dev-setup states.  Pin 1 is at
+    # the bottom; UM3417 defaults are JP1 [1-2] and JP2 [1-2]
+    # (flash boot), so dev boot puts JP2's cap on the UPPER pair
+    # (2-3) while JP1 keeps the lower default.
+    def jumper3(x, name, cap_upper, tag):
+        for py in (208, 224, 240):
+            emit(f'<rect x="{x + 4}" y="{py}" width="8" height="8" '
+                 f'fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>')
+        emit(f'<text x="{x}" y="248" font-size="7" fill="{SILK}" '
+             f'text-anchor="end">1</text>')
+        cap_y = 205 if cap_upper else 221
+        emit(f'<rect x="{x + 1}" y="{cap_y}" width="14" height="30" '
+             f'rx="3" fill="#3a5a8a" stroke="#111" stroke-width="1"/>')
+        emit(f'<text x="{x + 8}" y="262" font-size="9" fill="{SILK}" '
              f'text-anchor="middle">{name}</text>')
-    emit(f'<text x="446" y="284" font-size="9" fill="{SILK}" '
-         f'text-anchor="middle">BOOT0 / BOOT1</text>')
-    emit('<rect x="520" y="210" width="56" height="44" rx="3" '
-         'fill="#161616"/>')
-    emit(f'<text x="548" y="268" font-size="9" fill="{SILK}" '
-         f'text-anchor="middle">CN9 PWR SEL</text>')
-    emit(f'<text x="296" y="224" font-size="11" fill="{MUT}" '
-         f'text-anchor="end">JP2 BOOT1 pos 2 = dev boot</text>')
-    emit(f'<text x="296" y="238" font-size="11" fill="{MUT}" '
-         f'text-anchor="end">(RAM-boot flow, board page)</text>')
+        emit(f'<text x="{x + 8}" y="274" font-size="7.5" fill="{SILK}" '
+             f'text-anchor="middle">{tag}</text>')
+
+    jumper3(386, 'JP1', False, '1-2 dflt')
+    jumper3(414, 'JP2', True, '2-3 DEV')
+
+    # CN9 power-source selector, capped on its 5V_STLK default so
+    # the board powers from the ST-LINK USB during development
+    for r, (py, nm) in enumerate(((208, '5V_STLK'), (226, 'USB_SNK'),
+                                  (244, 'VIN'))):
+        for cx in (484, 500):
+            emit(f'<rect x="{cx}" y="{py}" width="8" height="8" '
+                 f'fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>')
+        emit(f'<text x="514" y="{py + 7}" font-size="7.5" '
+             f'fill="{SILK if r == 0 else "#9a9a94"}">{nm}</text>')
+    emit('<rect x="481" y="205" width="30" height="14" rx="3" '
+         'fill="#3a5a8a" stroke="#111" stroke-width="1"/>')
+    emit(f'<text x="497" y="262" font-size="9" fill="{SILK}" '
+         f'text-anchor="middle">CN9 PWR SRC</text>')
+    emit(f'<text x="497" y="274" font-size="7.5" fill="{SILK}" '
+         f'text-anchor="middle">1-2 dflt</text>')
+    emit(f'<text x="296" y="218" font-size="11" fill="{MUT}" '
+         f'text-anchor="end">JP2 BOOT1 capped 2-3 (upper) = dev</text>')
+    emit(f'<text x="296" y="232" font-size="11" fill="{MUT}" '
+         f'text-anchor="end">boot; JP1 + CN9 stay at defaults.</text>')
+    emit(f'<text x="296" y="246" font-size="11" fill="{MUT}" '
+         f'text-anchor="end">BOOT latches at reset-- power-cycle</text>')
+    emit(f'<text x="296" y="260" font-size="11" fill="{MUT}" '
+         f'text-anchor="end">after moving a cap.</text>')
 
     emit(f'<rect x="{BOARD_CX - 65}" y="580" width="130" height="130" rx="6" '
          'fill="#242424" stroke="#000"/>')
@@ -373,6 +404,10 @@ def build(variant):
          f'ETH1 RMII, LAN8742A PHY</text>')
     emit(f'<text x="{BOARD_R + 14}" y="1135" font-size="11" fill="{MUT}">net feature: '
          f'DHCP + SNTP + MQTT/TLS</text>')
+    if ars_mode:
+        emit(f'<text x="{BOARD_R + 14}" y="1150" font-size="11" '
+             f'fill="{MUT}">CNN stage reuses the mic + Ethernet '
+             f'paths: no extra wiring</text>')
 
     if not ars_mode:
         emit(f'<line x1="{BOARD_R - 6}" y1="592" x2="{BOARD_R + 10}" y2="770" '

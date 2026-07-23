@@ -331,7 +331,8 @@
 <rect x="563" y="58" width="60" height="22" rx="6" fill="#3a3a3a"/>
 <rect x="451" y="95" width="285" height="90" rx="6" fill="none" stroke="#03234B" stroke-dasharray="5 4" stroke-width="1.2"/>
 <text x="603" y="140" font-size="12" fill="#03234B" text-anchor="middle">STLINK-V3EC</text>
-<text x="593" y="45" font-size="12.5" fill="#222222" text-anchor="middle">CN10 USB-C: ST-LINK (SWD + RTT), VCP console, 5V_STLK power</text>
+<text x="593" y="30" font-size="12.5" fill="#222222" font-weight="bold" text-anchor="middle">CN10 USB-C: PRIMARY DEV PORT -- SWD + RTT debug, VCP console, 5V_STLK power in</text>
+<text x="593" y="46" font-size="11" fill="#555555" text-anchor="middle">flash + attach: mise run flash nucleo-n657x0 [--project net]</text>
 <rect x="344" y="100" width="22" height="70" rx="3" fill="#161616"/>
 <text x="355" y="185" font-size="9" fill="#03234B" text-anchor="middle">CN1</text>
 <line x1="344" y1="135" x2="300" y2="135" stroke="#b5b5b0"/>
@@ -341,17 +342,36 @@
 <circle cx="831" cy="130" r="5" fill="#3fae5a"/>
 <circle cx="831" cy="150" r="5" fill="#e0c23e"/>
 <text x="831" y="172" font-size="9" fill="#03234B" text-anchor="middle">LEDs</text>
-<rect x="370" y="210" width="20" height="44" rx="3" fill="#161616"/>
-<rect x="375" y="216" width="10" height="14" fill="#d9d9d9"/>
-<text x="380" y="268" font-size="9" fill="#03234B" text-anchor="middle">JP1</text>
-<rect x="402" y="210" width="20" height="44" rx="3" fill="#161616"/>
-<rect x="407" y="216" width="10" height="14" fill="#d9d9d9"/>
-<text x="412" y="268" font-size="9" fill="#03234B" text-anchor="middle">JP2</text>
-<text x="446" y="284" font-size="9" fill="#03234B" text-anchor="middle">BOOT0 / BOOT1</text>
-<rect x="520" y="210" width="56" height="44" rx="3" fill="#161616"/>
-<text x="548" y="268" font-size="9" fill="#03234B" text-anchor="middle">CN9 PWR SEL</text>
-<text x="296" y="224" font-size="11" fill="#555555" text-anchor="end">JP2 BOOT1 pos 2 = dev boot</text>
-<text x="296" y="238" font-size="11" fill="#555555" text-anchor="end">(RAM-boot flow, board page)</text>
+<rect x="390" y="208" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="390" y="224" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="390" y="240" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<text x="386" y="248" font-size="7" fill="#03234B" text-anchor="end">1</text>
+<rect x="387" y="221" width="14" height="30" rx="3" fill="#3a5a8a" stroke="#111" stroke-width="1"/>
+<text x="394" y="262" font-size="9" fill="#03234B" text-anchor="middle">JP1</text>
+<text x="394" y="274" font-size="7.5" fill="#03234B" text-anchor="middle">1-2 dflt</text>
+<rect x="418" y="208" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="418" y="224" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="418" y="240" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<text x="414" y="248" font-size="7" fill="#03234B" text-anchor="end">1</text>
+<rect x="415" y="205" width="14" height="30" rx="3" fill="#3a5a8a" stroke="#111" stroke-width="1"/>
+<text x="422" y="262" font-size="9" fill="#03234B" text-anchor="middle">JP2</text>
+<text x="422" y="274" font-size="7.5" fill="#03234B" text-anchor="middle">2-3 DEV</text>
+<rect x="484" y="208" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="500" y="208" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<text x="514" y="215" font-size="7.5" fill="#03234B">5V_STLK</text>
+<rect x="484" y="226" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="500" y="226" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<text x="514" y="233" font-size="7.5" fill="#9a9a94">USB_SNK</text>
+<rect x="484" y="244" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<rect x="500" y="244" width="8" height="8" fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>
+<text x="514" y="251" font-size="7.5" fill="#9a9a94">VIN</text>
+<rect x="481" y="205" width="30" height="14" rx="3" fill="#3a5a8a" stroke="#111" stroke-width="1"/>
+<text x="497" y="262" font-size="9" fill="#03234B" text-anchor="middle">CN9 PWR SRC</text>
+<text x="497" y="274" font-size="7.5" fill="#03234B" text-anchor="middle">1-2 dflt</text>
+<text x="296" y="218" font-size="11" fill="#555555" text-anchor="end">JP2 BOOT1 capped 2-3 (upper) = dev</text>
+<text x="296" y="232" font-size="11" fill="#555555" text-anchor="end">boot; JP1 + CN9 stay at defaults.</text>
+<text x="296" y="246" font-size="11" fill="#555555" text-anchor="end">BOOT latches at reset-- power-cycle</text>
+<text x="296" y="260" font-size="11" fill="#555555" text-anchor="end">after moving a cap.</text>
 <rect x="528" y="580" width="130" height="130" rx="6" fill="#242424" stroke="#000"/>
 <text x="593" y="638" font-size="14" fill="#eee" text-anchor="middle">STM32</text>
 <text x="593" y="656" font-size="14" fill="#eee" text-anchor="middle">N657X0Q</text>
