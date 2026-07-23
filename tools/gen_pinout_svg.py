@@ -419,8 +419,12 @@ def build(variant):
     jumper2(753, 'JP3', 'OFF')
 
     # CN12/JP3 citation, right margin: clear of everything above
-    # (nothing else is drawn at x >= BOARD_R+14 above y=1119) so the
-    # full correction and default state fit without truncation.
+    # (nothing else is drawn at x >= BOARD_R+14 above y=210) so the
+    # full correction and default state fit without truncation.  In
+    # ars mode, the debug-hookup sentence and the morpho/amp notes
+    # reuse this same column further down the page, past y=210; the
+    # base variant carries its debug-hookup sentence in the bottom
+    # legend instead (see the `if not ars_mode:` block below).
     emit(f'<text x="{BOARD_R + 14}" y="160" font-size="11" '
          f'fill="{MUT}">CN12 power test (UM3417 Table 7/8):</text>')
     emit(f'<text x="{BOARD_R + 14}" y="174" font-size="11" '
@@ -509,12 +513,31 @@ def build(variant):
         return W, out
 
     # ── ARS variant: morpho routing, external chain, HIL taps ──
-    emit(f'<line x1="{BOARD_R - 6}" y1="592" x2="{BOARD_R + 10}" y2="800" stroke="#b5b5b0"/>')
-    emit(f'<text x="{BOARD_R + 14}" y="796" font-size="11" fill="{MUT}">morpho CN15 '
+
+    # The base variant's debug-hookup sentence and general morpho
+    # callout are dev-setup content, not ARS-specific-- carry both
+    # over verbatim (Phase 1 review finding) so the ARS diagram
+    # stays a strict superset of the base page instead of trading
+    # that context away for amp-routing detail.  y=610 sits in the
+    # one gap this column has free of CN14/CN13's row labels (which
+    # run x=BOARD_R+14 from y~210 to y~590) and the morpho notes
+    # below (y>=796)-- no leader line, matching the CN12/JP3 citation
+    # above, since neither of those is drawn with one either.
+    emit(f'<text x="{BOARD_R + 14}" y="616" font-size="11" fill="{MUT}">Debug '
+         f'hookup: CN10 USB-C alone carries SWD, RTT, and the</text>')
+    emit(f'<text x="{BOARD_R + 14}" y="630" font-size="11" fill="{MUT}">VCP; '
+         f'CN1 takes an external probe.</text>')
+
+    emit(f'<text x="{BOARD_R + 14}" y="796" font-size="11" fill="{MUT}">ST '
+         f'morpho CN3/CN15: most remaining I/O</text>')
+    emit(f'<text x="{BOARD_R + 14}" y="810" font-size="11" fill="{MUT}">'
+         f'(UM3417 Tables 13-14)</text>')
+    emit(f'<line x1="{BOARD_R - 6}" y1="592" x2="{BOARD_R + 10}" y2="830" stroke="#b5b5b0"/>')
+    emit(f'<text x="{BOARD_R + 14}" y="826" font-size="11" fill="{MUT}">morpho CN15 '
          f'is the routing of record for the amp:</text>')
-    emit(f'<text x="{BOARD_R + 14}" y="810" font-size="11" fill="{MUT}">pin 3 PH9 SCL, '
+    emit(f'<text x="{BOARD_R + 14}" y="840" font-size="11" fill="{MUT}">pin 3 PH9 SCL, '
          f'pin 5 PC1 SDA, pin 31 PE9, pin 33 PD0;</text>')
-    emit(f'<text x="{BOARD_R + 14}" y="824" font-size="11" fill="{MUT}">pin 38 PA1 = '
+    emit(f'<text x="{BOARD_R + 14}" y="854" font-size="11" fill="{MUT}">pin 38 PA1 = '
          f'G2 fallback ADC tap</text>')
 
     def ext_box(x, y, w, h, lines, dashed=False):

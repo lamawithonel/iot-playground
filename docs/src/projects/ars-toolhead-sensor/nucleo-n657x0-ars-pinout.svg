@@ -423,10 +423,14 @@
 <text x="890" y="1119" font-size="12.5" fill="#222222">on-chip ETH1 RMII, LAN8742A PHY</text>
 <text x="890" y="1135" font-size="11" fill="#555555">net feature: DHCP + SNTP + MQTT/TLS</text>
 <text x="890" y="1150" font-size="11" fill="#555555">CNN stage reuses the mic + Ethernet paths: no extra wiring</text>
-<line x1="870" y1="592" x2="886" y2="800" stroke="#b5b5b0"/>
-<text x="890" y="796" font-size="11" fill="#555555">morpho CN15 is the routing of record for the amp:</text>
-<text x="890" y="810" font-size="11" fill="#555555">pin 3 PH9 SCL, pin 5 PC1 SDA, pin 31 PE9, pin 33 PD0;</text>
-<text x="890" y="824" font-size="11" fill="#555555">pin 38 PA1 = G2 fallback ADC tap</text>
+<text x="890" y="616" font-size="11" fill="#555555">Debug hookup: CN10 USB-C alone carries SWD, RTT, and the</text>
+<text x="890" y="630" font-size="11" fill="#555555">VCP; CN1 takes an external probe.</text>
+<text x="890" y="796" font-size="11" fill="#555555">ST morpho CN3/CN15: most remaining I/O</text>
+<text x="890" y="810" font-size="11" fill="#555555">(UM3417 Tables 13-14)</text>
+<line x1="870" y1="592" x2="886" y2="830" stroke="#b5b5b0"/>
+<text x="890" y="826" font-size="11" fill="#555555">morpho CN15 is the routing of record for the amp:</text>
+<text x="890" y="840" font-size="11" fill="#555555">pin 3 PH9 SCL, pin 5 PC1 SDA, pin 31 PE9, pin 33 PD0;</text>
+<text x="890" y="854" font-size="11" fill="#555555">pin 38 PA1 = G2 fallback ADC tap</text>
 <rect x="1190" y="487.5" width="250" height="60" rx="8" fill="#ffffff" stroke="#888888" stroke-width="1.4"/>
 <text x="1315.0" y="507.5" font-size="12.5" fill="#222222" font-weight="bold" text-anchor="middle">RC low-pass</text>
 <text x="1315.0" y="523.5" font-size="11" fill="#555555" text-anchor="middle">passive, values at gate G3</text>
