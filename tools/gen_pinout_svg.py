@@ -333,23 +333,35 @@ def build(variant):
         emit(f'<text x="{x + 8}" y="274" font-size="7.5" fill="{SILK}" '
              f'text-anchor="middle">{tag}</text>')
 
-    jumper3(386, 'JP1', False, '1-2 dflt')
-    jumper3(414, 'JP2', True, '2-3 DEV')
+    # x per UM3417 Rev 3 Figure 3 (p.8) / Figure 5 (p.10): JP1 sits
+    # ~21mm from the left board edge, JP2 ~25mm-- both well left of
+    # CN9, not flush against it.  Y stays put: the manual's ~32mm-
+    # down anchor lands inside the CN5 header box (y=279-443, row
+    # labels starting x=469), so pushing this cluster down to match
+    # would overlap CN5's pin names.  The current y already sits at
+    # the top of that gap (block bottom ~274, CN5 starts at 279), so
+    # only x moves.
+    jumper3(480, 'JP1', False, '1-2 dflt')
+    jumper3(512, 'JP2', True, '2-3 DEV')
 
     # CN9 power-source selector, capped on its 5V_STLK default so
-    # the board powers from the ST-LINK USB during development
+    # the board powers from the ST-LINK USB during development.
+    # x per UM3417 Rev 3 Figure 3 (p.8): CN9 sits ~33mm from the left board
+    # edge, measurably right of JP1/JP2 (~21/25mm)-- not flush
+    # against them.  Same y-collision reasoning as JP1/JP2 above:
+    # y is unchanged.
     for r, (py, nm) in enumerate(((208, '5V_STLK'), (226, 'USB_SNK'),
                                   (244, 'VIN'))):
-        for cx in (484, 500):
+        for cx in (565, 581):
             emit(f'<rect x="{cx}" y="{py}" width="8" height="8" '
                  f'fill="#c9c9c9" stroke="#000" stroke-width="0.5"/>')
-        emit(f'<text x="514" y="{py + 7}" font-size="7.5" '
+        emit(f'<text x="595" y="{py + 7}" font-size="7.5" '
              f'fill="{SILK if r == 0 else "#9a9a94"}">{nm}</text>')
-    emit('<rect x="481" y="205" width="30" height="14" rx="3" '
+    emit('<rect x="562" y="205" width="30" height="14" rx="3" '
          'fill="#3a5a8a" stroke="#111" stroke-width="1"/>')
-    emit(f'<text x="497" y="262" font-size="9" fill="{SILK}" '
+    emit(f'<text x="578" y="262" font-size="9" fill="{SILK}" '
          f'text-anchor="middle">CN9 PWR SRC</text>')
-    emit(f'<text x="497" y="274" font-size="7.5" fill="{SILK}" '
+    emit(f'<text x="578" y="274" font-size="7.5" fill="{SILK}" '
          f'text-anchor="middle">1-2 dflt</text>')
     emit(f'<text x="296" y="218" font-size="11" fill="{MUT}" '
          f'text-anchor="end">JP2 BOOT1 capped 2-3 (upper) = dev</text>')
