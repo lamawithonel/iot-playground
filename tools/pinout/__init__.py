@@ -8,10 +8,13 @@ return (width_px, lines), where lines is the list of SVG element
 strings to join and write.
 """
 
-from .boards import n657x0
+from .boards import h753zi, n657x0
 
 REGISTRY = (
     (n657x0, 'board', 'docs/src/boards/nucleo-n657x0-pinout.svg'),
     (n657x0, 'ars', 'docs/src/projects/ars-toolhead-sensor/'
                      'nucleo-n657x0-ars-pinout.svg'),
+    (h753zi, 'board', 'docs/src/boards/nucleo-h753zi-pinout.svg'),
+    (h753zi, 'ars', 'docs/src/projects/ars-toolhead-sensor/'
+                     'nucleo-h753zi-ars-pinout.svg'),
 )
