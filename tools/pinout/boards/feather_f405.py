@@ -2,8 +2,12 @@
 feather-stm32f405/ (flagship connected-device app) project overlay.
 
 Two variants from one board drawing:
-  board   -- base board: generic header names, debug + DFU hookup
-             only (board page).
+  board   -- base board: generic header names, debug + DFU hookup,
+             and the board's own fixed on-board components (the red
+             LED at pin 13, the NeoPixel, both crystals, and the SPI
+             flash chip)-- true of this board regardless of project,
+             so they belong on the board page, not only the project
+             overlay (board page).
   project -- flagship app: every physically-wired header pin's real
              device/function, with the implemented-vs-present-only
              distinction below (system_requirements.md section 3.1,
@@ -94,6 +98,18 @@ BOTTOM_FUNC = {
 TOP_IMPL = {'13', '12', '11', '6', 'SCL', 'SDA'}
 BOTTOM_IMPL = {'SCK', 'MO', 'MI', 'B0'}
 
+# On-board fixed components with no header pin at all (product guide
+# p.3 overview bullets + the "SPI Flash, STEMMA and NeoPixel" section,
+# p.8): stock features of every board built on this outline, present
+# regardless of project.  Drawn in both variants-- see
+# _draw_onboard_fixed.
+ONBOARD_FIXED = (
+    ('NeoPixel', 'PC0'),
+    ('Y1 12.000 MHz', 'PH0/PH1'),
+    ('Y2 32.768 kHz', 'PC14/PC15'),
+    ('25Q16 flash (2 MiB)', 'PB3/PB4/PB5/PA15'),
+)
+
 
 def _board():
     return t.Board(
@@ -110,9 +126,14 @@ def _rows(project):
         bottom_notes = dict(BOTTOM_FUNC)
     else:
         # Base board: generic silk names only, no peripheral wiring--
-        # BOOT0 is the one documented exception (doctrine: the base
-        # diagram must still show the DFU entry point).
-        top_notes, top_impl = {}, set()
+        # two documented exceptions, both fixed board facts true
+        # regardless of project (doctrine: basic-dev-setup content
+        # belongs in the base diagram even where a project also
+        # happens to use it).  '13' is hard-wired to the on-board red
+        # LED (product guide p.6: "GPIO 13 / PC1: Connected to the
+        # red LED next to the USB jack"); 'B0' is the DFU entry point
+        # the base diagram must still show.
+        top_notes, top_impl = {'13': TOP_FUNC['13']}, set()
         bottom_notes = {'B0': BOTTOM_FUNC['B0']}
     bottom_impl = BOTTOM_IMPL if project else set()
     return [
@@ -142,6 +163,29 @@ def _fixtures(board):
     ]
 
 
+def _draw_onboard_fixed(doc, fx0, fy0):
+    """The four ONBOARD_FIXED components: no header pin to annotate
+    (their MCU pins aren't brought out-- product guide p.8: the SPI
+    flash "is connected to SPI bus 1 pins that are not brought out on
+    the GPIO pads"), so each is its own small labeled box rather than
+    a pin-row note.  Both variants call this with their own (fx0, fy0)--
+    these are fixed board facts, not project-specific wiring."""
+    doc.emit(f'<text x="{fx0}" y="{fy0 - 10}" font-size="10.5" '
+              f'fill="{svg.MUT}">on-board, position not manual-'
+              f'verified (pin identity only, SRS 3.2):</text>')
+    for i, (label, note) in enumerate(ONBOARD_FIXED):
+        fx = fx0 + i * 130
+        doc.emit(f'<rect x="{fx}" y="{fy0}" width="110" height="34" '
+                  f'rx="4" fill="#6b6b6b" stroke="#333" '
+                  f'stroke-width="1"/>')
+        doc.emit(f'<text x="{fx + 55}" y="{fy0 + 15}" font-size="9.5" '
+                  f'fill="#eeeeee" text-anchor="middle">{label}'
+                  f'</text>')
+        doc.emit(f'<text x="{fx + 55}" y="{fy0 + 28}" font-size="8.5" '
+                  f'fill="#cfcfcf" text-anchor="middle">{note}'
+                  f'</text>')
+
+
 def _swatch(doc, x, y, fill, stroke, label, fill_text=svg.INK):
     doc.emit(f'<rect x="{x}" y="{y}" width="12" height="12" '
              f'fill="{fill}" stroke="{stroke}" stroke-width="0.6"/>')
@@ -153,7 +197,7 @@ def build(variant):
     project = variant == 'project'
     board = _board()
     W = board.r + (460 if project else 340)
-    H = 1060 if project else 800
+    H = 1060 if project else 860
     doc = svg.SvgDoc(W, H)
 
     svg.open_doc(doc)
@@ -193,6 +237,7 @@ def build(variant):
                   f'peripheral wiring; the project pin map (same '
                   f'header, every peripheral shown) lives in section '
                   f'3.1.</text>')
+        _draw_onboard_fixed(doc, board.cx - 170, board.b + 180)
         doc.emit('</svg>')
         return W, doc.out
 
@@ -209,30 +254,12 @@ def build(variant):
               f'driven by any firmware module.</text>')
 
     # On-board fixtures with no manual-verified exact PCB position--
-    # placed near the MCU as a cluster, muted (present, not driven).
-    # Their pin identity (SRS section 3.2) is the verified fact here,
-    # not their drawn (x, y).  fy0 clears the bottom row's own
-    # per-pin function labels (drawn at board.b + 25).
+    # placed near the MCU as a cluster (same _draw_onboard_fixed the
+    # base variant now also calls; these are fixed board facts, not
+    # project wiring).  fy0 clears the bottom row's own per-pin
+    # function labels (drawn at board.b + 25).
     fx0, fy0 = board.cx - 170, board.b + 70
-    doc.emit(f'<text x="{fx0}" y="{fy0 - 10}" font-size="10.5" '
-              f'fill="{svg.MUT}">on-board, position not manual-'
-              f'verified (pin identity only, SRS 3.2):</text>')
-    for i, (label, note) in enumerate((
-        ('NeoPixel', 'PC0'),
-        ('Y1 12.000 MHz', 'PH0/PH1'),
-        ('Y2 32.768 kHz', 'PC14/PC15'),
-        ('25Q16 flash (2 MiB)', 'PB3/PB4/PB5/PA15'),
-    )):
-        fx = fx0 + i * 130
-        doc.emit(f'<rect x="{fx}" y="{fy0}" width="110" height="34" '
-                  f'rx="4" fill="#6b6b6b" stroke="#333" '
-                  f'stroke-width="1"/>')
-        doc.emit(f'<text x="{fx + 55}" y="{fy0 + 15}" font-size="9.5" '
-                  f'fill="#eeeeee" text-anchor="middle">{label}'
-                  f'</text>')
-        doc.emit(f'<text x="{fx + 55}" y="{fy0 + 28}" font-size="8.5" '
-                  f'fill="#cfcfcf" text-anchor="middle">{note}'
-                  f'</text>')
+    _draw_onboard_fixed(doc, fx0, fy0)
 
     # SWD debug (verified) and on-board microSD/SDIO (present, not
     # driven)-- both bottom-side, real, unlike the fixture cluster
