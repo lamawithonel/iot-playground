@@ -8,8 +8,8 @@ This module owns geometry math and generic widget shapes only.  Every
 number that differs board-to-board-- pin tables, silk names, fixture
 designators and positions, jumper defaults-- is board data, supplied
 by the caller as one of the dataclasses below.  See
-tools/pinout/boards/n657x0.py for the first (and so far only) board
-built on this template.
+tools/pinout/boards/n657x0.py for the first board built on this
+template, and tools/pinout/boards/h753zi.py for the second.
 
 Fixture x/y positions here are NOT re-derived geometrically; each
 board module supplies its own, measured from that board's manual.
