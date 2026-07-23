@@ -67,6 +67,20 @@ outside this page's scope.
 
 ## Planned H753ZI Loopback Measurements
 
+![NUCLEO-H753ZI planned DAC/ADC loopback overlay, strict superset of the base-board pinout](nucleo-h753zi-ars-pinout.svg)
+
+The dashed amber path is the whole overlay: DAC1_OUT1 (PA4, Zio D24
+on CN7, also ST morpho CN11 pin 32) jumpered to the ADC input (PA3,
+Zio A0 on CN9, also ST morpho CN12 pin 37)-- UM2407 Rev 6 Tables 18,
+20, and 22 place those pins; the jumper itself is PLANNED, not
+soldered, matching [the board page](../../boards/nucleo-h753zi.md)
+and this page's own status line above.  The two dashed placeholder
+boxes are the TIM-trigger and capture-strobe channels described
+below: named concepts with no pin assigned yet, drawn that way on
+purpose rather than guessed at.  Everything else on the diagram is
+the unmodified base-board pinout, carried over so this stays a
+strict superset, not a separate pin map.
+
 Once the ARS `audio_loopback` module lands
 (`boards/nucleo-h753zi/AGENTS.md` Module Map: DAC1_OUT1 on PA4,
 jumpered to the ADC on PA3), the Logic MSO 2x100 covers that loop

@@ -25,6 +25,35 @@ exists today:
 - The ADR-009 Layer-3 network trigger board: an on-chip Ethernet
   MAC plus an on-board PHY over RMII, driven by `embassy-net`.
 
+## Pinout
+
+This is the base-board diagram: dev-setup jumpers at their documented
+defaults (UM2407 Rev 6 Table 4), the ST-LINK/debug hookup, and the
+full Zio/morpho pinout.  Project-specific assignments are
+deliberately absent, including the ADR-009 network trigger board's
+signals-- the on-board Ethernet PHY/RJ45 is drawn only as the generic
+Nucleo-144 fixture it is.  The ARS DAC/ADC loopback overlay lives
+with the bench plan in
+[HIL measurements](../projects/ars-toolhead-sensor/hil-measurements.md),
+which wins on that overlay's own content.
+
+![NUCLEO-H753ZI base-board pinout and debug hookup](nucleo-h753zi-pinout.svg)
+
+Notes:
+
+- Debug: CN1 (embedded STLINK-V3E) alone carries SWD and the VCP
+  console (USART3, sect. 7.6.5); CN5 is a MIPI-10/STDC14 connector
+  for an external probe, which can also bridge the VCP over its own
+  T_VCP_RX/T_VCP_TX pins (Table 5).
+- CN7/CN10 (right) and CN8/CN9 (left) are the four Zio connectors
+  (UM2407 Tables 18-21): each physical row pairs an Arduino-Uno-
+  compatible pin with a Zio-extension pin, drawn side by side.
+  CN8/CN9 carry the power/SDMMC rows and the A0-A5 analog inputs;
+  CN7/CN10 carry the digital/QSPI/TIM extension and A6-A8.
+- ST morpho CN11/CN12 (Table 22) are both fully populated at 35 pin
+  pairs (70 pins) each-- unlike NUCLEO-N657X0-Q, there is no unfitted
+  continuation footprint to draw.
+
 ## Building and Flashing
 
 ```sh
