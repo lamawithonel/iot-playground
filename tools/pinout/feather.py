@@ -38,7 +38,7 @@ board data can supply the name once verified rather than guessing.
 
 from dataclasses import dataclass, field
 
-from .svg import GND_FILL, MUT, PWR, SILK, ext_box
+from .svg import GND_FILL, MUT, PWR, ext_box
 
 # Feather boards are blue-PCB-with-white-silk, the opposite of the
 # Nucleo-144 family's white-PCB-with-blue-silk-- so this template
@@ -186,7 +186,7 @@ def draw_fixture(doc, f):
         doc.emit(f'<rect x="{f.x}" y="{f.y}" width="{f.w}" height="{f.h}" '
                  f'rx="3" fill="{f.fill}"/>')
         doc.emit(f'<text x="{f.x + f.w / 2}" y="{f.y + f.h + 13}" '
-                 f'font-size="9" fill="{SILK}" text-anchor="middle">'
+                 f'font-size="9" fill="{PCB_SILK}" text-anchor="middle">'
                  f'{f.label}</text>')
     elif f.kind == 'button':
         doc.emit(f'<circle cx="{f.x}" cy="{f.y}" r="{f.r}" fill="{f.fill}" '

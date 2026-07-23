@@ -122,7 +122,7 @@ def _morpho_strips(board):
         fitted_rows=19, unfitted_rows=17, unfitted_designator='CN16',
         odd_names=CN15_ODD, even_names=CN15_EVEN,
         pwr_pins=MORPHO_PWR['CN15'], gnd_pins=MORPHO_GND['CN15'],
-        ars_pins=ARS_CN15,
+        hl_pins=ARS_CN15,
     )
     return [cn3, cn15]
 
@@ -178,7 +178,8 @@ def build(variant):
         'CN10 USB-C: PRIMARY DEV PORT -- SWD + RTT debug, VCP '
         'console, 5V_STLK power in',
         'flash + attach: mise run flash nucleo-n657x0 [--project '
-        'net]')
+        'net]',
+        part_name='STLINK-V3EC')
     t.draw_debug_conn(doc, board, t.DebugConn(
         x=344, y=100, w=22, h=70, designator='CN1',
         label=('CN1 MIPI20: external', 'debug probe (SWD/trace)')))
@@ -280,7 +281,7 @@ def build(variant):
              'stroke="#b5b5b0"/>')
     if ars_mode:
         doc.emit(f'<text x="296" y="1074" font-size="12.5" '
-                 f'fill="{svg.ARS_TXT}" font-weight="bold" '
+                 f'fill="{svg.HL_TXT}" font-weight="bold" '
                  f'text-anchor="end">PC13  EXTI13  (user button) *'
                  f'</text>')
         doc.emit(f'<text x="296" y="1090" font-size="11" '
@@ -458,7 +459,7 @@ def build(variant):
 
     # Legend
     doc.emit(f'<rect x="{board.x}" y="1190" width="12" height="12" '
-             f'fill="{svg.ARS}" stroke="#000" stroke-width="0.6"/>')
+             f'fill="{svg.HL}" stroke="#000" stroke-width="0.6"/>')
     doc.emit(f'<text x="{board.x + 20}" y="1200" font-size="12.5" '
              f'fill="{svg.INK}">* ARS-assigned signal (provisional, '
              f'gates G0-G5) -- pinout.md is the authority</text>')

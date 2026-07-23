@@ -8,12 +8,14 @@ template modules (e.g. nucleo144.py).
 
 import math
 
-# Palette shared by every board template.  ARS/ARS_TXT/HIL are ARS-
-# toolhead-sensor-project conventions (amber highlight, violet HIL
-# taps); every other name is a generic PCB/pin-role color reused
-# across boards.
-ARS = '#e8a13d'
-ARS_TXT = '#8a5a00'
+# Palette shared by every board template.  HL/HL_TXT/HIL are the
+# generic per-pin highlight mechanism's colors (amber highlight,
+# violet HIL taps)-- any per-project overlay can flag its own pins
+# with them (the ARS toolhead-sensor project was the first consumer;
+# a second board's own highlight rig is another); every other name is
+# a generic PCB/pin-role color reused across boards.
+HL = '#e8a13d'
+HL_TXT = '#8a5a00'
 PAD = '#c9c9c9'
 SILK = '#03234B'
 PCB = '#ffffff'
