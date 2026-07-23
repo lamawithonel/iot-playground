@@ -15,30 +15,27 @@ adafruit-stm32f405-feather-express.pdf), rendered pages cached under
     inset), the top pin row starting 0.65 in from the left edge.
   - feather-05.png, feather-page-06.png -- silkscreen photos, p.5-6:
     top row silk order (12 pins) Bat En USB 13 12 11 10 9 6 5 SCL
-    SDA; bottom row silk order (16 pads) Rst 3.3V <unlabeled> Gnd A0
-    A1 A2 A3 A4 A5 SCK MO MI RX TX B0.
+    SDA; bottom row silk order (15 pads) Rst 3.3V Gnd A0 A1 A2 A3 A4
+    A5 SCK MO MI RX TX B0.
   - feather-page-09.png, feather-page-10.png -- p.9-10 text/photos:
     bottom-side micro SD/SDIO slot and an unpopulated 2x5 SWD pad.
 
 This module owns geometry math and generic widget shapes only; every
 number that differs board-to-board (silk names, MCU pin/net per
-name, fixture positions) is board data, supplied by the caller.  No
-board module consumes this template yet-- see the Phase 2 smoke test
-that proved it renders, not committed.
+name, fixture positions) is board data, supplied by the caller.
 
-Open item carried over from the architecture pass: the bottom row's
-4th pad (between 3.3V and Gnd) is a real, separately drilled pad-- it
-is NOT the 3.3V or Gnd pad and not a mis-read of the "(X)" DAC-output
-icon over A0/A1-- but its silk name is too small to read at 300 dpi
-in this guide.  The EagleCAD source (linked from the guide's
-Downloads page, GitHub) would resolve it; not fetched this pass (no
-network access in this sandbox).  It is modeled below as name=None so
-board data can supply the name once verified rather than guessing.
+Open item from the architecture pass, now resolved: a prior reading
+of this docstring claimed a 4th, unlabeled pad between 3.3V and Gnd
+on the bottom row (16 pads total).  A 600 dpi re-render of p.5, done
+for tools/pinout/boards/feather_f405.py's pin data, shows the row
+plainly-- Rst, 3.3V, Gnd, then A0-A5, with no pad between 3.3V and
+Gnd-- so the bottom row is 15 pads, not 16, and there is no
+unlabeled pad to resolve.
 """
 
 from dataclasses import dataclass, field
 
-from .svg import GND_FILL, MUT, PWR, ext_box
+from .svg import GND_FILL, HL, HL_TXT, MUT, PWR, ext_box
 
 # Feather boards are blue-PCB-with-white-silk, the opposite of the
 # Nucleo-144 family's white-PCB-with-blue-silk-- so this template
@@ -100,13 +97,19 @@ class PinRow:
     pad whose name is unread/unverified (see the module docstring).
     notes maps a name to an annotation drawn beside that pin (e.g.
     B0's DFU jumper-to-3.3V note, since this board has no DFU
-    button).
+    button).  impl flags which annotated names are firmware-verified
+    (drawn amber, bold, and starred, svg.HL/HL_TXT) rather than
+    merely physically wired (drawn muted, svg.MUT)-- the same
+    implemented-vs-present distinction a project overlay for a board
+    built on this template uses to separate its active feature set
+    from everything else the PCB exposes but does not yet drive.
     """
 
     side: str  # 'top' | 'bottom'
     start_in: float
     names: list
     notes: dict = field(default_factory=dict)
+    impl: set = field(default_factory=set)
 
 
 @dataclass
@@ -172,13 +175,21 @@ def draw_pin_row(doc, board, row):
             fill, stroke, txt, txt_fill = '#c9c9c9', '#000', name, PCB_SILK
         doc.emit(f'<circle cx="{cx}" cy="{y}" r="{pad_r}" fill="{fill}" '
                  f'stroke="{stroke}" stroke-width="0.8"/>')
+        is_impl = name in row.impl
+        if is_impl:
+            doc.emit(f'<circle cx="{cx}" cy="{y}" r="{pad_r + 2.2}" '
+                     f'fill="none" stroke="{HL}" stroke-width="1.4"/>')
         doc.emit(f'<text x="{cx}" y="{y + label_dy}" font-size="9.5" '
                  f'fill="{txt_fill}" text-anchor="middle">{txt}</text>')
         note = row.notes.get(name)
         if note:
             note_dy = label_dy + (-11 if row.side == 'top' else 11)
+            color = HL_TXT if is_impl else MUT
+            weight = ' font-weight="bold"' if is_impl else ''
+            suffix = ' *' if is_impl else ''
             doc.emit(f'<text x="{cx}" y="{y + note_dy}" font-size="7.5" '
-                     f'fill="{MUT}" text-anchor="middle">{note}</text>')
+                     f'fill="{color}"{weight} text-anchor="middle">'
+                     f'{note}{suffix}</text>')
 
 
 def draw_fixture(doc, f):
@@ -192,12 +203,12 @@ def draw_fixture(doc, f):
         doc.emit(f'<circle cx="{f.x}" cy="{f.y}" r="{f.r}" fill="{f.fill}" '
                  f'stroke="#111"/>')
         doc.emit(f'<text x="{f.x}" y="{f.y + f.r + 13}" font-size="9" '
-                 f'fill="{SILK}" text-anchor="middle">{f.label}</text>')
+                 f'fill="{PCB_SILK}" text-anchor="middle">{f.label}</text>')
     elif f.kind == 'led':
         doc.emit(f'<circle cx="{f.x}" cy="{f.y}" r="{f.r}" fill="{f.fill}" '
                  f'stroke="#111" stroke-width="0.8"/>')
         doc.emit(f'<text x="{f.x}" y="{f.y + f.r + 13}" font-size="9" '
-                 f'fill="{SILK}" text-anchor="middle">{f.label}</text>')
+                 f'fill="{PCB_SILK}" text-anchor="middle">{f.label}</text>')
     else:
         raise ValueError(f'unknown fixture kind: {f.kind!r}')
 
